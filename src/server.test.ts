@@ -2,6 +2,9 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createGatewayServer } from "./server.js";
 import { FakeHarnessAdapter } from "./harness/fake-harness.js";
 import { CommandCodeAdapter } from "./harness/command-code.js";
+import { AdapterRegistry } from "./core/adapter-registry.js";
+import { RunService } from "./core/run-service.js";
+import { RunStore } from "./core/store.js";
 import type { HarnessAdapter, HarnessRunRequest } from "./harness/types.js";
 import type { Server } from "node:http";
 
@@ -19,12 +22,26 @@ async function requestPost(
   return { status: res.status, body: json };
 }
 
+function buildServer(
+  adapters: HarnessAdapter[],
+  options: { port?: number; defaultTimeoutMs?: number } = {},
+) {
+  const registry = new AdapterRegistry();
+  for (const adapter of adapters) registry.register(adapter);
+  const store = new RunStore(":memory:");
+  const runService = new RunService({
+    adapterRegistry: registry,
+    store,
+    defaultTimeoutMs: options.defaultTimeoutMs ?? 30_000,
+  });
+  return createGatewayServer({ runService, port: options.port ?? 0 });
+}
+
 describe("POST /v1/chat/completions", () => {
   let server: { server: Server; start: () => Promise<void>; stop: () => Promise<void>; port: number };
 
   beforeAll(async () => {
-    const adapter = new FakeHarnessAdapter();
-    server = createGatewayServer({ adapter, port: 0 });
+    server = buildServer([new FakeHarnessAdapter()]);
     await server.start();
   });
 
@@ -35,7 +52,7 @@ describe("POST /v1/chat/completions", () => {
   it("returns a deterministic OpenAI response through the full pipeline", async () => {
     const port = (server.server.address() as { port: number }).port;
     const res = await requestPost(port, "/v1/chat/completions", {
-      model: "fake-model",
+      model: "fake-harness/fake-model",
       messages: [{ role: "user", content: "Hello" }],
       stream: false,
     });
@@ -44,7 +61,7 @@ describe("POST /v1/chat/completions", () => {
     const body = res.body as Record<string, unknown>;
     expect(body.object).toBe("chat.completion");
     expect(body.id).toMatch(/^chatcmpl-/);
-    expect(body.model).toBe("fake-model");
+    expect(body.model).toBe("fake-harness/fake-model");
 
     const choices = body.choices as Array<Record<string, unknown>>;
     expect(choices).toHaveLength(1);
@@ -60,7 +77,7 @@ describe("POST /v1/chat/completions", () => {
   it("rejects stream: true with a controlled error", async () => {
     const port = (server.server.address() as { port: number }).port;
     const res = await requestPost(port, "/v1/chat/completions", {
-      model: "fake-model",
+      model: "fake-harness/fake-model",
       messages: [{ role: "user", content: "Hello" }],
       stream: true,
     });
@@ -119,7 +136,7 @@ describe("Shell injection safety", () => {
   };
 
   beforeAll(async () => {
-    server = createGatewayServer({ adapter: spyAdapter, port: 0 });
+    server = buildServer([spyAdapter]);
     await server.start();
   });
 
@@ -145,7 +162,7 @@ describe("Shell injection safety", () => {
       collectedMessages.length = 0;
       const port = (server.server.address() as { port: number }).port;
       const res = await requestPost(port, "/v1/chat/completions", {
-        model: "test",
+        model: "spy/test",
         messages: [{ role: "user", content: payload }],
         stream: false,
       });
@@ -160,12 +177,12 @@ describe("Timeout handling", () => {
   it("kills the hanging harness and returns a timeout error", async () => {
     const harnessPath = new URL("../testing/fixtures/fake-harness/fake-harness.mjs", import.meta.url).pathname;
     const adapter = new FakeHarnessAdapter({ harnessPath, extraArgs: ["--hang"] });
-    const server = createGatewayServer({ adapter, port: 0, defaultTimeoutMs: 500 });
+    const server = buildServer([adapter], { defaultTimeoutMs: 500 });
     await server.start();
     const port = (server.server.address() as { port: number }).port;
 
     const res = await requestPost(port, "/v1/chat/completions", {
-      model: "fake-model",
+      model: "fake-harness/fake-model",
       messages: [{ role: "user", content: "hello" }],
       stream: false,
     });
@@ -182,12 +199,12 @@ describe("Malformed harness output", () => {
   it("returns a controlled error when the harness emits invalid JSON", async () => {
     const harnessPath = new URL("../testing/fixtures/fake-harness/fake-harness.mjs", import.meta.url).pathname;
     const adapter = new FakeHarnessAdapter({ harnessPath, extraArgs: ["--malformed"] });
-    const server = createGatewayServer({ adapter, port: 0 });
+    const server = buildServer([adapter]);
     await server.start();
     const port = (server.server.address() as { port: number }).port;
 
     const res = await requestPost(port, "/v1/chat/completions", {
-      model: "fake-model",
+      model: "fake-harness/fake-model",
       messages: [{ role: "user", content: "test" }],
       stream: false,
     });
@@ -200,17 +217,51 @@ describe("Malformed harness output", () => {
   });
 });
 
+describe("Model and harness rejection", () => {
+  it("rejects a single-segment model id with 400", async () => {
+    const server = buildServer([new FakeHarnessAdapter()]);
+    await server.start();
+    const port = (server.server.address() as { port: number }).port;
+
+    const res = await requestPost(port, "/v1/chat/completions", {
+      model: "fake-model",
+      messages: [{ role: "user", content: "hi" }],
+      stream: false,
+    });
+
+    expect(res.status).toBe(400);
+
+    await server.stop();
+  });
+
+  it("rejects an unknown harness with 400", async () => {
+    const server = buildServer([new FakeHarnessAdapter()]);
+    await server.start();
+    const port = (server.server.address() as { port: number }).port;
+
+    const res = await requestPost(port, "/v1/chat/completions", {
+      model: "unknown/model",
+      messages: [{ role: "user", content: "hi" }],
+      stream: false,
+    });
+
+    expect(res.status).toBe(400);
+
+    await server.stop();
+  });
+});
+
 describe("Command-Code smoke test (opt-in)", () => {
   it.skipIf(!process.env.RUN_REAL_HARNESS)(
     "runs the real cmd CLI with a tiny prompt",
     async () => {
       const adapter = new CommandCodeAdapter();
-      const server = createGatewayServer({ adapter, port: 0, defaultTimeoutMs: 30000 });
+      const server = buildServer([adapter], { defaultTimeoutMs: 30000 });
       await server.start();
       const port = (server.server.address() as { port: number }).port;
 
       const res = await requestPost(port, "/v1/chat/completions", {
-        model: "deepseek/deepseek-v4-flash",
+        model: "command-code/deepseek/deepseek-v4-flash",
         messages: [{ role: "user", content: "Reply with exactly: VERIFIED" }],
         stream: false,
       });

@@ -1,5 +1,4 @@
-import { parseNdjson, JsonlParseError } from "./jsonl.js";
-import { spawnChild } from "./spawn.js";
+import { ProcessRunner } from "../core/process-runner.js";
 import type { HarnessAdapter, HarnessEvent, HarnessRunRequest, Usage } from "./types.js";
 
 export interface CommandCodeAdapterOptions {
@@ -93,9 +92,11 @@ function mapCcUsage(raw: Record<string, number>): Usage {
 export class CommandCodeAdapter implements HarnessAdapter {
   readonly id = "command-code";
   private cmdPath: string;
+  private runner: ProcessRunner;
 
   constructor(opts?: CommandCodeAdapterOptions) {
     this.cmdPath = opts?.cmdPath ?? "cmd";
+    this.runner = new ProcessRunner();
   }
 
   async health() {
@@ -115,45 +116,20 @@ export class CommandCodeAdapter implements HarnessAdapter {
       prompt,
     ];
 
-    const child = spawnChild({ command: this.cmdPath, args });
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    let timedOut = false;
-
-    if (request.timeoutMs) {
-      timeout = setTimeout(() => {
-        timedOut = true;
-        child.kill("SIGKILL");
-      }, request.timeoutMs);
-    }
-
     const ccEvents: CcEvent[] = [];
 
-    try {
-      for await (const obj of parseNdjson(child.stdout!)) {
-        ccEvents.push(obj as CcEvent);
-      }
-    } catch (err) {
-      if (err instanceof JsonlParseError) {
-        yield { type: "failed", message: err.message, retryable: false };
+    for await (const event of this.runner.run(request.runId, this.cmdPath, args, { timeoutMs: request.timeoutMs })) {
+      if (event.type === "jsonl") {
+        ccEvents.push(event.value as CcEvent);
+      } else if (event.type === "jsonl_error") {
+        yield { type: "failed", message: event.error.message, retryable: false };
         return;
+      } else if (event.type === "exit") {
+        if (event.code !== 0 && event.code !== null) {
+          yield { type: "failed", message: `Command-Code exited with code ${event.code}`, retryable: false };
+          return;
+        }
       }
-      throw err;
-    } finally {
-      if (timeout) clearTimeout(timeout);
-    }
-
-    const exitCode = await new Promise<number | null>((resolve) => {
-      child.on("close", resolve);
-    });
-
-    if (timedOut) {
-      yield { type: "failed", message: `Command-Code timed out after ${request.timeoutMs}ms`, retryable: true };
-      return;
-    }
-
-    if (exitCode !== 0 && exitCode !== null) {
-      yield { type: "failed", message: `Command-Code exited with code ${exitCode}`, retryable: false };
-      return;
     }
 
     for (const event of normalizeCcEvents(ccEvents)) {
@@ -161,7 +137,7 @@ export class CommandCodeAdapter implements HarnessAdapter {
     }
   }
 
-  async cancel(_runId: string): Promise<void> {
-    // TODO: implement in Phase 03
+  async cancel(runId: string): Promise<void> {
+    this.runner.cancel(runId);
   }
 }

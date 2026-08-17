@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseNdjson, JsonlParseError } from "./jsonl.js";
-import { spawnChild } from "./spawn.js";
+import { ProcessRunner } from "../core/process-runner.js";
 import type { HarnessAdapter, HarnessEvent, HarnessRunRequest } from "./types.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -16,10 +15,12 @@ export class FakeHarnessAdapter implements HarnessAdapter {
   readonly id = "fake-harness";
   private harnessPath: string;
   private extraArgs: string[];
+  private runner: ProcessRunner;
 
   constructor(opts?: FakeHarnessAdapterOptions) {
     this.harnessPath = opts?.harnessPath ?? FAKE_HARNESS_PATH;
     this.extraArgs = opts?.extraArgs ?? [];
+    this.runner = new ProcessRunner();
   }
 
   async health() {
@@ -37,47 +38,21 @@ export class FakeHarnessAdapter implements HarnessAdapter {
       ...this.extraArgs,
     ];
 
-    const timeoutMs = request.timeoutMs;
-    const child = spawnChild({ command: "node", args });
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    let timedOut = false;
-
-    if (timeoutMs) {
-      timeout = setTimeout(() => {
-        timedOut = true;
-        child.kill("SIGKILL");
-      }, timeoutMs);
-    }
-
-    try {
-      for await (const obj of parseNdjson(child.stdout!)) {
-        yield obj as HarnessEvent;
-      }
-    } catch (err) {
-      if (err instanceof JsonlParseError) {
-        yield { type: "failed", message: err.message, retryable: false };
+    for await (const event of this.runner.run(request.runId, "node", args, { timeoutMs: request.timeoutMs })) {
+      if (event.type === "jsonl") {
+        yield event.value as HarnessEvent;
+      } else if (event.type === "jsonl_error") {
+        yield { type: "failed", message: event.error.message, retryable: false };
         return;
+      } else if (event.type === "exit") {
+        if (event.code !== 0 && event.code !== null) {
+          yield { type: "failed", message: `Fake harness exited with code ${event.code}`, retryable: false };
+        }
       }
-      throw err;
-    } finally {
-      if (timeout) clearTimeout(timeout);
-    }
-
-    const exitCode = await new Promise<number | null>((resolve) => {
-      child.on("close", resolve);
-    });
-
-    if (timedOut) {
-      yield { type: "failed", message: `Harness timed out after ${timeoutMs}ms`, retryable: true };
-      return;
-    }
-
-    if (exitCode !== 0 && exitCode !== null) {
-      yield { type: "failed", message: `Fake harness exited with code ${exitCode}`, retryable: false };
     }
   }
 
-  async cancel(_runId: string): Promise<void> {
-    // No-op for fake harness
+  async cancel(runId: string): Promise<void> {
+    this.runner.cancel(runId);
   }
 }

@@ -1,12 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
-import type { HarnessAdapter, HarnessEvent, HarnessRunRequest } from "./harness/types.js";
+import type { RunService } from "./core/run-service.js";
+import type { ChatMessage } from "./harness/types.js";
 import { formatOpenAIResponse } from "./openai/format-response.js";
 
 export interface CreateGatewayServerOptions {
-  adapter: HarnessAdapter;
+  runService: RunService;
   port?: number;
-  defaultTimeoutMs?: number;
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -28,8 +27,7 @@ function sendJson(res: ServerResponse, statusCode: number, body: unknown) {
 export async function handleChatCompletions(
   req: IncomingMessage,
   res: ServerResponse,
-  adapter: HarnessAdapter,
-  defaultTimeoutMs: number,
+  runService: RunService,
 ): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: { message: "Method not allowed", type: "invalid_request_error" } });
@@ -64,49 +62,57 @@ export async function handleChatCompletions(
     return;
   }
 
-  const runId = randomUUID();
-  const request: HarnessRunRequest = {
-    runId,
+  const result = await runService.run({
     model: parsed.model,
-    messages: parsed.messages as HarnessRunRequest["messages"],
-    stream: false,
-    timeoutMs: defaultTimeoutMs,
-  };
+    messages: parsed.messages as ChatMessage[],
+  });
 
-  const events: HarnessEvent[] = [];
-  let failed = false;
-
-  try {
-    for await (const event of adapter.run(request)) {
-      if (event.type === "failed") {
-        sendJson(res, 502, {
-          error: { message: event.message, type: "server_error" },
-        });
-        failed = true;
-        break;
-      }
-      events.push(event);
+  switch (result.status) {
+    case "completed": {
+      const completion = formatOpenAIResponse(result.events, { runId: result.runId, model: parsed.model });
+      sendJson(res, 200, completion);
+      return;
     }
-  } catch (err) {
-    sendJson(res, 500, {
-      error: { message: `Internal error: ${err instanceof Error ? err.message : String(err)}`, type: "server_error" },
-    });
-    return;
+    case "failed":
+    case "timed_out":
+    case "cancelled": {
+      sendJson(res, 502, {
+        error: { message: result.message, type: "server_error" },
+      });
+      return;
+    }
+    default:
+      sendJson(res, 500, {
+        error: { message: "Unknown run outcome", type: "server_error" },
+      });
   }
-
-  if (failed) return;
-
-  const completion = formatOpenAIResponse(events, { runId, model: parsed.model });
-  sendJson(res, 200, completion);
 }
 
 export function createGatewayServer(opts: CreateGatewayServerOptions) {
   const port = opts.port ?? 3000;
-  const defaultTimeoutMs = opts.defaultTimeoutMs ?? 30_000;
 
   const server = createServer(async (req, res) => {
     if (req.url === "/v1/chat/completions") {
-      await handleChatCompletions(req, res, opts.adapter, defaultTimeoutMs);
+      try {
+        await handleChatCompletions(req, res, opts.runService);
+      } catch (err) {
+        const runServiceError = err as { code?: string; message?: string };
+        const code = runServiceError.code;
+
+        if (code === "invalid_model" || code === "unknown_harness") {
+          sendJson(res, 400, {
+            error: { message: runServiceError.message ?? "Invalid model", type: "invalid_request_error" },
+          });
+        } else if (code === "queue_full") {
+          sendJson(res, 429, {
+            error: { message: runServiceError.message ?? "Queue is full", type: "rate_limit_error" },
+          });
+        } else {
+          sendJson(res, 500, {
+            error: { message: `Internal error: ${runServiceError.message ?? String(err)}`, type: "server_error" },
+          });
+        }
+      }
     } else {
       sendJson(res, 404, { error: { message: "Not found", type: "invalid_request_error" } });
     }
