@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.commandcode/
+.env
+.env.*
+*.db
+*.db-wal
+*.db-shm
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

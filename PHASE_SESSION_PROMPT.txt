@@ -1,0 +1,9 @@
+Read AGENT_HANDOFF.md and Phase 0.
+
+Execute Phase 0 only.
+Follow the documented workflow.
+Use delegation for implementation tasks.
+Run all required tests.
+Do not start the next phase.
+
+Report the final status and test results.
