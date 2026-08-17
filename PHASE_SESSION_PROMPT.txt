@@ -1,6 +1,6 @@
-Read AGENT_HANDOFF.md and Phase 0.
+Read AGENT_HANDOFF.md and Phase 2.
 
-Execute Phase 0 only.
+Execute Phase 2 only.
 Follow the documented workflow.
 Use delegation for implementation tasks.
 Run all required tests.
