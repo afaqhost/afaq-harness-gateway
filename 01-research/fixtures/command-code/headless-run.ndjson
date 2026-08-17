@@ -1,0 +1,28 @@
+{"type":"event","event":{"type":"run_start","sessionId":"a20cf574-fcb0-4ae0-91d1-91ab10eac36f"}}
+{"type":"event","event":{"type":"turn_start","turnNumber":1}}
+{"type":"event","event":{"type":"message_start"}}
+{"type":"event","event":{"type":"model_request_start","model":"deepseek/deepseek-v4-flash"}}
+{"type":"event","event":{"type":"model_trace","traceId":"f96bfe8dfd525da177f91ce73ad91760"}}
+{"type":"event","event":{"type":"thinking_start"}}
+{"type":"event","event":{"type":"thinking_delta","delta":"The"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" user"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" wants"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" me"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" to"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" reply"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" with"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" exactly"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" \""}}
+{"type":"event","event":{"type":"thinking_delta","delta":"VER"}}
+{"type":"event","event":{"type":"thinking_delta","delta":"IFIED"}}
+{"type":"event","event":{"type":"thinking_delta","delta":"\"."}}
+{"type":"event","event":{"type":"thinking_end","text":"The user wants me to reply with exactly \"VERIFIED\"."}}
+{"type":"event","event":{"type":"text_delta","delta":"VER"}}
+{"type":"event","event":{"type":"message_update","content":[{"type":"thinking","thinking":"The user wants me to reply with exactly \"VERIFIED\".","signature":""},{"type":"text","text":"VER"}]}}
+{"type":"event","event":{"type":"text_delta","delta":"IFIED"}}
+{"type":"event","event":{"type":"message_update","content":[{"type":"thinking","thinking":"The user wants me to reply with exactly \"VERIFIED\".","signature":""},{"type":"text","text":"VERIFIED"}]}}
+{"type":"event","event":{"type":"model_request_end","model":"deepseek/deepseek-v4-flash","usage":{"inputTokens":16571,"outputTokens":15,"cacheReadTokens":5376,"cacheWriteTokens":0},"stopReason":"stop"}}
+{"type":"event","event":{"type":"message_end","content":[{"type":"thinking","thinking":"The user wants me to reply with exactly \"VERIFIED\".","signature":""},{"type":"text","text":"VERIFIED"}]}}
+{"type":"event","event":{"type":"turn_end","turnNumber":1,"hadToolCalls":false,"usage":{"inputTokens":16571,"outputTokens":15,"cacheReadTokens":5376,"cacheWriteTokens":0}}}
+{"type":"event","event":{"type":"run_end","result":{"finalText":"VERIFIED","stopReason":"end_turn","turnCount":1,"usage":{"inputTokens":16571,"outputTokens":15,"cacheReadTokens":5376,"cacheWriteTokens":0},"systemPromptTokens":null,"nextState":{"sessionId":"a20cf574-fcb0-4ae0-91d1-91ab10eac36f","messages":[{"role":"user","content":[{"type":"text","text":"Reply with exactly: VERIFIED"}],"meta":{"source":"user","createdAt":1786998118443,"messageId":"da8e5924-cb81-4c59-b22d-0a81b7b77405"}},{"role":"assistant","content":[{"type":"thinking","thinking":"The user wants me to reply with exactly \"VERIFIED\".","signature":""},{"type":"text","text":"VERIFIED"}],"meta":{"source":"model","createdAt":1786998121268,"messageId":"1a50f267-d0da-498c-9870-cab967b842fe"}}],"interrupted":false,"modState":{"workspace":{"cwd":"/home/nasser/Desktop/afaq-harness-gateway","platform":"linux","branch":"main","gitStatus":"M PHASE_SESSION_PROMPT.txt\n?? 01-research/fixtures/","recentCommits":["2a719d6 feat: complete phase 00 foundation","a4f377f Initial commit"],"additionalDirectories":[]},"compaction":16571}}}}}
+{"type":"result","subtype":"success","sessionId":"a20cf574-fcb0-4ae0-91d1-91ab10eac36f","stopReason":"end_turn","usage":{"inputTokens":16571,"outputTokens":15,"cacheReadTokens":5376,"cacheWriteTokens":0},"durationMs":2888,"finalText":"VERIFIED"}
