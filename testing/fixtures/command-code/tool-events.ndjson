@@ -1,0 +1,6 @@
+{"type":"event","event":{"type":"run_start","sessionId":"tool-session"}}
+{"type":"event","event":{"type":"tool_running","toolCallId":"tc1","toolName":"read_file","description":"Reading file"}}
+{"type":"event","event":{"type":"tool_completed","toolCallId":"tc1","toolName":"read_file","result":[{"type":"text","text":"file contents here"}]}}
+{"type":"event","event":{"type":"tool_errored","toolCallId":"tc2","toolName":"write_file","error":"Permission denied"}}
+{"type":"event","event":{"type":"text_delta","delta":"done"}}
+{"type":"result","subtype":"success","sessionId":"tool-session","finalText":"done","usage":{"inputTokens":5,"outputTokens":1,"cacheReadTokens":0,"cacheWriteTokens":0}}

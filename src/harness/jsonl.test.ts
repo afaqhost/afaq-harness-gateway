@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Readable } from "node:stream";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { parseNdjson, JsonlParseError } from "./jsonl.js";
 
 function streamFromString(s: string): Readable {
@@ -83,5 +85,27 @@ describe("parseNdjson", () => {
     const stream = streamFromString(JSON.stringify(obj) + "\n");
     const result = await collect(stream);
     expect(result).toEqual([obj]);
+  });
+
+  it("reports line context for the malformed-lines.ndjson fixture", async () => {
+    const fixture = resolve(
+      import.meta.dirname,
+      "../../testing/fixtures/command-code/malformed-lines.ndjson",
+    );
+    const raw = readFileSync(fixture, "utf-8");
+    const stream = Readable.from(Buffer.from(raw));
+
+    let error: unknown;
+    try {
+      await collect(stream);
+      expect.unreachable("Should have thrown");
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).toBeInstanceOf(JsonlParseError);
+    const parseErr = error as JsonlParseError;
+    expect(parseErr.lineNumber).toBe(2);
+    expect(parseErr.line).toBe("this is not json");
   });
 });

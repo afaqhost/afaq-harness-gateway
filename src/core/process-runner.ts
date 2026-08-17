@@ -35,7 +35,7 @@ export class ProcessRunner {
     args: string[],
     options: ProcessRunnerOptions = {},
   ): AsyncGenerator<ProcessRunnerEvent> {
-    const env = options.env ? { ...process.env, ...options.env } : process.env;
+    const env = options.env ?? process.env;
     const child = spawn(command, args, {
       shell: false,
       stdio: ["pipe", "pipe", "pipe"],

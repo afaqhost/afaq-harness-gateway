@@ -77,22 +77,38 @@ No `costUsd` field observed.
 
 ## Exit codes
 
-**Not yet verified.** Not exercised in this phase.
+**Verified at the adapter level.** The adapter maps exit codes to harness events via `mapCcExitCode`:
+
+| Code | Meaning | Retryable |
+|---|---|---|
+| 0 | Success | — |
+| 3 | Authentication error | No |
+| 4 | Permission error | No |
+| 5 | Rate limit exceeded | Yes |
+| 6 | Network error | Yes |
+| 7 | Upstream server error | Yes |
+| 8 | Max turns reached | No |
+| 9 | No response | No |
+| 10 | Insufficient credits | No |
+| 130 | Interrupted | No |
+| other | Unknown error | No |
+
+Non-zero exit codes are surfaced as `{ type: "failed", message, retryable }` events.
 
 ## Cancellation behavior
 
-**Not yet verified.** Not exercised in this phase.
+**Verified at the adapter level.** `ProcessRunner.cancel()` sends SIGTERM first, then SIGKILL after a 2-second grace period. The generator throws `ProcessCancelledError` without emitting any `completed` or `failed` event.
 
 ## Timeout behavior
 
-**Not yet verified.** Not exercised in this phase.
+**Verified at the adapter level.** `ProcessRunner.run()` accepts `timeoutMs`. When exceeded, the process is killed with SIGKILL and the generator throws `ProcessTimedOutError`. No `completed` or `failed` event is emitted.
 
 ## Known limitations
 
 1. `thinking_*` events have no corresponding type in the `HarnessEvent` contract; adapters must filter them.
 2. The NDJSON stream includes many event types beyond `text_delta`; the adapter must parse and dispatch selectively.
 3. `costUsd` is not reported; pricing must be computed externally if needed.
-4. Exit codes, cancellation, and timeout behavior need verification in Phase 03 (core adapter implementation).
+4. Exit codes, cancellation, and timeout behavior are verified at the adapter level (Phase 04).
 
 ## Licensing / terms constraints
 

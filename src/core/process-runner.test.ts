@@ -68,6 +68,26 @@ describe("ProcessRunner", () => {
     expect(err).toBeInstanceOf(ProcessCancelledError);
   });
 
+  it("passing env REPLACES the environment instead of merging", async () => {
+    const runner = new ProcessRunner();
+    const events: unknown[] = [];
+
+    for await (const event of runner.run(
+      "env-test",
+      process.execPath,
+      ["-e", "process.stdout.write(JSON.stringify({HOME: process.env.HOME, CUSTOM: process.env.CUSTOM}))"],
+      { env: { CUSTOM: "yes", PATH: process.env.PATH ?? "" } },
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toHaveLength(2);
+    const jsonl = events[0] as { type: string; value: Record<string, unknown> };
+    expect(jsonl.type).toBe("jsonl");
+    expect(jsonl.value.CUSTOM).toBe("yes");
+    expect(jsonl.value.HOME).toBeUndefined();
+  });
+
   it("kills a child that ignores SIGTERM after the grace period", async () => {
     const runner = new ProcessRunner();
     const startedAt = Date.now();
