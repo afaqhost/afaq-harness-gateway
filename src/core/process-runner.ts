@@ -43,6 +43,10 @@ export class ProcessRunner {
     });
     this.children.set(runId, child);
 
+    // Prompts are passed via argv, so close stdin immediately. Some CLIs
+    // (e.g. opencode run) wait for stdin EOF and hang otherwise.
+    child.stdin?.end();
+
     // Drain stderr so a chatty CLI cannot block on a full pipe buffer.
     child.stderr?.on("data", () => {});
 

@@ -1,6 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { ProcessRunner } from "../core/process-runner.js";
 import type { HarnessAdapter, HarnessEvent, HarnessRunRequest, Usage } from "./types.js";
+import { buildMinimalEnv } from "./env.js";
+import { serializeMessages } from "./messages.js";
+
+export { serializeMessages } from "./messages.js";
 
 export interface CommandCodeAdapterOptions {
   cmdPath?: string;
@@ -9,20 +13,6 @@ export interface CommandCodeAdapterOptions {
 }
 
 const DEFAULT_MODELS = ["deepseek/deepseek-v4-flash"];
-const ENV_ALLOWLIST = ["HOME", "PATH", "USER", "SHELL", "LANG", "LC_ALL", "TMPDIR"];
-
-function buildMinimalEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const key of ENV_ALLOWLIST) {
-    const val = process.env[key];
-    if (val !== undefined) env[key] = val;
-  }
-  return env;
-}
-
-export function serializeMessages(messages: HarnessRunRequest["messages"]): string {
-  return messages.map((m) => `[${m.role}]\n${m.content}`).join("\n\n");
-}
 
 export function mapCcExitCode(code: number): { message: string; retryable: boolean } {
   switch (code) {
