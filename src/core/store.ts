@@ -18,6 +18,8 @@ export interface RunRow {
   session_id: string | null;
   error_message: string | null;
   usage_json: string | null;
+  api_key_id: string | null;
+  estimated_cost_usd: number | null;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -38,6 +40,7 @@ export interface CreateRunInput {
   requestedModel: string;
   resolvedModel?: string;
   harness?: string;
+  apiKeyId?: string;
 }
 
 const SCHEMA = `
@@ -50,6 +53,8 @@ CREATE TABLE IF NOT EXISTS runs (
   session_id TEXT,
   error_message TEXT,
   usage_json TEXT,
+  api_key_id TEXT,
+  estimated_cost_usd REAL,
   created_at TEXT NOT NULL,
   started_at TEXT,
   finished_at TEXT,
@@ -91,10 +96,10 @@ export class RunStore {
   createRun(input: CreateRunInput): void {
     this.db
       .prepare(
-        `INSERT INTO runs (id, requested_model, resolved_model, harness, status, created_at)
-         VALUES (?, ?, ?, ?, 'queued', ?)`,
+        `INSERT INTO runs (id, requested_model, resolved_model, harness, api_key_id, status, created_at)
+         VALUES (?, ?, ?, ?, ?, 'queued', ?)`,
       )
-      .run(input.id, input.requestedModel, input.resolvedModel ?? null, input.harness ?? null, new Date().toISOString());
+      .run(input.id, input.requestedModel, input.resolvedModel ?? null, input.harness ?? null, input.apiKeyId ?? null, new Date().toISOString());
   }
 
   getRun(id: string): RunRow | undefined {
@@ -127,10 +132,17 @@ export class RunStore {
       .run(status, errorMessage ?? null, new Date().toISOString(), durationMs, id);
   }
 
-  updateRunMeta(id: string, meta: { sessionId?: string | null; usageJson?: string | null }): void {
+  updateRunMeta(id: string, meta: { sessionId?: string | null; usageJson?: string | null; estimatedCostUsd?: number | null }): void {
     this.db
-      .prepare("UPDATE runs SET session_id = COALESCE(?, session_id), usage_json = COALESCE(?, usage_json) WHERE id = ?")
-      .run(meta.sessionId ?? null, meta.usageJson ?? null, id);
+      .prepare("UPDATE runs SET session_id = COALESCE(?, session_id), usage_json = COALESCE(?, usage_json), estimated_cost_usd = ? WHERE id = ?")
+      .run(meta.sessionId ?? null, meta.usageJson ?? null, meta.estimatedCostUsd ?? null, id);
+  }
+
+  sumEstimatedCostSince(keyId: string, sinceIso: string): number {
+    const row = this.db
+      .prepare("SELECT COALESCE(SUM(estimated_cost_usd), 0) AS total FROM runs WHERE api_key_id = ? AND created_at >= ?")
+      .get(keyId, sinceIso);
+    return Number(row?.total ?? 0);
   }
 
   appendEvent(id: string, type: string, payload: unknown): void {

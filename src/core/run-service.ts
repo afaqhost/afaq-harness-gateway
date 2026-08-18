@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { ChatMessage, HarnessAdapter, HarnessEvent, HarnessRunRequest, Usage } from "../harness/types.js";
 import { AdapterRegistry } from "./adapter-registry.js";
+import { estimateCostUsd } from "./cost.js";
 import { resolveModelId } from "./model-resolution.js";
+import { PricingRegistry } from "./pricing.js";
 import { ProcessCancelledError, ProcessTimedOutError } from "./process-runner.js";
 import { TaskQueue, QueueFullError } from "./queue.js";
 import { RunStore, type RunStatus } from "./store.js";
@@ -11,18 +13,23 @@ export interface RunServiceOptions {
   store: RunStore;
   queue?: TaskQueue;
   defaultTimeoutMs?: number;
+  pricing?: PricingRegistry;
 }
 
 export interface RunServiceRequest {
   model: string;
   messages: ChatMessage[];
   timeoutMs?: number;
+  apiKeyId?: string;
+  allowedModels?: string[];
 }
 
 export interface RunStreamRequest {
   model: string;
   messages: ChatMessage[];
   timeoutMs?: number;
+  apiKeyId?: string;
+  allowedModels?: string[];
 }
 
 export interface RunStreamHandle {
@@ -39,7 +46,7 @@ export type RunServiceResult =
 
 export class RunRejectedError extends Error {
   constructor(
-    public readonly code: "invalid_model" | "unknown_harness" | "queue_full",
+    public readonly code: "invalid_model" | "unknown_harness" | "queue_full" | "model_not_allowed",
     message: string,
   ) {
     super(message);
@@ -110,6 +117,7 @@ export class RunService {
   private readonly store: RunStore;
   private readonly queue: TaskQueue;
   private readonly defaultTimeoutMs: number;
+  private readonly pricing: PricingRegistry;
   private readonly adaptersByRun = new Map<string, HarnessAdapter>();
   private readonly cancelledRuns = new Set<string>();
 
@@ -118,6 +126,7 @@ export class RunService {
     this.store = options.store;
     this.queue = options.queue ?? new TaskQueue();
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000;
+    this.pricing = options.pricing ?? new PricingRegistry();
   }
 
   async run(request: RunServiceRequest): Promise<RunServiceResult> {
@@ -144,12 +153,24 @@ export class RunService {
       );
     }
 
+    const fullModelId = `${harness}/${canonicalModel}`;
+    if (request.allowedModels && request.allowedModels.length > 0 && !request.allowedModels.includes(fullModelId)) {
+      return this.reject(
+        request.model,
+        harness,
+        canonicalModel,
+        "model_not_allowed",
+        `Model "${fullModelId}" is not in the allowed list.`,
+      );
+    }
+
     const runId = randomUUID();
     this.store.createRun({
       id: runId,
       requestedModel: request.model,
       resolvedModel: canonicalModel,
       harness,
+      apiKeyId: request.apiKeyId,
     });
     this.adaptersByRun.set(runId, adapter);
 
@@ -167,6 +188,10 @@ export class RunService {
 
   getRun(runId: string) {
     return this.store.getRun(runId);
+  }
+
+  getEstimatedCostSince(keyId: string, sinceIso: string): number {
+    return this.store.sumEstimatedCostSince(keyId, sinceIso);
   }
 
   async stream(request: RunStreamRequest): Promise<RunStreamHandle> {
@@ -193,12 +218,24 @@ export class RunService {
       );
     }
 
+    const fullModelId = `${harness}/${canonicalModel}`;
+    if (request.allowedModels && request.allowedModels.length > 0 && !request.allowedModels.includes(fullModelId)) {
+      return this.reject(
+        request.model,
+        harness,
+        canonicalModel,
+        "model_not_allowed",
+        `Model "${fullModelId}" is not in the allowed list.`,
+      );
+    }
+
     const runId = randomUUID();
     this.store.createRun({
       id: runId,
       requestedModel: request.model,
       resolvedModel: canonicalModel,
       harness,
+      apiKeyId: request.apiKeyId,
     });
     this.adaptersByRun.set(runId, adapter);
 
@@ -249,7 +286,7 @@ export class RunService {
     requestedModel: string,
     harness: string | undefined,
     canonicalModel: string | undefined,
-    code: "invalid_model" | "unknown_harness" | "queue_full",
+    code: "invalid_model" | "unknown_harness" | "queue_full" | "model_not_allowed",
     message: string,
   ): Promise<never> {
     const runId = randomUUID();
@@ -340,9 +377,12 @@ export class RunService {
     }
 
     if (sessionId || usage) {
+      const fullModelId = `${harness}/${canonicalModel}`;
+      const estimatedCostUsd = usage ? estimateCostUsd(usage, this.pricing.get(fullModelId)) : null;
       this.store.updateRunMeta(runId, {
         sessionId: sessionId ?? null,
         usageJson: usage ? JSON.stringify(usage) : null,
+        estimatedCostUsd,
       });
     }
 
@@ -439,9 +479,12 @@ export class RunService {
     }
 
     if (sessionId || usage) {
+      const fullModelId = `${harness}/${canonicalModel}`;
+      const estimatedCostUsd = usage ? estimateCostUsd(usage, this.pricing.get(fullModelId)) : null;
       this.store.updateRunMeta(runId, {
         sessionId: sessionId ?? null,
         usageJson: usage ? JSON.stringify(usage) : null,
+        estimatedCostUsd,
       });
     }
 

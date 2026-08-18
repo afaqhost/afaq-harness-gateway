@@ -5,7 +5,11 @@ import { dirname, resolve } from "node:path";
 import type { RunService } from "./core/run-service.js";
 import type { ChatService } from "./core/chat-service.js";
 import type { AdapterRegistry } from "./core/adapter-registry.js";
+import type { AuthService } from "./core/auth-service.js";
+import type { UsageLimiter } from "./core/limits.js";
+import type { ApiKeyRow } from "./core/api-key-store.js";
 import type { ChatMessage, HarnessEvent } from "./harness/types.js";
+import { UsageLimitError } from "./core/limits.js";
 import { formatOpenAIResponse } from "./openai/format-response.js";
 import { sseDone, createSSEStreamMapper } from "./openai/sse.js";
 
@@ -13,6 +17,8 @@ export interface CreateGatewayServerOptions {
   runService: RunService;
   chatService?: ChatService;
   adapterRegistry?: AdapterRegistry;
+  authService?: AuthService;
+  usageLimiter?: UsageLimiter;
   port?: number;
 }
 
@@ -68,6 +74,8 @@ function sendServerError(res: ServerResponse, err: unknown) {
     sendJson(res, 429, {
       error: { message: runServiceError.message ?? "Queue is full", type: "rate_limit_error" },
     });
+  } else if (code === "model_not_allowed") {
+    sendPermissionError(res, runServiceError.message ?? "Model not allowed.");
   } else {
     sendJson(res, 500, {
       error: { message: `Internal error: ${runServiceError.message ?? String(err)}`, type: "server_error" },
@@ -75,10 +83,65 @@ function sendServerError(res: ServerResponse, err: unknown) {
   }
 }
 
+function getBearerToken(req: IncomingMessage): string | undefined {
+  const header = req.headers.authorization;
+  if (!header) return undefined;
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim();
+}
+
+function readCookies(req: IncomingMessage): Record<string, string> {
+  const header = req.headers.cookie;
+  if (!header) return {};
+  const cookies: Record<string, string> = {};
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx < 0) continue;
+    const key = part.slice(0, idx).trim();
+    const val = part.slice(idx + 1).trim();
+    if (key) cookies[key] = val;
+  }
+  return cookies;
+}
+
+function sendAuthError(res: ServerResponse, message: string) {
+  sendJson(res, 401, { error: { message, type: "authentication_error" } });
+}
+
+function sendPermissionError(res: ServerResponse, message: string) {
+  sendJson(res, 403, { error: { message, type: "permission_error" } });
+}
+
+function sendRateLimitError(res: ServerResponse, message: string) {
+  sendJson(res, 429, { error: { message, type: "rate_limit_error" } });
+}
+
+function publicApiKey(row: ApiKeyRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    prefix: row.prefix,
+    enabled: row.enabled,
+    model_allowlist: row.model_allowlist_json ? JSON.parse(row.model_allowlist_json) : null,
+    rpm_limit: row.rpm_limit,
+    max_concurrency: row.max_concurrency,
+    monthly_budget_usd: row.monthly_budget_usd,
+    expires_at: row.expires_at,
+    last_used_at: row.last_used_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function currentMonthStart(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+}
+
 function streamSSE(
   req: IncomingMessage,
   res: ServerResponse,
-  opts: { runId: string; model: string; events: AsyncGenerator<HarnessEvent>; onClose: () => void },
+  opts: { runId: string; model: string; events: AsyncGenerator<HarnessEvent>; onClose: () => void; onDone?: () => void },
 ): void {
   res.writeHead(200, {
     "content-type": "text/event-stream",
@@ -94,6 +157,7 @@ function streamSSE(
     if (!closed && !finished) {
       closed = true;
       opts.onClose();
+      opts.onDone?.();
     }
   };
 
@@ -115,6 +179,7 @@ function streamSSE(
         res.write(sseDone());
         res.end();
       }
+      opts.onDone?.();
     }
   })();
 }
@@ -123,6 +188,7 @@ async function handleChatCompletions(
   req: IncomingMessage,
   res: ServerResponse,
   runService: RunService,
+  auth?: { key: ApiKeyRow; usageLimiter?: UsageLimiter },
 ): Promise<void> {
   if (req.method !== "POST") {
     methodNotAllowed(res);
@@ -144,7 +210,102 @@ async function handleChatCompletions(
   }
 
   const messages = parsed.messages as ChatMessage[];
+  const allowlist = auth?.key?.model_allowlist_json ? JSON.parse(auth.key.model_allowlist_json) as string[] : [];
 
+  if (auth) {
+    const { key, usageLimiter } = auth;
+    try {
+      if (usageLimiter) {
+        usageLimiter.checkRpm(key.id, key.rpm_limit);
+        const monthStart = currentMonthStart();
+        usageLimiter.checkBudget(runService.getEstimatedCostSince(key.id, monthStart), key.monthly_budget_usd);
+      }
+    } catch (err) {
+      if (err instanceof UsageLimitError) {
+        sendRateLimitError(res, err.message);
+        return;
+      }
+      throw err;
+    }
+
+    try {
+      if (parsed.stream === true) {
+        let release: (() => void) | undefined;
+        if (usageLimiter) {
+          release = usageLimiter.acquireConcurrency(key.id, key.max_concurrency);
+        }
+        try {
+          const handle = await runService.stream({
+            model: parsed.model,
+            messages,
+            apiKeyId: key.id,
+            allowedModels: allowlist.length > 0 ? allowlist : undefined,
+          });
+          streamSSE(req, res, {
+            runId: handle.runId,
+            model: parsed.model,
+            events: handle.events,
+            onClose: () => {
+              void handle.cancel();
+            },
+            onDone: () => {
+              release?.();
+            },
+          });
+        } catch (err) {
+          release?.();
+          if (err instanceof UsageLimitError) {
+            sendRateLimitError(res, err.message);
+            return;
+          }
+          throw err;
+        }
+      } else {
+        let release: (() => void) | undefined;
+        if (usageLimiter) {
+          release = usageLimiter.acquireConcurrency(key.id, key.max_concurrency);
+        }
+        try {
+          const result = await runService.run({
+            model: parsed.model,
+            messages,
+            apiKeyId: key.id,
+            allowedModels: allowlist.length > 0 ? allowlist : undefined,
+          });
+          switch (result.status) {
+            case "completed": {
+              const completion = formatOpenAIResponse(result.events, { runId: result.runId, model: parsed.model });
+              sendJson(res, 200, completion);
+              return;
+            }
+            case "failed":
+            case "timed_out":
+            case "cancelled": {
+              sendJson(res, 502, {
+                error: { message: result.message, type: "server_error" },
+              });
+              return;
+            }
+            default:
+              sendJson(res, 500, {
+                error: { message: "Unknown run outcome", type: "server_error" },
+              });
+          }
+        } finally {
+          release?.();
+        }
+      }
+    } catch (err) {
+      if (err instanceof UsageLimitError) {
+        sendRateLimitError(res, err.message);
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  // No auth — existing behavior
   if (parsed.stream === true) {
     const handle = await runService.stream({ model: parsed.model, messages });
     streamSSE(req, res, {
@@ -240,6 +401,8 @@ async function handleGetRun(
     session_id: row.session_id,
     duration_ms: row.duration_ms,
     usage: row.usage_json ? JSON.parse(row.usage_json) : null,
+    estimated_cost_usd: row.estimated_cost_usd,
+    cost_is_estimated: true,
     created_at: row.created_at,
     started_at: row.started_at,
     finished_at: row.finished_at,
@@ -251,6 +414,7 @@ async function handleModels(
   req: IncomingMessage,
   res: ServerResponse,
   adapterRegistry: AdapterRegistry | undefined,
+  allowlist?: string[],
 ): Promise<void> {
   if (req.method !== "GET") {
     methodNotAllowed(res);
@@ -262,7 +426,7 @@ async function handleModels(
     return;
   }
 
-  const data: Array<{ id: string; object: "model"; created: number; owned_by: string }> = [];
+  let data: Array<{ id: string; object: "model"; created: number; owned_by: string }> = [];
   const created = Math.floor(Date.now() / 1000);
   for (const adapterId of adapterRegistry.ids()) {
     const adapter = adapterRegistry.get(adapterId);
@@ -271,6 +435,10 @@ async function handleModels(
     for (const model of models) {
       data.push({ id: `${adapterId}/${model}`, object: "model", created, owned_by: adapterId });
     }
+  }
+
+  if (allowlist && allowlist.length > 0) {
+    data = data.filter((m) => allowlist.includes(m.id));
   }
 
   sendJson(res, 200, { object: "list", data });
@@ -405,31 +573,234 @@ async function serveUI(res: ServerResponse): Promise<void> {
 
 export function createGatewayServer(opts: CreateGatewayServerOptions) {
   const port = opts.port ?? 3000;
+  const authService = opts.authService;
+  const usageLimiter = opts.usageLimiter;
+
+  function requireApiKey(req: IncomingMessage, res: ServerResponse): ApiKeyRow | undefined {
+    if (!authService) return undefined;
+    const token = getBearerToken(req);
+    if (!token) {
+      sendAuthError(res, "Missing API key.");
+      return undefined;
+    }
+    const result = authService.authenticateApiKey(token);
+    if (!result.ok) {
+      const messages = {
+        invalid: "Invalid API key.",
+        disabled: "API key is disabled.",
+        expired: "API key has expired.",
+      };
+      sendAuthError(res, messages[result.reason]);
+      return undefined;
+    }
+    authService.setLastUsed(result.key.id);
+    return result.key;
+  }
+
+  async function requireSession(req: IncomingMessage, res: ServerResponse): Promise<{ id: string; username: string } | undefined> {
+    if (!authService) {
+      notImplemented(res, "Authentication is not available.");
+      return undefined;
+    }
+    const cookies = readCookies(req);
+    const token = cookies["ahg_session"];
+    if (!token) {
+      sendAuthError(res, "Session required.");
+      return undefined;
+    }
+    const user = await authService.getUserBySession(token);
+    if (!user) {
+      sendAuthError(res, "Invalid or expired session.");
+      return undefined;
+    }
+    return { id: user.id, username: user.username };
+  }
 
   const server = createServer(async (req, res) => {
     const url = req.url ?? "/";
 
     try {
+      if (url === "/health") {
+        sendJson(res, 200, { status: "ok" });
+        return;
+      }
+
       if (url === "/v1/chat/completions") {
-        await handleChatCompletions(req, res, opts.runService);
+        const key = requireApiKey(req, res);
+        if (authService && !key) return;
+        await handleChatCompletions(req, res, opts.runService, key ? { key, usageLimiter } : undefined);
         return;
       }
 
       if (url.startsWith("/v1/runs/") && url.endsWith("/cancel")) {
+        const key = requireApiKey(req, res);
+        if (authService && !key) return;
         await handleCancelRun(req, res, opts.runService);
         return;
       }
 
       if (url.startsWith("/v1/runs/")) {
+        const key = requireApiKey(req, res);
+        if (authService && !key) return;
         await handleGetRun(req, res, opts.runService);
         return;
       }
 
       if (url === "/v1/models") {
-        await handleModels(req, res, opts.adapterRegistry);
+        const key = requireApiKey(req, res);
+        if (authService && !key) return;
+        const allowlist = key?.model_allowlist_json ? JSON.parse(key.model_allowlist_json) as string[] : undefined;
+        await handleModels(req, res, opts.adapterRegistry, allowlist);
         return;
       }
 
+      if (url === "/v1/usage") {
+        if (!authService) {
+          notImplemented(res, "Usage tracking is not available.");
+          return;
+        }
+        const key = requireApiKey(req, res);
+        if (!key) return;
+        const monthStart = currentMonthStart();
+        const estimatedCost = opts.runService.getEstimatedCostSince(key.id, monthStart);
+        sendJson(res, 200, {
+          object: "usage",
+          key_id: key.id,
+          period_start: monthStart,
+          period_end: new Date().toISOString(),
+          estimated_cost_usd: estimatedCost,
+          currency: "USD",
+          estimated: true,
+        });
+        return;
+      }
+
+      // Auth routes
+      if (url === "/auth/setup" && req.method === "POST") {
+        if (!authService) {
+          notImplemented(res, "Authentication is not available.");
+          return;
+        }
+        const raw = await readBody(req);
+        const parsed = parseJsonBody(raw);
+        if (!parsed || typeof parsed.username !== "string" || typeof parsed.password !== "string") {
+          sendJson(res, 400, { error: { message: "Username and password are required.", type: "invalid_request_error" } });
+          return;
+        }
+        const hasUsers = authService.hasUsers();
+        if (hasUsers) {
+          sendJson(res, 409, { error: { message: "Setup disabled: users already exist.", type: "invalid_request_error" } });
+          return;
+        }
+        try {
+          const user = await authService.createUser(parsed.username, parsed.password);
+          sendJson(res, 201, { id: user.id, username: user.username });
+        } catch (err) {
+          sendJson(res, 400, { error: { message: (err as Error).message, type: "invalid_request_error" } });
+        }
+        return;
+      }
+
+      if (url === "/auth/login" && req.method === "POST") {
+        if (!authService) {
+          notImplemented(res, "Authentication is not available.");
+          return;
+        }
+        const raw = await readBody(req);
+        const parsed = parseJsonBody(raw);
+        if (!parsed || typeof parsed.username !== "string" || typeof parsed.password !== "string") {
+          sendJson(res, 400, { error: { message: "Username and password are required.", type: "invalid_request_error" } });
+          return;
+        }
+        const result = await authService.login(parsed.username, parsed.password);
+        if (!result) {
+          sendAuthError(res, "Invalid username or password.");
+          return;
+        }
+        res.writeHead(200, {
+          "content-type": "application/json",
+          "set-cookie": `ahg_session=${result.token}; HttpOnly; SameSite=Lax; Path=/; Expires=${new Date(result.expiresAt).toUTCString()}`,
+        });
+        const user = await authService.getUserBySession(result.token);
+        res.end(JSON.stringify({ id: user!.id, username: user!.username }));
+        return;
+      }
+
+      if (url === "/auth/logout" && req.method === "POST") {
+        if (!authService) {
+          notImplemented(res, "Authentication is not available.");
+          return;
+        }
+        const cookies = readCookies(req);
+        const token = cookies["ahg_session"];
+        if (token) {
+          await authService.logout(token);
+        }
+        res.writeHead(204, {
+          "set-cookie": "ahg_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+        });
+        res.end();
+        return;
+      }
+
+      // Key management routes
+      if (url === "/v1/keys" && req.method === "GET") {
+        const user = await requireSession(req, res);
+        if (!user) return;
+        const keys = authService!.listApiKeys();
+        sendJson(res, 200, { object: "list", data: keys.map(publicApiKey) });
+        return;
+      }
+
+      if (url === "/v1/keys" && req.method === "POST") {
+        const user = await requireSession(req, res);
+        if (!user) return;
+        const raw = await readBody(req);
+        const parsed = parseJsonBody(raw);
+        if (!parsed || typeof parsed.name !== "string") {
+          sendJson(res, 400, { error: { message: "name is required.", type: "invalid_request_error" } });
+          return;
+        }
+        const { fullKey, row } = authService!.createApiKey({
+          name: parsed.name,
+          modelAllowlist: parsed.model_allowlist as string[] | undefined,
+          rpmLimit: parsed.rpm_limit as number | undefined,
+          maxConcurrency: parsed.max_concurrency as number | undefined,
+          monthlyBudgetUsd: parsed.monthly_budget_usd as number | undefined,
+          expiresAt: parsed.expires_at as string | undefined,
+        });
+        sendJson(res, 201, { full_key: fullKey, key: publicApiKey(row) });
+        return;
+      }
+
+      if (url.match(/^\/v1\/keys\/[^/]+\/disable$/) && req.method === "POST") {
+        const user = await requireSession(req, res);
+        if (!user) return;
+        const keyId = url.split("/")[3];
+        authService!.disableApiKey(keyId);
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (url.match(/^\/v1\/keys\/[^/]+\/enable$/) && req.method === "POST") {
+        const user = await requireSession(req, res);
+        if (!user) return;
+        const keyId = url.split("/")[3];
+        authService!.enableApiKey(keyId);
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (url.match(/^\/v1\/keys\/[^/]+$/) && req.method === "DELETE") {
+        const user = await requireSession(req, res);
+        if (!user) return;
+        const keyId = url.split("/")[3];
+        authService!.deleteApiKey(keyId);
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      // Conversation and UI routes (unchanged)
       if (url === "/v1/conversations") {
         await handleConversations(req, res, opts.chatService);
         return;

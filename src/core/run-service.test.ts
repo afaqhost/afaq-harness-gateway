@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { AdapterRegistry } from "./adapter-registry.js";
 import { RunService, RunRejectedError } from "./run-service.js";
 import { RunStore } from "./store.js";
+import { PricingRegistry } from "./pricing.js";
 import { FakeHarnessAdapter } from "../harness/fake-harness.js";
 
 describe("RunService", () => {
@@ -76,5 +77,84 @@ describe("RunService", () => {
     const run = store.getRun(result.runId)!;
     expect(run.requested_model).toBe("fake");
     expect(run.resolved_model).toBe("fake-model");
+  });
+
+  it("rejects a model not in the allowed list before executing", async () => {
+    const registry = new AdapterRegistry();
+    registry.register(new FakeHarnessAdapter());
+    const store = new RunStore(":memory:");
+    const service = new RunService({ adapterRegistry: registry, store });
+
+    await expect(
+      service.run({
+        model: "fake-harness/fake-model",
+        messages: [{ role: "user", content: "hi" }],
+        allowedModels: ["fake-harness/other-model"],
+      }),
+    ).rejects.toBeInstanceOf(RunRejectedError);
+    await expect(
+      service.run({
+        model: "fake-harness/fake-model",
+        messages: [],
+        allowedModels: ["fake-harness/other-model"],
+      }),
+    ).rejects.toMatchObject({ code: "model_not_allowed" });
+
+    const runs = store.listRuns();
+    const rejected = runs.find((r) => r.status === "rejected");
+    expect(rejected).toBeDefined();
+    // No adapter run should have produced usage or session
+    expect(rejected!.usage_json).toBeNull();
+    expect(rejected!.session_id).toBeNull();
+  });
+
+  it("passes apiKeyId to the persisted run", async () => {
+    const registry = new AdapterRegistry();
+    registry.register(new FakeHarnessAdapter());
+    const store = new RunStore(":memory:");
+    const service = new RunService({ adapterRegistry: registry, store });
+
+    const result = await service.run({
+      model: "fake-harness/fake-model",
+      messages: [{ role: "user", content: "hi" }],
+      apiKeyId: "key-abc",
+    });
+
+    expect(result.status).toBe("completed");
+    const run = store.getRun(result.runId)!;
+    expect(run.api_key_id).toBe("key-abc");
+  });
+
+  it("persists estimated_cost_usd when usage is present", async () => {
+    const registry = new AdapterRegistry();
+    registry.register(new FakeHarnessAdapter());
+    const store = new RunStore(":memory:");
+    const service = new RunService({ adapterRegistry: registry, store });
+
+    const result = await service.run({
+      model: "fake-harness/fake-model",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(result.status).toBe("completed");
+    const run = store.getRun(result.runId)!;
+    expect(run.estimated_cost_usd).not.toBeNull();
+    expect(run.estimated_cost_usd).toBeGreaterThan(0);
+  });
+
+  it("getEstimatedCostSince delegates to the store", async () => {
+    const registry = new AdapterRegistry();
+    registry.register(new FakeHarnessAdapter());
+    const store = new RunStore(":memory:");
+    const service = new RunService({ adapterRegistry: registry, store });
+
+    await service.run({
+      model: "fake-harness/fake-model",
+      messages: [{ role: "user", content: "hi" }],
+      apiKeyId: "k1",
+    });
+
+    const cost = service.getEstimatedCostSince("k1", "2000-01-01T00:00:00.000Z");
+    expect(cost).toBeGreaterThan(0);
   });
 });
