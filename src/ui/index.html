@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Afaq Harness Gateway</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #101014;
+      --panel: #17171c;
+      --panel-2: #1f1f26;
+      --border: #2c2c35;
+      --text: #eceef4;
+      --muted: #8b8f9c;
+      --accent: #7aa2ff;
+      --danger: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+    }
+    #sidebar {
+      width: 280px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 12px;
+    }
+    #sidebar h1 {
+      font-size: 18px;
+      margin: 0 0 8px;
+    }
+    #new-conversation {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: left;
+    }
+    #conversation-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #conversation-list li {
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      color: var(--text);
+      border: 1px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #conversation-list li:hover { background: var(--panel-2); }
+    #conversation-list li.active { border-color: var(--accent); }
+    #conversation-list li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #conversation-list li button {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 2px 6px;
+    }
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    #toolbar {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    #title-input {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 600;
+      padding: 6px 8px;
+      border-radius: 6px;
+      flex: 1;
+    }
+    #title-input:hover, #title-input:focus { border-color: var(--border); outline: none; }
+    #metadata {
+      padding: 6px 20px;
+      color: var(--muted);
+      font-size: 12px;
+      min-height: 18px;
+      white-space: pre-wrap;
+    }
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .message { max-width: 72%; padding: 12px 14px; border-radius: 12px; line-height: 1.5; white-space: pre-wrap; }
+    .message.user { align-self: flex-end; background: var(--accent); color: #000; }
+    .message.assistant { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--border); }
+    #composer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+    }
+    #composer textarea {
+      flex: 1;
+      resize: none;
+      min-height: 46px;
+      max-height: 160px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 15px;
+    }
+    #model-select {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+    }
+    #send-button, #stop-button {
+      border: none;
+      border-radius: 8px;
+      padding: 0 18px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #send-button { background: var(--accent); color: #000; }
+    #stop-button { background: var(--danger); color: #fff; display: none; }
+  </style>
+</head>
+<body>
+  <aside id="sidebar">
+    <h1>Gateway Chat</h1>
+    <button id="new-conversation">+ New conversation</button>
+    <ul id="conversation-list"></ul>
+  </aside>
+  <main id="main">
+    <div id="toolbar">
+      <input id="title-input" placeholder="Conversation title">
+    </div>
+    <div id="metadata"></div>
+    <div id="messages"></div>
+    <div id="composer">
+      <select id="model-select"></select>
+      <textarea id="message-input" placeholder="Type a message..."></textarea>
+      <button id="send-button">Send</button>
+      <button id="stop-button">Stop</button>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      const state = {
+        conversations: [],
+        activeConversationId: null,
+        models: [],
+        activeRunId: null,
+        streaming: false,
+        abortController: null,
+      };
+
+      const els = {
+        list: document.getElementById("conversation-list"),
+        newButton: document.getElementById("new-conversation"),
+        title: document.getElementById("title-input"),
+        metadata: document.getElementById("metadata"),
+        messages: document.getElementById("messages"),
+        model: document.getElementById("model-select"),
+        input: document.getElementById("message-input"),
+        send: document.getElementById("send-button"),
+        stop: document.getElementById("stop-button"),
+      };
+
+      async function api(path, options = {}) {
+        const res = await fetch(path, options);
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`HTTP ${res.status}: ${text}`);
+        }
+        return res;
+      }
+
+      function setStreaming(streaming) {
+        state.streaming = streaming;
+        els.send.style.display = streaming ? "none" : "";
+        els.stop.style.display = streaming ? "" : "none";
+        els.input.disabled = streaming;
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (ch) => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+        }[ch]));
+      }
+
+      function addMessage(role, content) {
+        const div = document.createElement("div");
+        div.className = "message " + role;
+        div.textContent = content;
+        els.messages.appendChild(div);
+        els.messages.scrollTop = els.messages.scrollHeight;
+        return div;
+      }
+
+      function clearMessages() {
+        els.messages.innerHTML = "";
+        els.metadata.textContent = "";
+      }
+
+      async function loadModels() {
+        try {
+          const res = await fetch("/v1/models");
+          if (res.status === 501) {
+            els.model.innerHTML = '<option value="">No models</option>';
+            return;
+          }
+          if (!res.ok) throw new Error(await res.text());
+          const body = await res.json();
+          state.models = body.data || [];
+          els.model.innerHTML = "";
+          for (const model of state.models) {
+            const opt = document.createElement("option");
+            opt.value = model.id;
+            opt.textContent = model.id;
+            els.model.appendChild(opt);
+          }
+        } catch {
+          els.model.innerHTML = '<option value="">Failed to load models</option>';
+        }
+      }
+
+      async function loadConversations() {
+        const res = await fetch("/v1/conversations");
+        if (res.status === 501) return;
+        if (!res.ok) throw new Error(await res.text());
+        state.conversations = await res.json();
+        renderConversationList();
+      }
+
+      function renderConversationList() {
+        els.list.innerHTML = "";
+        for (const conversation of state.conversations) {
+          const li = document.createElement("li");
+          if (conversation.id === state.activeConversationId) li.classList.add("active");
+
+          const span = document.createElement("span");
+          span.textContent = conversation.title;
+          span.title = conversation.title;
+          span.addEventListener("click", () => selectConversation(conversation.id));
+          li.appendChild(span);
+
+          const button = document.createElement("button");
+          button.textContent = "×";
+          button.title = "Delete conversation";
+          button.addEventListener("click", (event) => {
+            event.stopPropagation();
+            void deleteConversation(conversation.id);
+          });
+          li.appendChild(button);
+
+          els.list.appendChild(li);
+        }
+      }
+
+      async function deleteConversation(id) {
+        // No DELETE route is required; a simple client-side refresh is sufficient for
+        // listing. Deletion would need a new endpoint and is intentionally omitted.
+        void id;
+        await loadConversations();
+      }
+
+      async function selectConversation(id) {
+        state.activeConversationId = id;
+        renderConversationList();
+
+        const res = await fetch(`/v1/conversations/${encodeURIComponent(id)}`);
+        if (!res.ok) throw new Error(await res.text());
+        const conversation = await res.json();
+
+        els.title.value = conversation.title;
+        clearMessages();
+        for (const message of conversation.messages || []) {
+          addMessage(message.role, message.content);
+        }
+      }
+
+      async function createConversation() {
+        const res = await fetch("/v1/conversations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const conversation = await res.json();
+        state.conversations.unshift(conversation);
+        renderConversationList();
+        await selectConversation(conversation.id);
+      }
+
+      async function saveTitle() {
+        if (!state.activeConversationId) return;
+        const title = els.title.value.trim();
+        if (!title) return;
+        await fetch(`/v1/conversations/${encodeURIComponent(state.activeConversationId)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        await loadConversations();
+        renderConversationList();
+      }
+
+      async function consumeSSE(res, onEvent) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() || "";
+
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith("data:")) continue;
+            const data = line.slice(5).trim();
+            if (data === "[DONE]") return;
+            try {
+              onEvent(JSON.parse(data));
+            } catch {
+              // Ignore malformed SSE frame.
+            }
+          }
+        }
+      }
+
+      async function sendMessage() {
+        if (state.streaming || !state.activeConversationId) return;
+        const content = els.input.value.trim();
+        if (!content) return;
+
+        const model = els.model.value || undefined;
+        const body = { content };
+        if (model) body.model = model;
+
+        els.input.value = "";
+        addMessage("user", content);
+        setStreaming(true);
+        state.activeRunId = null;
+
+        const assistantNode = addMessage("assistant", "");
+        let assistantText = "";
+        let usageText = "";
+        let finished = false;
+
+        try {
+          const res = await fetch(
+            `/v1/conversations/${encodeURIComponent(state.activeConversationId)}/messages`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(body),
+            },
+          );
+
+          if (!res.ok) throw new Error(await res.text());
+
+          await consumeSSE(res, (chunk) => {
+            const choice = chunk.choices && chunk.choices[0];
+            if (!choice) return;
+            if (!state.activeRunId && typeof chunk.id === "string" && chunk.id.startsWith("chatcmpl-")) {
+              state.activeRunId = chunk.id.slice("chatcmpl-".length);
+            }
+            const delta = choice.delta || {};
+            if (delta.content) {
+              assistantText += delta.content;
+              assistantNode.textContent = assistantText;
+            }
+            if (choice.finish_reason === "stop") finished = true;
+            if (chunk.usage) {
+              usageText = `tokens: ${chunk.usage.prompt_tokens}/${chunk.usage.completion_tokens}`;
+            }
+            els.messages.scrollTop = els.messages.scrollHeight;
+          });
+
+          if (assistantText === "" && !finished) {
+            assistantNode.textContent = "(no response)";
+          }
+
+          if (state.activeRunId) {
+            try {
+              const runRes = await fetch(`/v1/runs/${encodeURIComponent(state.activeRunId)}`);
+              if (runRes.ok) {
+                const run = await runRes.json();
+                const harnessPart = run.harness ? `harness: ${run.harness}` : "";
+                const modelPart = run.resolved_model ? `model: ${run.resolved_model}` : "";
+                const durationPart = run.duration_ms != null ? `duration: ${run.duration_ms}ms` : "";
+                usageText = [harnessPart, modelPart, usageText, durationPart].filter(Boolean).join(" | ");
+              }
+            } catch {
+              // metadata is best-effort
+            }
+          }
+          els.metadata.textContent = usageText || "";
+        } catch (err) {
+          assistantNode.textContent = assistantNode.textContent || `Error: ${err.message}`;
+          els.metadata.textContent = "stream failed";
+        } finally {
+          setStreaming(false);
+          await loadConversations();
+          renderConversationList();
+        }
+      }
+
+      async function stopStreaming() {
+        if (state.activeRunId) {
+          await fetch(`/v1/runs/${encodeURIComponent(state.activeRunId)}/cancel`, { method: "POST" });
+        }
+        setStreaming(false);
+      }
+
+      els.newButton.addEventListener("click", () => { void createConversation(); });
+      els.send.addEventListener("click", () => { void sendMessage(); });
+      els.stop.addEventListener("click", () => { void stopStreaming(); });
+      els.title.addEventListener("change", () => { void saveTitle(); });
+      els.input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          void sendMessage();
+        }
+      });
+
+      (async function init() {
+        await loadModels();
+        await loadConversations();
+        if (state.conversations.length > 0) {
+          await selectConversation(state.conversations[0].id);
+        } else {
+          await createConversation();
+        }
+      })().catch((err) => {
+        els.metadata.textContent = `Init error: ${err.message}`;
+      });
+    })();
+  </script>
+</body>
+</html>

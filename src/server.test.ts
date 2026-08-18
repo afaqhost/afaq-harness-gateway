@@ -5,6 +5,8 @@ import { CommandCodeAdapter } from "./harness/command-code.js";
 import { AdapterRegistry } from "./core/adapter-registry.js";
 import { RunService } from "./core/run-service.js";
 import { RunStore } from "./core/store.js";
+import { ChatStore } from "./core/chat-store.js";
+import { ChatService } from "./core/chat-service.js";
 import type { HarnessAdapter, HarnessRunRequest } from "./harness/types.js";
 import type { Server } from "node:http";
 
@@ -34,7 +36,7 @@ function buildServer(
     store,
     defaultTimeoutMs: options.defaultTimeoutMs ?? 30_000,
   });
-  return createGatewayServer({ runService, port: options.port ?? 0 });
+  return createGatewayServer({ runService, adapterRegistry: registry, port: options.port ?? 0 });
 }
 
 describe("POST /v1/chat/completions", () => {
@@ -72,19 +74,6 @@ describe("POST /v1/chat/completions", () => {
     expect(usage.prompt_tokens).toBe(10);
     expect(usage.completion_tokens).toBe(5);
     expect(usage.total_tokens).toBe(15);
-  });
-
-  it("rejects stream: true with a controlled error", async () => {
-    const port = (server.server.address() as { port: number }).port;
-    const res = await requestPost(port, "/v1/chat/completions", {
-      model: "fake-harness/fake-model",
-      messages: [{ role: "user", content: "Hello" }],
-      stream: true,
-    });
-
-    expect(res.status).toBe(400);
-    const body = res.body as Record<string, unknown>;
-    expect((body.error as { message: string }).message).toContain("Streaming is not supported");
   });
 
   it("rejects invalid JSON body", async () => {
@@ -275,4 +264,210 @@ describe("Command-Code smoke test (opt-in)", () => {
     },
     60000,
   );
+});
+
+async function fetchSSE(port: number, path: string, body: unknown): Promise<{ status: number; text: string }> {
+  const res = await fetch(`http://127.0.0.1:${port}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, text: await res.text() };
+}
+
+describe("Phase 05: streaming + chat", () => {
+  it("stream:true returns text/event-stream with OpenAI chunks and [DONE]", async () => {
+    const server = buildServer([new FakeHarnessAdapter()]);
+    await server.start();
+    const port = (server.server.address() as { port: number }).port;
+
+    const res = await fetchSSE(port, "/v1/chat/completions", {
+      model: "fake-harness/fake-model",
+      messages: [{ role: "user", content: "Hello" }],
+      stream: true,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("data: ");
+    expect(res.text).toContain("data: [DONE]");
+    expect(res.text).toContain('"object":"chat.completion.chunk"');
+    expect(res.text).toContain('"delta":{"role":"assistant"}');
+    expect(res.text).toContain('"delta":{"content":"Hello from fake harness."}');
+    expect(res.text).toContain('"finish_reason":"stop"');
+    expect(res.text).toContain('"prompt_tokens":10');
+    expect(res.text).toContain('"completion_tokens":5');
+    expect(res.text).toContain('"total_tokens":15');
+
+    await server.stop();
+  });
+
+  it("cancel endpoint cancels a hanging streaming run", async () => {
+    const harnessPath = new URL("../testing/fixtures/fake-harness/fake-harness.mjs", import.meta.url).pathname;
+    const adapter = new FakeHarnessAdapter({ harnessPath, extraArgs: ["--hang"] });
+    const server = buildServer([adapter], { defaultTimeoutMs: 30000 });
+    await server.start();
+    const port = (server.server.address() as { port: number }).port;
+
+    const controller = new AbortController();
+    const resPromise = fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "fake-harness/fake-model",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      }),
+      signal: controller.signal,
+    });
+
+    const res = await resPromise;
+    expect(res.status).toBe(200);
+
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let runId: string | undefined;
+
+    const first = await reader.read();
+    buffer += decoder.decode(first.value, { stream: true });
+
+    const startedChunk = buffer
+      .split("\n\n")
+      .map((f) => f.replace(/^data:\s*/, "").trim())
+      .find((f) => f && f !== "[DONE]");
+    if (startedChunk) {
+      const chunk = JSON.parse(startedChunk) as { id?: string };
+      if (chunk.id?.startsWith("chatcmpl-")) runId = chunk.id.slice("chatcmpl-".length);
+    }
+
+    expect(runId).toBeTruthy();
+    const cancelRes = await fetch(`http://127.0.0.1:${port}/v1/runs/${runId}/cancel`, { method: "POST" });
+    expect(cancelRes.status).toBe(200);
+
+    await reader.cancel();
+    controller.abort();
+
+    await new Promise((r) => setTimeout(r, 100));
+    await server.stop();
+  });
+
+  it("client disconnect during streaming cancels the run", async () => {
+    const harnessPath = new URL("../testing/fixtures/fake-harness/fake-harness.mjs", import.meta.url).pathname;
+    const adapter = new FakeHarnessAdapter({ harnessPath, extraArgs: ["--hang"] });
+    const server = buildServer([adapter], { defaultTimeoutMs: 30000 });
+    await server.start();
+    const port = (server.server.address() as { port: number }).port;
+
+    const controller = new AbortController();
+    const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "fake-harness/fake-model",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      }),
+      signal: controller.signal,
+    });
+    expect(res.status).toBe(200);
+
+    const reader = res.body!.getReader();
+    await reader.read();
+    controller.abort();
+    await new Promise((r) => setTimeout(r, 300));
+    await server.stop();
+  });
+
+  it("conversations CRUD + message persistence through HTTP endpoints", async () => {
+    const registry = new AdapterRegistry();
+    registry.register(new FakeHarnessAdapter());
+    const runStore = new RunStore(":memory:");
+    const runService = new RunService({ adapterRegistry: registry, store: runStore });
+    const chatStore = new ChatStore(":memory:");
+    const chatService = new ChatService({ runService, chatStore });
+    const server = createGatewayServer({ runService, chatService, adapterRegistry: registry, port: 0 });
+    await server.start();
+    const port = (server.server.address() as { port: number }).port;
+
+    const createRes = await fetch(`http://127.0.0.1:${port}/v1/conversations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "My chat" }),
+    });
+    expect(createRes.status).toBe(201);
+    const conversation = (await createRes.json()) as { id: string; title: string };
+    expect(conversation.title).toBe("My chat");
+
+    const listRes = await fetch(`http://127.0.0.1:${port}/v1/conversations`);
+    expect(listRes.status).toBe(200);
+    expect(await listRes.json()).toHaveLength(1);
+
+    const sendRes = await fetch(`http://127.0.0.1:${port}/v1/conversations/${conversation.id}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: "hello", model: "fake-harness/fake-model" }),
+    });
+    expect(sendRes.status).toBe(200);
+    const sseText = await sendRes.text();
+    expect(sseText).toContain("data: [DONE]");
+
+    const messagesRes = await fetch(`http://127.0.0.1:${port}/v1/conversations/${conversation.id}/messages`);
+    expect(messagesRes.status).toBe(200);
+    const messages = (await messagesRes.json()) as Array<{ role: string; content: string; run_id: string | null }>;
+    expect(messages).toHaveLength(2);
+    expect(messages[0].role).toBe("user");
+    expect(messages[1].role).toBe("assistant");
+    expect(messages[1].run_id).toBeTruthy();
+
+    const patchRes = await fetch(`http://127.0.0.1:${port}/v1/conversations/${conversation.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Renamed" }),
+    });
+    expect(patchRes.status).toBe(200);
+    expect(((await patchRes.json()) as { title: string }).title).toBe("Renamed");
+
+    await server.stop();
+  });
+
+  it("UI route serves HTML containing expected markers", async () => {
+    const server = buildServer([new FakeHarnessAdapter()]);
+    await server.start();
+    const port = (server.server.address() as { port: number }).port;
+
+    const res = await fetch(`http://127.0.0.1:${port}/`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const text = await res.text();
+    expect(text).toContain("Gateway Chat");
+    expect(text).toContain("new-conversation");
+    expect(text).toContain("message-input");
+
+    await server.stop();
+  });
+
+  it("/v1/models returns fake-harness/fake-model", async () => {
+    const server = buildServer([new FakeHarnessAdapter()]);
+    await server.start();
+    const port = (server.server.address() as { port: number }).port;
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/models`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { object: string; data: Array<{ id: string }> };
+    expect(body.object).toBe("list");
+    expect(body.data).toContainEqual(expect.objectContaining({ id: "fake-harness/fake-model" }));
+
+    await server.stop();
+  });
+
+  it("returns 501 for conversation routes when chatService is absent", async () => {
+    const server = buildServer([new FakeHarnessAdapter()]);
+    await server.start();
+    const port = (server.server.address() as { port: number }).port;
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/conversations`);
+    expect(res.status).toBe(501);
+
+    await server.stop();
+  });
 });
