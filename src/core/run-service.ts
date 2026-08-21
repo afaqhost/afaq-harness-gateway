@@ -5,8 +5,9 @@ import { estimateCostUsd } from "./cost.js";
 import { resolveModelId } from "./model-resolution.js";
 import { PricingRegistry } from "./pricing.js";
 import { ProcessCancelledError, ProcessTimedOutError } from "./process-runner.js";
-import { TaskQueue, QueueFullError } from "./queue.js";
+import { TaskQueue, QueueFullError, QueueTimeoutError } from "./queue.js";
 import { RunStore, type RunStatus } from "./store.js";
+import { logger } from "./logger.js";
 
 export interface RunServiceOptions {
   adapterRegistry: AdapterRegistry;
@@ -14,6 +15,8 @@ export interface RunServiceOptions {
   queue?: TaskQueue;
   defaultTimeoutMs?: number;
   pricing?: PricingRegistry;
+  queueCapacity?: number;
+  queueTimeoutMs?: number;
 }
 
 export interface RunServiceRequest {
@@ -124,7 +127,10 @@ export class RunService {
   constructor(options: RunServiceOptions) {
     this.registry = options.adapterRegistry;
     this.store = options.store;
-    this.queue = options.queue ?? new TaskQueue();
+    this.queue = options.queue ?? new TaskQueue({
+      capacity: options.queueCapacity ?? 100,
+      queueTimeoutMs: options.queueTimeoutMs,
+    });
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000;
     this.pricing = options.pricing ?? new PricingRegistry();
   }
@@ -180,6 +186,12 @@ export class RunService {
       this.adaptersByRun.delete(runId);
       if (err instanceof QueueFullError) {
         this.store.markFinished(runId, "rejected", err.message);
+        this.logRunCompletion(runId, harness, canonicalModel, "rejected", "queue_full");
+        throw new RunRejectedError("queue_full", err.message);
+      }
+      if (err instanceof QueueTimeoutError) {
+        this.store.markFinished(runId, "rejected", err.message);
+        this.logRunCompletion(runId, harness, canonicalModel, "rejected", "queue_timeout");
         throw new RunRejectedError("queue_full", err.message);
       }
       throw err;
@@ -254,8 +266,9 @@ export class RunService {
 
     enqueuePromise.catch((err) => {
       this.adaptersByRun.delete(runId);
-      if (err instanceof QueueFullError) {
+      if (err instanceof QueueFullError || err instanceof QueueTimeoutError) {
         this.store.markFinished(runId, "rejected", err.message);
+        this.logRunCompletion(runId, harness, canonicalModel, "rejected", err instanceof QueueFullError ? "queue_full" : "queue_timeout");
         const rejected = new RunRejectedError("queue_full", err.message);
         channel.fail(rejected);
         markStartFailed?.(rejected);
@@ -282,6 +295,24 @@ export class RunService {
     }
   }
 
+  private logRunCompletion(
+    runId: string,
+    harness: string | undefined,
+    model: string | undefined,
+    status: RunStatus,
+    errorCode: string,
+  ): void {
+    const row = this.store.getRun(runId);
+    logger.info("run_finished", {
+      run_id: runId,
+      harness: harness ?? null,
+      model: model ?? null,
+      status,
+      duration_ms: row?.duration_ms ?? null,
+      error_code: errorCode,
+    });
+  }
+
   private async reject(
     requestedModel: string,
     harness: string | undefined,
@@ -298,6 +329,7 @@ export class RunService {
     });
     this.store.appendEvent(runId, "rejected", { message });
     this.store.markFinished(runId, "rejected", message);
+    this.logRunCompletion(runId, harness, canonicalModel, "rejected", code);
     throw new RunRejectedError(code, message);
   }
 
@@ -321,6 +353,7 @@ export class RunService {
 
     if (this.cancelledRuns.has(runId)) {
       this.store.markFinished(runId, "cancelled", "Run was cancelled before it started.");
+      this.logRunCompletion(runId, harness, canonicalModel, "cancelled", "cancelled");
       return { status: "cancelled", runId, message: "Run was cancelled before it started." };
     }
 
@@ -364,13 +397,16 @@ export class RunService {
     } catch (err) {
       if (err instanceof ProcessTimedOutError) {
         this.store.markFinished(runId, "timed_out", err.message);
+        this.logRunCompletion(runId, harness, canonicalModel, "timed_out", "timed_out");
         return { status: "timed_out", runId, message: err.message };
       }
       if (err instanceof ProcessCancelledError || this.cancelledRuns.has(runId)) {
         this.store.markFinished(runId, "cancelled", "Run was cancelled.");
+        this.logRunCompletion(runId, harness, canonicalModel, "cancelled", "cancelled");
         return { status: "cancelled", runId, message: "Run was cancelled." };
       }
       this.store.markFinished(runId, "failed", err instanceof Error ? err.message : String(err));
+      this.logRunCompletion(runId, harness, canonicalModel, "failed", "failed");
       throw err;
     } finally {
       this.cancelledRuns.delete(runId);
@@ -388,15 +424,18 @@ export class RunService {
 
     if (terminal === "cancelled") {
       this.store.markFinished(runId, "cancelled", "Run was cancelled.");
+      this.logRunCompletion(runId, harness, canonicalModel, "cancelled", "cancelled");
       return { status: "cancelled", runId, message: "Run was cancelled." };
     }
 
     if (terminal === "failed") {
       this.store.markFinished(runId, "failed", errorMessage);
+      this.logRunCompletion(runId, harness, canonicalModel, "failed", "failed");
       return { status: "failed", runId, message: errorMessage ?? "Harness failed.", retryable };
     }
 
     this.store.markFinished(runId, "completed");
+    this.logRunCompletion(runId, harness, canonicalModel, "completed", "ok");
     return { status: "completed", runId, events };
   }
 
@@ -463,15 +502,18 @@ export class RunService {
     } catch (err) {
       if (err instanceof ProcessTimedOutError) {
         this.store.markFinished(runId, "timed_out", err.message);
+        this.logRunCompletion(runId, harness, canonicalModel, "timed_out", "timed_out");
         channel.fail(err);
         return;
       }
       if (err instanceof ProcessCancelledError || this.cancelledRuns.has(runId)) {
         this.store.markFinished(runId, "cancelled", "Run was cancelled.");
+        this.logRunCompletion(runId, harness, canonicalModel, "cancelled", "cancelled");
         channel.fail(new ProcessCancelledError(runId));
         return;
       }
       this.store.markFinished(runId, "failed", err instanceof Error ? err.message : String(err));
+      this.logRunCompletion(runId, harness, canonicalModel, "failed", "failed");
       channel.fail(err);
       return;
     } finally {
@@ -490,17 +532,20 @@ export class RunService {
 
     if (terminal === "cancelled") {
       this.store.markFinished(runId, "cancelled", errorMessage ?? "Run was cancelled.");
+      this.logRunCompletion(runId, harness, canonicalModel, "cancelled", "cancelled");
       channel.fail(new ProcessCancelledError(runId));
       return;
     }
 
     if (terminal === "failed") {
       this.store.markFinished(runId, "failed", errorMessage);
+      this.logRunCompletion(runId, harness, canonicalModel, "failed", "failed");
       channel.finish();
       return;
     }
 
     this.store.markFinished(runId, "completed");
+    this.logRunCompletion(runId, harness, canonicalModel, "completed", "ok");
     channel.finish();
   }
 }

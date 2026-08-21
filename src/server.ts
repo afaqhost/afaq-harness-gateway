@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -10,6 +11,7 @@ import type { UsageLimiter } from "./core/limits.js";
 import type { ApiKeyRow } from "./core/api-key-store.js";
 import type { ChatMessage, HarnessEvent } from "./harness/types.js";
 import { UsageLimitError } from "./core/limits.js";
+import { logger } from "./core/logger.js";
 import { formatOpenAIResponse } from "./openai/format-response.js";
 import { sseDone, createSSEStreamMapper } from "./openai/sse.js";
 
@@ -20,18 +22,36 @@ export interface CreateGatewayServerOptions {
   authService?: AuthService;
   usageLimiter?: UsageLimiter;
   port?: number;
+  maxBodyBytes?: number;
 }
+
+export class RequestTooLargeError extends Error {
+  constructor(public readonly maxBodyBytes: number) {
+    super(`Request body exceeds ${maxBodyBytes} bytes.`);
+    this.name = "RequestTooLargeError";
+  }
+}
+
+const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UI_PATH = resolve(__dirname, "./ui/index.html");
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage, maxBodyBytes: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    let data = "";
+    const chunks: Buffer[] = [];
+    let size = 0;
     req.on("data", (chunk: Buffer) => {
-      data += chunk.toString();
+      size += chunk.length;
+      if (size > maxBodyBytes) {
+        req.removeAllListeners("data");
+        req.pause();
+        reject(new RequestTooLargeError(maxBodyBytes));
+        return;
+      }
+      chunks.push(chunk);
     });
-    req.on("end", () => resolve(data));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
     req.on("error", reject);
   });
 }
@@ -188,14 +208,15 @@ async function handleChatCompletions(
   req: IncomingMessage,
   res: ServerResponse,
   runService: RunService,
-  auth?: { key: ApiKeyRow; usageLimiter?: UsageLimiter },
+  auth: { key: ApiKeyRow; usageLimiter?: UsageLimiter } | undefined,
+  maxBodyBytes: number,
 ): Promise<void> {
   if (req.method !== "POST") {
     methodNotAllowed(res);
     return;
   }
 
-  const raw = await readBody(req);
+  const raw = await readBody(req, maxBodyBytes);
   const parsed = parseJsonBody(raw);
   if (!parsed) {
     sendJson(res, 400, { error: { message: "Invalid JSON body", type: "invalid_request_error" } });
@@ -448,6 +469,7 @@ async function handleConversations(
   req: IncomingMessage,
   res: ServerResponse,
   chatService: ChatService | undefined,
+  maxBodyBytes: number,
 ): Promise<void> {
   if (!chatService) {
     notImplemented(res, "Conversation support is not available.");
@@ -460,7 +482,7 @@ async function handleConversations(
   }
 
   if (req.method === "POST") {
-    const raw = await readBody(req);
+    const raw = await readBody(req, maxBodyBytes);
     const parsed = parseJsonBody(raw);
     if (!parsed || (parsed.title !== undefined && typeof parsed.title !== "string")) {
       sendJson(res, 400, { error: { message: "Invalid title", type: "invalid_request_error" } });
@@ -479,6 +501,7 @@ async function handleConversationItem(
   res: ServerResponse,
   chatService: ChatService | undefined,
   conversationId: string,
+  maxBodyBytes: number,
 ): Promise<void> {
   if (!chatService) {
     notImplemented(res, "Conversation support is not available.");
@@ -497,7 +520,7 @@ async function handleConversationItem(
   }
 
   if (req.method === "PATCH") {
-    const raw = await readBody(req);
+    const raw = await readBody(req, maxBodyBytes);
     const parsed = parseJsonBody(raw);
     if (!parsed || typeof parsed.title !== "string") {
       sendJson(res, 400, { error: { message: "Invalid title", type: "invalid_request_error" } });
@@ -516,6 +539,7 @@ async function handleConversationMessages(
   res: ServerResponse,
   opts: { chatService: ChatService | undefined; runService: RunService },
   conversationId: string,
+  maxBodyBytes: number,
 ): Promise<void> {
   const { chatService, runService } = opts;
   if (!chatService) {
@@ -535,7 +559,7 @@ async function handleConversationMessages(
   }
 
   if (req.method === "POST") {
-    const raw = await readBody(req);
+    const raw = await readBody(req, maxBodyBytes);
     const parsed = parseJsonBody(raw);
     if (!parsed || typeof parsed.content !== "string" || (parsed.model !== undefined && typeof parsed.model !== "string")) {
       sendJson(res, 400, { error: { message: "Invalid message body", type: "invalid_request_error" } });
@@ -575,6 +599,22 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
   const port = opts.port ?? 3000;
   const authService = opts.authService;
   const usageLimiter = opts.usageLimiter;
+  const maxBodyBytes = opts.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
+
+  async function healthResponse(): Promise<{ status: string; harnesses?: Record<string, { ok: boolean; message?: string }> }> {
+    if (!opts.adapterRegistry) {
+      return { status: "ok" };
+    }
+    const harnesses: Record<string, { ok: boolean; message?: string }> = {};
+    for (const adapterId of opts.adapterRegistry.ids()) {
+      const adapter = opts.adapterRegistry.get(adapterId);
+      if (!adapter) continue;
+      const health = await adapter.health();
+      harnesses[adapterId] = health.ok ? { ok: true } : { ok: false, message: health.message };
+    }
+    const allOk = Object.values(harnesses).every((h) => h.ok);
+    return { status: allOk ? "ok" : "degraded", harnesses };
+  }
 
   function requireApiKey(req: IncomingMessage, res: ServerResponse): ApiKeyRow | undefined {
     if (!authService) return undefined;
@@ -618,17 +658,34 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
 
   const server = createServer(async (req, res) => {
     const url = req.url ?? "/";
+    const requestId = randomUUID();
+    const startedAt = Date.now();
+    res.setHeader("x-request-id", requestId);
+
+    const logRequest = (status: number, keyId?: string) => {
+      logger.info("http_request", {
+        request_id: requestId,
+        method: req.method ?? "",
+        path: url,
+        status,
+        duration_ms: Date.now() - startedAt,
+        key_id: keyId ?? null,
+      });
+    };
 
     try {
       if (url === "/health") {
-        sendJson(res, 200, { status: "ok" });
+        const health = await healthResponse();
+        sendJson(res, health.status === "ok" ? 200 : 503, health);
+        logRequest(health.status === "ok" ? 200 : 503);
         return;
       }
 
       if (url === "/v1/chat/completions") {
         const key = requireApiKey(req, res);
         if (authService && !key) return;
-        await handleChatCompletions(req, res, opts.runService, key ? { key, usageLimiter } : undefined);
+        await handleChatCompletions(req, res, opts.runService, key ? { key, usageLimiter } : undefined, maxBodyBytes);
+        logRequest(res.statusCode, key?.id);
         return;
       }
 
@@ -636,6 +693,7 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
         const key = requireApiKey(req, res);
         if (authService && !key) return;
         await handleCancelRun(req, res, opts.runService);
+        logRequest(res.statusCode, key?.id);
         return;
       }
 
@@ -643,6 +701,7 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
         const key = requireApiKey(req, res);
         if (authService && !key) return;
         await handleGetRun(req, res, opts.runService);
+        logRequest(res.statusCode, key?.id);
         return;
       }
 
@@ -651,6 +710,7 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
         if (authService && !key) return;
         const allowlist = key?.model_allowlist_json ? JSON.parse(key.model_allowlist_json) as string[] : undefined;
         await handleModels(req, res, opts.adapterRegistry, allowlist);
+        logRequest(res.statusCode, key?.id);
         return;
       }
 
@@ -672,6 +732,7 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
           currency: "USD",
           estimated: true,
         });
+        logRequest(res.statusCode, key.id);
         return;
       }
 
@@ -681,7 +742,7 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
           notImplemented(res, "Authentication is not available.");
           return;
         }
-        const raw = await readBody(req);
+        const raw = await readBody(req, maxBodyBytes);
         const parsed = parseJsonBody(raw);
         if (!parsed || typeof parsed.username !== "string" || typeof parsed.password !== "string") {
           sendJson(res, 400, { error: { message: "Username and password are required.", type: "invalid_request_error" } });
@@ -706,7 +767,7 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
           notImplemented(res, "Authentication is not available.");
           return;
         }
-        const raw = await readBody(req);
+        const raw = await readBody(req, maxBodyBytes);
         const parsed = parseJsonBody(raw);
         if (!parsed || typeof parsed.username !== "string" || typeof parsed.password !== "string") {
           sendJson(res, 400, { error: { message: "Username and password are required.", type: "invalid_request_error" } });
@@ -755,7 +816,7 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
       if (url === "/v1/keys" && req.method === "POST") {
         const user = await requireSession(req, res);
         if (!user) return;
-        const raw = await readBody(req);
+        const raw = await readBody(req, maxBodyBytes);
         const parsed = parseJsonBody(raw);
         if (!parsed || typeof parsed.name !== "string") {
           sendJson(res, 400, { error: { message: "name is required.", type: "invalid_request_error" } });
@@ -800,9 +861,13 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
         return;
       }
 
-      // Conversation and UI routes (unchanged)
+      // Conversation and UI routes
       if (url === "/v1/conversations") {
-        await handleConversations(req, res, opts.chatService);
+        if (authService) {
+          const user = await requireSession(req, res);
+          if (!user) return;
+        }
+        await handleConversations(req, res, opts.chatService, maxBodyBytes);
         return;
       }
 
@@ -814,12 +879,20 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
             notFound(res);
             return;
           }
-          await handleConversationMessages(req, res, { chatService: opts.chatService, runService: opts.runService }, conversationId);
+          if (authService) {
+            const user = await requireSession(req, res);
+            if (!user) return;
+          }
+          await handleConversationMessages(req, res, { chatService: opts.chatService, runService: opts.runService }, conversationId, maxBodyBytes);
           return;
         }
 
         if (rest !== "" && !rest.includes("/")) {
-          await handleConversationItem(req, res, opts.chatService, rest);
+          if (authService) {
+            const user = await requireSession(req, res);
+            if (!user) return;
+          }
+          await handleConversationItem(req, res, opts.chatService, rest, maxBodyBytes);
           return;
         }
 
@@ -833,8 +906,15 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
       }
 
       notFound(res);
+      logRequest(res.statusCode);
     } catch (err) {
+      if (err instanceof RequestTooLargeError) {
+        sendJson(res, 413, { error: { message: err.message, type: "invalid_request_error" } });
+        logRequest(413);
+        return;
+      }
       sendServerError(res, err);
+      logRequest(res.statusCode);
     }
   });
 

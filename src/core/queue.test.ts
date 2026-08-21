@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { TaskQueue, QueueFullError } from "./queue.js";
+import { TaskQueue, QueueFullError, QueueTimeoutError } from "./queue.js";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -67,5 +67,31 @@ describe("TaskQueue", () => {
 
     release();
     await first;
+  });
+
+  it("rejects a queued task that exceeds queueTimeoutMs", async () => {
+    const queue = new TaskQueue({ concurrency: 1, queueTimeoutMs: 30 });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+
+    const blocking = queue.enqueue(async () => {
+      await gate;
+      return 1;
+    });
+
+    const queued = queue.enqueue(async () => 2);
+    await expect(queued).rejects.toBeInstanceOf(QueueTimeoutError);
+
+    release();
+    await blocking;
+  });
+
+  it("does not time out a running task", async () => {
+    const queue = new TaskQueue({ concurrency: 1, queueTimeoutMs: 30 });
+    const result = await queue.enqueue(async () => {
+      await delay(80);
+      return "done";
+    });
+    expect(result).toBe("done");
   });
 });

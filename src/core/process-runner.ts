@@ -25,6 +25,18 @@ export class ProcessCancelledError extends Error {
   }
 }
 
+function killTree(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (process.platform !== "win32" && child.pid != null) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // Fall through to killing only the direct child if the group is gone.
+    }
+  }
+  child.kill(signal);
+}
+
 export class ProcessRunner {
   private children = new Map<string, ChildProcess>();
   private cancelled = new Set<string>();
@@ -40,6 +52,7 @@ export class ProcessRunner {
       shell: false,
       stdio: ["pipe", "pipe", "pipe"],
       env,
+      detached: process.platform !== "win32",
     });
     this.children.set(runId, child);
 
@@ -56,7 +69,7 @@ export class ProcessRunner {
     if (options.timeoutMs) {
       timeout = setTimeout(() => {
         timedOut = true;
-        child.kill("SIGKILL");
+        killTree(child, "SIGKILL");
       }, options.timeoutMs);
     }
 
@@ -66,7 +79,7 @@ export class ProcessRunner {
       }
     } catch (err) {
       if (err instanceof JsonlParseError) {
-        child.kill("SIGKILL");
+        killTree(child, "SIGKILL");
         yield { type: "jsonl_error", error: err };
         return;
       }
@@ -96,11 +109,11 @@ export class ProcessRunner {
     if (!child) return;
 
     this.cancelled.add(runId);
-    child.kill("SIGTERM");
+    killTree(child, "SIGTERM");
 
     const grace = setTimeout(() => {
       if (this.children.has(runId)) {
-        child.kill("SIGKILL");
+        killTree(child, "SIGKILL");
       }
     }, 2000);
     grace.unref?.();

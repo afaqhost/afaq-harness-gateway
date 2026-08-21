@@ -110,4 +110,25 @@ describe("ProcessRunner", () => {
     expect(err).toBeInstanceOf(ProcessCancelledError);
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(2000);
   });
+
+  it("kills a detached process group on cancel", async () => {
+    const runner = new ProcessRunner();
+
+    const consume = (async () => {
+      try {
+        for await (const _ of runner.run("r7", "node", ["-e", "const { spawn } = require('child_process'); const c = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000000)'], { stdio: 'ignore' }); process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1000000)"])) {
+          void _;
+        }
+        return undefined;
+      } catch (err) {
+        return err;
+      }
+    })();
+
+    await new Promise((r) => setTimeout(r, 200));
+    runner.cancel("r7");
+
+    const err = await consume;
+    expect(err).toBeInstanceOf(ProcessCancelledError);
+  });
 });
