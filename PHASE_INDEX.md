@@ -1,17 +1,10 @@
-# Phase Index
+# Phase Index — 10 to Release
 
-| Phase | Primary outcome | Main worker |
+| Phase | Name | Main outcome |
 |---|---|---|
-| 00 | Stable repo + rules | MiMo |
-| 01 | Verified technical facts | DeepSeek + MiMo |
-| 02 | Runtime POC | MiMo |
-| 03 | Core runtime | MiMo |
-| 04 | Command-Code adapter | MiMo |
-| 05 | Streaming + Chat | MiMo |
-| 06 | Auth + Usage | MiMo |
-| 07 | Hermes | MiMo |
-| 08 | Additional adapters | MiMo |
-| 09 | Hardening | DeepSeek review + MiMo fixes |
-| 10 | OSS release | DeepSeek review + MiMo |
-
-Use the lead/reviewer model for architecture and difficult debugging. Use the low-cost worker for specification-driven implementation.
+| 10 | Harness Platform Core | Definitions, installations, instances, capabilities, lifecycle model |
+| 11 | Installation & Discovery | Detect and install supported Harnesses safely |
+| 12 | Credentials + Multi-Harness Lifecycle | Account profiles, enable/disable, routing, management |
+| 13 | Updates + Compatibility | Version tracking and safe update workflow |
+| 14 | Managed Deployment | Per-customer container isolation and hosting foundations |
+| 15 | Open Source Release | Public release, contributor workflow, documentation, release gates |

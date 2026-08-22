@@ -6,7 +6,7 @@ LiteLLM is **NOT adopted** as a core or proxy dependency for the MVP.
 
 Afaq Harness Gateway keeps its own independent runtime core. A LiteLLM integration may be reconsidered only later behind a documented, optional, MIT-only component boundary.
 
-This aligns with ADR-002 (do not make a large LiteLLM fork the default; keep Afaq independent) and the "own small runtime core + selective integration" default established in `01-research/01_LITELLM_DECISION.md`.
+This aligns with ADR-002 (do not make a large LiteLLM fork the default; keep Afaq independent) and the "own small runtime core + selective integration" default established in `phases/01-research/01_LITELLM_DECISION.md`.
 
 ## Evidence
 
@@ -28,7 +28,7 @@ This aligns with ADR-002 (do not make a large LiteLLM fork the default; keep Afa
 - **Rootless Docker:** Blocked by Ubuntu 24.04 AppArmor unprivileged-userns restriction (`kernel.apparmor_restrict_unprivileged_userns = 1`); `unshare --user --map-root-user` fails with "Operation not permitted".
 - **Direct (non-container) proxy start:** Failed at runtime with `ImportError: cannot import name 'get_flat_dependant' from 'fastapi.dependencies.utils'` (installed fastapi 0.141.1), followed by `ModuleNotFoundError: No module named 'proxy_server'`.
 
-As a result, the following verification items from `01-research/01_LITELLM_DECISION.md` could **not** be completed:
+As a result, the following verification items from `phases/01-research/01_LITELLM_DECISION.md` could **not** be completed:
 
 - Start a known-good LiteLLM proxy container
 - Verify `/v1/models` through the proxy
@@ -38,7 +38,7 @@ As a result, the following verification items from `01-research/01_LITELLM_DECIS
 
 License inspection and dependency-tree analysis were completed without a running container.
 
-### Evaluation against criteria (01-research/01_LITELLM_DECISION.md)
+### Evaluation against criteria (phases/01-research/01_LITELLM_DECISION.md)
 
 | Criterion | Score (1-5) | Notes |
 |---|---|---|

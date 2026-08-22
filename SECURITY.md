@@ -41,14 +41,14 @@ Afaq Harness Gateway is a **self-hosted, single-node** application.
 
 The full threat model and control inventory are documented at:
 
-- `09-hardening/03_THREAT_MODEL.md` -- threats, controls, and residual risks
+- `docs/phases/09-hardening/03_THREAT_MODEL.md` -- threats, controls, and residual risks
 - `docs/SECURITY_MODEL.md` -- security model summary
 
 ## Scope
 
 Out of scope for the open-source core:
 
-- Multi-region or multi-tenant isolation (see `14-managed-deployment/` for
+- Multi-region or multi-tenant isolation (see `docs/phases/14-managed-deployment/` for
   managed-hosting guidance)
 - Billing, marketplace, or subscription-resale logic
 - Kubernetes or container-orchestration specifics

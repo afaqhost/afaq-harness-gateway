@@ -8,7 +8,7 @@ import { ProcessTimedOutError, ProcessCancelledError } from "../core/process-run
 
 const FIXTURE_PATH = resolve(
   import.meta.dirname,
-  "../../01-research/fixtures/command-code/headless-run.ndjson",
+  "../../docs/phases/01-research/fixtures/command-code/headless-run.ndjson",
 );
 
 const SHIM_PATH = resolve(

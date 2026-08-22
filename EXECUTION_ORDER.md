@@ -1,17 +1,35 @@
-# Execution Order
+# Execution Order — Phase 10 to Release
 
-Follow phases strictly in this order.
+Run one phase at a time:
 
-1. `00-foundation` — repository rules, definition of done, test baseline.
-2. `01-research` — verify LiteLLM boundaries and actual harness CLI behavior.
-3. `02-poc` — prove OpenAI-compatible request -> local CLI -> normalized response.
-4. `03-core` — build the independent runtime and adapter contract.
-5. `04-command-code` — production-quality Command-Code adapter.
-6. `05-streaming-chat` — SSE streaming and internal Chat UI.
-7. `06-auth-usage` — API keys, usage, estimated cost, limits.
-8. `07-hermes` — Hermes integration and end-to-end verification.
-9. `08-adapters` — Codex, Claude Code, OpenCode.
-10. `09-hardening` — security, reliability, cancellation, retention, observability.
-11. `10-release` — packaging, licensing, docs, contribution workflow.
+```text
+10 → 11 → 12 → 13 → 14 → 15
+```
 
-Do not skip a phase because a later feature appears easy. The phase order is designed to minimize rework.
+For every phase:
+
+1. Read `AGENT_HANDOFF.md`.
+2. Read the phase README and checklist.
+3. Inspect `git status` and recent commits.
+4. Preserve the existing architecture unless the phase explicitly changes it.
+5. Use `cmd-delegate` for routine implementation tasks.
+6. Run tests continuously.
+7. Review the final diff.
+8. Update documentation.
+9. Commit the completed phase.
+10. Start a new session for the next major phase.
+
+Never start the next phase automatically.
+
+## Dependency order
+
+- Phase 10 defines the platform model.
+- Phase 11 depends on the platform model and adds installation/discovery.
+- Phase 12 depends on installations and adds credentials/lifecycle.
+- Phase 13 depends on installed versions and adapter compatibility.
+- Phase 14 depends on stable lifecycle and credential boundaries.
+- Phase 15 depends on the previous phases.
+
+## Non-goals
+
+Do not introduce a provider-subscription resale model, billing system, marketplace, Kubernetes, multi-region infrastructure, Redis, or PostgreSQL unless a later explicitly approved scope requires them.

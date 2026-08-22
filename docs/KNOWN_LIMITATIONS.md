@@ -33,7 +33,7 @@ v0.1.0.
 | Limitation | Details |
 |---|---|
 | No Kubernetes support | No Helm charts, operators, or container-orchestration specifics are provided. |
-| No multi-tenant isolation | The open-source core is single-tenant. Managed multi-tenant deployment guidance is in `14-managed-deployment/` but is not part of the core. |
+| No multi-tenant isolation | The open-source core is single-tenant. Managed multi-tenant deployment guidance is in `docs/phases/14-managed-deployment/` but is not part of the core. |
 | No subscription resale | No built-in support for reselling access to third-party Harness provider subscriptions. |
 
 ## Testing

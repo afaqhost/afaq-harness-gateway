@@ -40,7 +40,7 @@ items:
 
 See [SECURITY.md](../SECURITY.md) for the security policy and reporting
 instructions. The threat model is documented in
-`09-hardening/03_THREAT_MODEL.md` and `docs/SECURITY_MODEL.md`.
+`docs/phases/09-hardening/03_THREAT_MODEL.md` and `docs/SECURITY_MODEL.md`.
 
 The gateway has no built-in TLS. Deploy behind a reverse proxy, VPN, or
 tunnel. The process boundary between the gateway and each Harness CLI is the

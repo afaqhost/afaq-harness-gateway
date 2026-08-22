@@ -1,6 +1,6 @@
 # Command-Code CLI — Harness Verification Record
 
-Spec: `01-research/02_HARNESS_VERIFICATION.md`
+Spec: `02_HARNESS_VERIFICATION.md`
 
 ## Tested version
 
@@ -118,4 +118,4 @@ Non-zero exit codes are surfaced as `{ type: "failed", message, retryable }` eve
 
 | Fixture | Path |
 |---|---|
-| Headless NDJSON run | `01-research/fixtures/command-code/headless-run.ndjson` |
+| Headless NDJSON run | `fixtures/command-code/headless-run.ndjson` |

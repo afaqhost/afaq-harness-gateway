@@ -148,7 +148,7 @@ requirements. Install only the harnesses you actually use.
 The gateway has **no built-in TLS**. In production, place it behind a private
 network, a hardened HTTPS reverse proxy, Cloudflare Tunnel + Access, Tailscale,
 or an equivalent. See [SECURITY.md](SECURITY.md) and the threat model in
-`09-hardening/03_THREAT_MODEL.md`.
+`docs/phases/09-hardening/03_THREAT_MODEL.md`.
 
 ## Documentation
 
