@@ -17,11 +17,14 @@ export interface HarnessInstallation {
   readonly state: LifecycleState;
 }
 
+export type CredentialAuthKind = "cli_login" | "api_key_ref" | "env_ref" | "oauth" | "provider_store";
+
 export interface CredentialProfile {
   readonly id: string;
   readonly name: string;
   readonly definitionId: string;
   readonly secretRef: string;
+  readonly authKind: CredentialAuthKind;
 }
 
 export interface HarnessInstance {
@@ -83,6 +86,7 @@ export function createCredentialProfile(input: {
   name: string;
   definitionId: string;
   secretRef: string;
+  authKind?: CredentialAuthKind;
 }): CredentialProfile {
   assertNonEmpty(input.id, "id");
   assertNonEmpty(input.name, "name");
@@ -93,6 +97,7 @@ export function createCredentialProfile(input: {
     name: input.name,
     definitionId: input.definitionId,
     secretRef: input.secretRef,
+    authKind: input.authKind ?? "provider_store",
   };
 }
 

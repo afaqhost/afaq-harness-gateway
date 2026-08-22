@@ -3,6 +3,7 @@ import type { AdapterRegistry } from "../core/adapter-registry.js";
 import type { HarnessAdapter } from "../harness/types.js";
 import { transitionLifecycle, type LifecycleEvent } from "./lifecycle.js";
 import type { HarnessDefinition, HarnessInstallation, CredentialProfile, HarnessInstance } from "./entities.js";
+import type { CapabilitySet } from "./capabilities.js";
 
 export class HarnessPlatformError extends Error {}
 export class UnknownHarnessError extends HarnessPlatformError {}
@@ -15,6 +16,17 @@ export interface ResolvedInstance {
   readonly instanceId: string;
 }
 
+export interface ResolvedRuntime {
+  harness: string;
+  model: string;
+  adapterId: string;
+  instanceId: string;
+  installationId: string;
+  credentialProfileId?: string;
+  capabilities: CapabilitySet;
+  models: readonly string[];
+}
+
 export class HarnessPlatform {
   private adapterRegistry?: AdapterRegistry;
   private definitions = new Map<string, HarnessDefinition>();
@@ -22,6 +34,8 @@ export class HarnessPlatform {
   private credentialProfiles = new Map<string, CredentialProfile>();
   private instances = new Map<string, HarnessInstance>();
   private instanceInsertionOrder: string[] = [];
+  private activeInstanceByDefinition = new Map<string, string>();
+  private credentialProfileByInstance = new Map<string, string>();
 
   constructor(adapterRegistry?: AdapterRegistry) {
     this.adapterRegistry = adapterRegistry;
@@ -143,5 +157,81 @@ export class HarnessPlatform {
   getAdapter(modelId: string): HarnessAdapter | undefined {
     const resolved = this.resolveModel(modelId);
     return this.adapterRegistry?.get(resolved.adapterId);
+  }
+
+  setActiveInstance(instanceId: string): void {
+    const instance = this.instances.get(instanceId);
+    if (!instance) {
+      throw new Error(`Instance "${instanceId}" is not registered.`);
+    }
+    this.activeInstanceByDefinition.set(instance.definitionId, instanceId);
+  }
+
+  clearActiveInstance(definitionId: string): void {
+    this.activeInstanceByDefinition.delete(definitionId);
+  }
+
+  setCredentialProfile(instanceId: string, profileId: string): void {
+    const instance = this.instances.get(instanceId);
+    if (!instance) {
+      throw new Error(`Instance "${instanceId}" is not registered.`);
+    }
+    const profile = this.credentialProfiles.get(profileId);
+    if (!profile) {
+      throw new Error(`Credential profile "${profileId}" is not registered.`);
+    }
+    if (profile.definitionId !== instance.definitionId) {
+      throw new Error(
+        `Credential profile "${profileId}" belongs to definition "${profile.definitionId}" but instance "${instanceId}" belongs to definition "${instance.definitionId}".`,
+      );
+    }
+    this.credentialProfileByInstance.set(instanceId, profileId);
+  }
+
+  getActiveInstance(definitionId: string): HarnessInstance | undefined {
+    const instanceId = this.activeInstanceByDefinition.get(definitionId);
+    if (!instanceId) {
+      return undefined;
+    }
+    const instance = this.instances.get(instanceId);
+    if (!instance) {
+      return undefined;
+    }
+    if (instance.state !== "enabled" && instance.state !== "healthy") {
+      return undefined;
+    }
+    return instance;
+  }
+
+  resolveRuntime(modelId: string): ResolvedRuntime {
+    const { harness, model } = parseModelId(modelId);
+    const candidates = this.instanceInsertionOrder
+      .map((id) => this.instances.get(id)!)
+      .filter((inst) => inst.definitionId === harness);
+
+    if (candidates.length === 0) {
+      throw new UnknownHarnessError(`No instances registered for harness "${harness}".`);
+    }
+
+    const activeInstance = this.getActiveInstance(harness);
+    const active = activeInstance ?? candidates.find((inst) => inst.state === "healthy" || inst.state === "enabled");
+    if (!active) {
+      throw new HarnessNotAvailableError(
+        `No healthy or enabled instances for harness "${harness}".`,
+      );
+    }
+
+    const credentialProfileId = this.credentialProfileByInstance.get(active.id) ?? active.credentialProfileId;
+
+    return {
+      harness,
+      model,
+      adapterId: active.adapterId,
+      instanceId: active.id,
+      installationId: active.installationId,
+      credentialProfileId,
+      capabilities: active.capabilities,
+      models: active.models,
+    };
   }
 }
