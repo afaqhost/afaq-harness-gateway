@@ -9,7 +9,7 @@ function makeRecord(overrides?: Partial<InstallRecord>): InstallRecord {
   return {
     id: "rec-1",
     definitionId: "def-1",
-    path: "/usr/bin/node",
+    path: process.execPath,
     version: "1.0.0",
     strategy: "copy",
     state: "verified",
@@ -31,7 +31,7 @@ function makeDefinition(overrides?: Partial<InstallDefinition>): InstallDefiniti
 
 describe("checkHealth", () => {
   it("returns ok for a healthy installation", () => {
-    const record = makeRecord({ path: "/usr/bin/node" });
+    const record = makeRecord();
     const definition = makeDefinition({
       versionCommand: ["node", "--version"],
     });
@@ -53,7 +53,7 @@ describe("checkHealth", () => {
   });
 
   it("returns ok when version command is empty (no check needed)", () => {
-    const record = makeRecord({ path: "/usr/bin/node" });
+    const record = makeRecord();
     const definition = makeDefinition({ versionCommand: [] });
 
     const result = checkHealth(record, definition);
@@ -61,7 +61,7 @@ describe("checkHealth", () => {
   });
 
   it("returns not-ok when version command fails", () => {
-    const record = makeRecord({ path: "/usr/bin/node" });
+    const record = makeRecord();
     const definition = makeDefinition({
       versionCommand: ["node", "-e", "process.exit(1)"],
     });

@@ -111,13 +111,13 @@ describe("validateVersion", () => {
 
 describe("detectVersion", () => {
   it("detects version from a real command", () => {
-    const result = detectVersion("/usr/bin/node", ["node", "--version"]);
+    const result = detectVersion(process.execPath, ["node", "--version"]);
     expect(result.detected).toBe(true);
     expect(result.version).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it("returns error for empty version command", () => {
-    const result = detectVersion("/usr/bin/node", []);
+    const result = detectVersion(process.execPath, []);
     expect(result.detected).toBe(false);
     expect(result.error).toContain("must not be empty");
   });
@@ -132,13 +132,20 @@ describe("detectVersion", () => {
   });
 
   it("uses shell:false (no shell injection)", () => {
-    // This tests that the command runs directly, not through a shell
-    // If shell:true were used, this would interpret the semicolon
-    const result = detectVersion("/usr/bin/echo", ["echo", "1.0.0; echo hacked"]);
-    expect(result.detected).toBe(true);
-    expect(result.version).toBe("1.0.0");
-    // The raw output should contain the literal string, not two separate outputs
-    expect(result.raw).toBe("1.0.0; echo hacked");
+    const dir = mkdtempSync(join(tmpdir(), "version-shell-test-"));
+    const binPath = join(dir, "my-echo");
+    writeFileSync(binPath, '#!/bin/sh\necho "$1"\n');
+    chmodSync(binPath, 0o755);
+    try {
+      // If shell:true were used, the semicolon would be interpreted as two commands
+      const result = detectVersion(binPath, ["echo", "1.0.0; echo hacked"]);
+      expect(result.detected).toBe(true);
+      expect(result.version).toBe("1.0.0");
+      // The raw output should contain the literal string, not two separate outputs
+      expect(result.raw).toBe("1.0.0; echo hacked");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("uses the provided binary path, not the versionCommand executable name", () => {

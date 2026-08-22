@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, chmodSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { InstallService } from "./install-service.js";
 import { InstallStore } from "./store.js";
@@ -65,7 +65,7 @@ describe("InstallService", () => {
   describe("discover", () => {
     it("discovers a binary in candidate dirs", () => {
       service.registerDefinition(nodeDefinition);
-      const result = service.discover("node", ["/usr/bin"]);
+      const result = service.discover("node", [dirname(process.execPath)]);
       expect(result.found).toBe(true);
     });
 
@@ -79,13 +79,13 @@ describe("InstallService", () => {
   describe("detectVersion", () => {
     it("detects version for a known binary", () => {
       service.registerDefinition(nodeDefinition);
-      const result = service.detectVersion("node", "/usr/bin/node");
+      const result = service.detectVersion("node", process.execPath);
       expect(result.detected).toBe(true);
       expect(result.version).toMatch(/^\d+\.\d+\.\d+/);
     });
 
     it("returns error for unknown definition", () => {
-      const result = service.detectVersion("unknown", "/usr/bin/node");
+      const result = service.detectVersion("unknown", process.execPath);
       expect(result.detected).toBe(false);
       expect(result.error).toContain("Unknown definition");
     });
@@ -133,7 +133,7 @@ describe("InstallService", () => {
       const result = service.install({
         definitionId: "unknown",
         strategy: "copy",
-        sourcePath: "/usr/bin/node",
+        sourcePath: process.execPath,
         installDir: join(tempDir, "install"),
       });
       expect(result.success).toBe(false);
@@ -145,7 +145,7 @@ describe("InstallService", () => {
       const result = service.install({
         definitionId: "node",
         strategy: "download" as unknown as "copy",
-        sourcePath: "/usr/bin/node",
+        sourcePath: process.execPath,
         installDir: join(tempDir, "install"),
       });
       expect(result.success).toBe(false);
