@@ -21,6 +21,7 @@ export interface CreateGatewayServerOptions {
   adapterRegistry?: AdapterRegistry;
   authService?: AuthService;
   usageLimiter?: UsageLimiter;
+  host?: string;
   port?: number;
   maxBodyBytes?: number;
 }
@@ -922,7 +923,7 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
     server,
     start: () =>
       new Promise<void>((resolve) => {
-        server.listen(port, resolve);
+        server.listen(port, opts.host ?? "127.0.0.1", resolve);
       }),
     stop: () =>
       new Promise<void>((resolve, reject) => {

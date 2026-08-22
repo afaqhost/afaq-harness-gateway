@@ -4,6 +4,7 @@ coverage/
 .commandcode/
 .env
 .env.*
+!.env.example
 *.db
 *.db-wal
 *.db-shm
@@ -14,3 +15,4 @@ Thumbs.db
 *~
 .vscode/
 .idea/
+.data/

@@ -471,3 +471,17 @@ describe("Phase 05: streaming + chat", () => {
     await server.stop();
   });
 });
+
+describe("host option", () => {
+  it("binds to the specified host address", async () => {
+    const registry = new AdapterRegistry();
+    registry.register(new FakeHarnessAdapter());
+    const store = new RunStore(":memory:");
+    const runService = new RunService({ adapterRegistry: registry, store });
+    const server = createGatewayServer({ runService, adapterRegistry: registry, host: "127.0.0.1", port: 0 });
+    await server.start();
+    const addr = server.server.address() as { address: string; port: number };
+    expect(addr.address).toBe("127.0.0.1");
+    await server.stop();
+  });
+});
