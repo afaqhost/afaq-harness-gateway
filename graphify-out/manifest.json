@@ -1,0 +1,207 @@
+{
+  "/home/nasser/Downloads/afaq-harness-gateway/test.py": {
+    "mtime": 1787567049.5394077,
+    "ast_hash": "bd1fd43fcd8e55e1345f4f9a6d189fe5",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/main.py": {
+    "mtime": 1787552608.7169626,
+    "ast_hash": "c87c390ed611c943eee1c9aee07ced11",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/__init__.py": {
+    "mtime": 1787539382.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/infrastructure/__init__.py": {
+    "mtime": 1787539711.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/services/__init__.py": {
+    "mtime": 1787539382.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/static/app.js": {
+    "mtime": 1787651614.318687,
+    "ast_hash": "d11f9bf53eefda6bd97fb99153f73d13",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/core/config.py": {
+    "mtime": 1787539271.0,
+    "ast_hash": "02488ab0984122f1e9332ee979111733",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/core/__init__.py": {
+    "mtime": 1787539382.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/core/security.py": {
+    "mtime": 1787539302.0,
+    "ast_hash": "a76af0caada4f1b919f2df6a1c2d3a95",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/domain/harness.py": {
+    "mtime": 1787539702.0,
+    "ast_hash": "cb5337be06c3f083d0a33e55bc5ca335",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/domain/__init__.py": {
+    "mtime": 1787539711.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/presentation/__init__.py": {
+    "mtime": 1787539711.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/models/__init__.py": {
+    "mtime": 1787539382.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/db/database.py": {
+    "mtime": 1787539281.0,
+    "ast_hash": "617690217d8f0d3c20c4758430eb6137",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/db/__init__.py": {
+    "mtime": 1787539382.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/api/openai.py": {
+    "mtime": 1787550740.0098195,
+    "ast_hash": "38b064c75e780311c709439ea601131d",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/api/auth.py": {
+    "mtime": 1787539318.0,
+    "ast_hash": "c9f5b3611e807e6fe8d5b4ae5e2e5efe",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/api/admin.py": {
+    "mtime": 1787550740.009041,
+    "ast_hash": "45156ed8f46be502c6710f7744283faf",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/api/__init__.py": {
+    "mtime": 1787539382.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/harnesses/registry.py": {
+    "mtime": 1787552608.7169626,
+    "ast_hash": "2fa708c1ff0a8bbc4f84aa5232c78750",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/harnesses/__init__.py": {
+    "mtime": 1787539382.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/application/chat_service.py": {
+    "mtime": 1787539706.0,
+    "ast_hash": "64090b0625400b787ea8a5dbdefb78fc",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/application/__init__.py": {
+    "mtime": 1787539711.0,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/README.md": {
+    "mtime": 1787556597.5554595,
+    "ast_hash": "1e79d579f8f2d2318a09edcb965b6af6",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/DESIGN.md": {
+    "mtime": 1787628828.3692727,
+    "ast_hash": "4ddf4edb3d3f4b57e26f55eec1a79bef",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/docker-compose.yml": {
+    "mtime": 1787539370.0,
+    "ast_hash": "9e47b22bd0b0ac1f6c73e0e24e7043f5",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/requirements.txt": {
+    "mtime": 1787539408.0,
+    "ast_hash": "a1cb3e39fbe84aaaa49593c529cfb443",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/templates/index.html": {
+    "mtime": 1787651403.3998733,
+    "ast_hash": "27e497c1778be6b3088ec33eb36d5ed8",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/docs/installation.md": {
+    "mtime": 1787556597.5554595,
+    "ast_hash": "cec65034b4c4f4289cd78dabc629add0",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/docs/api.md": {
+    "mtime": 1787556597.5567322,
+    "ast_hash": "ef8bf4958fea643e277618fbe6b9a8b2",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/docs/configuration.md": {
+    "mtime": 1787556597.5554595,
+    "ast_hash": "07efed6d0b9fd1c27a64309ba2b9c079",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/docs/harnesses.md": {
+    "mtime": 1787556597.566458,
+    "ast_hash": "4c731053c3b90f1a0571813012f3a89f",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/docs/architecture.md": {
+    "mtime": 1787556597.5554595,
+    "ast_hash": "56bf0bbec9136df3b86cee7ad329d2db",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/images/afaq_navbar_logo_transparent.png": {
+    "mtime": 1787620990.0,
+    "ast_hash": "ba1b91109ec727a4fcf6a4e314ddd501",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/images/afaq_navbar_logo_transparent_white.png": {
+    "mtime": 1787620990.0,
+    "ast_hash": "cea022acb33bc4ea9ed15c6a87303079",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/images/afaq_icon_transparent.png": {
+    "mtime": 1787620990.0,
+    "ast_hash": "6d2cf3d284c30475ccadec7c3259886d",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/static/brand/lockup-dark.png": {
+    "mtime": 1787633192.6405644,
+    "ast_hash": "f9736dbbb267baae4b5ee214b7472c85",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/static/brand/apple-touch-icon.png": {
+    "mtime": 1787633192.9945593,
+    "ast_hash": "3a5b85836cc30534f4fc54ece0a75305",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/static/brand/lockup-white.png": {
+    "mtime": 1787633192.4725668,
+    "ast_hash": "4e040684b6df7ef27a4cb036af1d6284",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/static/brand/icon.png": {
+    "mtime": 1787633192.6985636,
+    "ast_hash": "c4e07778fbc05a7b903cfdccf77c7c4e",
+    "semantic_hash": ""
+  },
+  "/home/nasser/Downloads/afaq-harness-gateway/app/static/brand/favicon-48.png": {
+    "mtime": 1787633192.7725625,
+    "ast_hash": "b89e920c32d726a4a464e7f74f81a328",
+    "semantic_hash": ""
+  }
+}

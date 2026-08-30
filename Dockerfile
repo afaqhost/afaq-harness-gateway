@@ -1,29 +1,12 @@
-# ---- builder ----
-FROM node:24-bookworm-slim AS builder
-
+FROM node:22-bookworm-slim AS runtime
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip ca-certificates git curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-
-COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build
-
-# ---- runtime ----
-FROM node:24-bookworm-slim
-
-WORKDIR /app
-
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
-
-COPY --from=builder /app/dist ./dist
-
-ENV AHG_HOST=0.0.0.0
-ENV AHG_PORT=3000
-ENV AHG_DATA_DIR=/data
-
-VOLUME /data
-EXPOSE 3000
-
-CMD ["node", "dist/src/start.js"]
+COPY requirements.txt .
+RUN pip3 install --break-system-packages -r requirements.txt
+COPY app ./app
+COPY docs ./docs
+COPY LICENSE README.md .env.example ./
+RUN mkdir -p data storage/harnesses storage/uploads
+EXPOSE 3500
+CMD ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "3500"]

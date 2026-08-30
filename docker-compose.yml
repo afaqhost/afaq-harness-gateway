@@ -1,0 +1,19 @@
+services:
+  afaq-gateway:
+    build: .
+    image: afaq-harness-gateway:latest
+    container_name: afaq-harness-gateway
+    ports:
+      - "3500:3500"
+    env_file:
+      - .env
+    volumes:
+      - afaq_data:/app/data
+      - afaq_storage:/app/storage
+      - afaq_harnesses:/root/.npm
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+volumes:
+  afaq_data:
+  afaq_storage:
+  afaq_harnesses:

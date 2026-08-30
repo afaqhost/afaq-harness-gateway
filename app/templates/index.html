@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ app_name }}</title>
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0B1020">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" sizes="48x48" href="/static/brand/favicon-48.png">
+  <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-page="{{ page }}">
+  <div id="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><img class="brand-lockup" src="/static/brand/lockup-white.png" alt="AFAQ Harness Gateway" width="163" height="40"></div>
+      <button class="new-chat" id="new-chat">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span data-i18n="newChat">محادثة جديدة</span>
+      </button>
+
+      <!-- ChatGPT-like conversation history -->
+      <div class="conv-section">
+        <div class="conv-section-header">
+          <span class="conv-label" data-i18n="history">السجل</span>
+          <span class="conv-count" id="conv-count"></span>
+        </div>
+        <div id="conversation-list" class="conv-list">
+          <div class="conv-empty muted" data-i18n="noChats">لا توجد محادثات بعد</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Main navigation">
+        <a class="nav-link" href="/chat" data-page="chat"><span class="nav-icon">01</span><span data-i18n="chat">المحادثة</span></a>
+        <a class="nav-link" href="/harnesses" data-page="harnesses"><span class="nav-icon">02</span><span data-i18n="harnesses">الهارنسس</span></a>
+        <a class="nav-link" href="/keys" data-page="keys"><span class="nav-icon">03</span><span data-i18n="apiKeys">مفاتيح API</span></a>
+        <a class="nav-link" href="/users" data-page="users"><span class="nav-icon">04</span><span data-i18n="users">المستخدمون</span></a>
+        <a class="nav-link" href="/documentation" data-page="documentation"><span class="nav-icon">05</span><span data-i18n="docs">التوثيق</span></a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="logout-button" id="logout"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span data-i18n="logout">تسجيل الخروج</span></button>
+        <div class="sidebar-bottom"><button class="language-switch" id="lang">EN <span>/</span> AR</button><span class="license">Apache 2.0</span></div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="mobile-header">
+        <button class="menu-toggle" id="menu-toggle" aria-label="Menu" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+        <img class="mobile-brand" src="/static/brand/icon.png" alt="AFAQ" width="30" height="30">
+        <span class="connection"><span class="pulse"></span><span data-i18n="online">البوابة متصلة</span></span>
+      </header>
+      <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+
+      <header class="topbar"><div><p class="eyebrow" data-i18n="workspace">مساحة العمل</p><h1 id="page-title">المحادثة</h1><p id="page-subtitle" class="subtitle" data-i18n="chatSubtitle">تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية</p></div><div class="connection"><span class="pulse"></span><span data-i18n="online">البوابة متصلة</span></div></header>
+
+      <section id="login" class="login-card{% if page != 'login' %} hidden{% endif %}"><img class="login-logo" src="/static/brand/lockup-white.png" alt="AFAQ Harness Gateway" width="163" height="40"><p class="eyebrow" data-i18n="secureAccess">وصول آمن</p><h2 data-i18n="loginTitle">تسجيل الدخول</h2><p data-i18n="loginDescription">أدخل بيانات حسابك للوصول إلى لوحة Afaq.</p><label for="email" data-i18n="email">البريد الإلكتروني</label><input id="email" type="email" autocomplete="email" placeholder="name@example.com"><label for="password" data-i18n="password">كلمة المرور</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••"><button id="login-btn" data-i18n="login">دخول</button><small id="login-message" role="alert"></small></section>
+
+      <!-- ChatGPT-like chat -->
+      <section id="chat" class="page">
+        <div class="chatgpt-layout">
+          <!-- Chat header with model + title -->
+          <div class="chat-header">
+            <div class="chat-header-left">
+              <div class="chat-title-wrap">
+                <h2 id="chat-title" class="chat-title">محادثة جديدة</h2>
+                <span id="chat-model-badge" class="model-badge"></span>
+              </div>
+              <div class="chat-meta">
+                <span id="chat-message-count" class="chat-meta-item"></span>
+                <span id="chat-model-name" class="chat-meta-item mono"></span>
+              </div>
+            </div>
+            <div class="chat-header-actions">
+              <div class="model-selector-wrap">
+                <label for="model-select" class="sr-only" data-i18n="model">الموديل</label>
+                <select id="model-select" class="model-select"><option data-i18n="loading">جارٍ التحميل...</option></select>
+              </div>
+              <button id="rename-chat" class="icon-btn" title="Rename" aria-label="Rename"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button id="clear-chat" class="icon-btn danger" title="Clear" aria-label="Clear"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+          </div>
+
+          <div class="messages" id="messages">
+            <div class="welcome" id="welcome">
+              <div class="welcome-index">01 / CHAT</div>
+              <h2><span data-i18n="welcomeTitle">مساحة تفكير واحدة،</span><br><em data-i18n="welcomeTitleAccent">كل الهارنسس.</em></h2>
+              <p data-i18n="welcomeDescription">اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.</p>
+              <div class="welcome-actions">
+                <div class="welcome-hint">
+                  <span class="welcome-kbd">Enter</span><span data-i18n="enterHint"> للإرسال · Shift + Enter لسطر جديد</span>
+                </div>
+              </div>
+              <div class="welcome-suggestions" id="welcome-suggestions">
+                <button class="suggestion" data-suggest="اشرح لي كيف تعمل البوابة">💡 اشرح لي كيف تعمل البوابة</button>
+                <button class="suggestion" data-suggest="اكتب دالة بلغة Python">🐍 اكتب دالة بلغة Python</button>
+                <button class="suggestion" data-suggest="ما الفرق بين Harnesses؟">🔀 ما الفرق بين Harnesses؟</button>
+                <button class="suggestion" data-suggest="ساعدني في كتابة API">⚡ ساعدني في كتابة API</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer composer-glass" id="composer">
+            <div class="composer-inner">
+              <textarea id="prompt" data-i18n-placeholder="messagePlaceholder" placeholder="اكتب رسالتك هنا... (المحادثة لها ذاكرة)" rows="1"></textarea>
+              <button id="send" class="send-btn" aria-label="Send">
+                <span class="send-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span>
+                <span data-i18n="send">إرسال</span>
+              </button>
+            </div>
+            <div class="composer-footer">
+              <span class="hint" data-i18n="enterHint">Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا</span>
+              <span class="composer-model" id="composer-model"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="harnesses" class="page hidden"><div class="section-heading"><div><p class="eyebrow">02 / <span data-i18n="harnesses">الهارنسس</span></p><h2 data-i18n="harnessTitle">الأدوات المتصلة</h2></div><button class="outline-button" id="refresh-harnesses"><span class="refresh-symbol">↻</span><span data-i18n="refresh">تحديث الموديلات</span></button></div><div id="harness-grid" class="harness-grid"></div></section>
+      <section id="keys" class="page hidden"><div class="section-heading"><div><p class="eyebrow">03 / API KEYS</p><h2 data-i18n="keyTitle">مفاتيح الوصول</h2></div><button id="new-key"><span>+</span><span data-i18n="createKey">إنشاء مفتاح</span></button></div><div id="keys-list" class="table-card"></div></section>
+      <section id="users" class="page hidden"><div class="section-heading"><div><p class="eyebrow">04 / <span data-i18n="users">المستخدمون</span></p><h2 data-i18n="userTitle">المستخدمون والصلاحيات</h2></div><button id="new-user"><span>+</span><span data-i18n="addUser">إضافة مستخدم</span></button></div><div id="users-list" class="table-card"></div></section>
+      <section id="docs" class="page hidden">
+        <div class="section-heading"><div><p class="eyebrow">05 / DOCS</p><h2 data-i18n="docsTitle">ابدأ خلال دقائق</h2></div></div>
+        <article class="docs"><p data-i18n="docsIntro">استخدم Afaq Gateway كواجهة متوافقة مع OpenAI للوصول إلى أدوات الذكاء الاصطناعي من أي تطبيق.</p>
+          <div class="docs-grid"><div class="docs-card"><span class="docs-number">01</span><h3 data-i18n="docsAuthTitle">المصادقة</h3><p data-i18n="docsAuthText">أنشئ API Key وأرسله في ترويسة Bearer مع كل طلب شات.</p></div><div class="docs-card"><span class="docs-number">02</span><h3 data-i18n="docsModelsTitle">الموديلات</h3><p data-i18n="docsModelsText">استخدم GET /v1/models لمعرفة الموديلات المتاحة.</p></div><div class="docs-card"><span class="docs-number">03</span><h3 data-i18n="docsResponseTitle">الاستجابة</h3><p data-i18n="docsResponseText">النص النهائي موجود في choices[0].message.content.</p></div></div>
+          <div class="docs-section"><div class="docs-section-heading"><h3 data-i18n="docsModelsHeading">جلب الموديلات</h3><span class="method-badge">GET /v1/models</span></div><p data-i18n="docsModelsBody">يعيد هذا المسار الموديلات المكتشفة من الهارنسس المثبتة.</p><div class="code-block"><div class="code-toolbar"><span class="code-label">curl</span><button class="copy-code" data-copy-target="models-code" data-i18n="copy">نسخ</button></div><pre id="models-code">curl http://localhost:3500/v1/models</pre></div></div>
+          <div class="docs-section"><div class="docs-section-heading"><h3 data-i18n="docsChatHeading">إرسال رسالة</h3><span class="method-badge">POST /v1/chat/completions</span></div><p data-i18n="docsChatBody">استبدل API Key والموديل بقيم موجودة في حسابك.</p><div class="code-tabs"><button class="code-tab active" data-code="curl-code">curl</button><button class="code-tab" data-code="python-code">Python</button><button class="code-tab" data-code="javascript-code">JavaScript</button><button class="code-tab" data-code="php-code">PHP</button></div><div class="code-panel"><div class="code-toolbar"><span class="code-label" id="active-language">curl</span><button class="copy-code" data-copy-target="curl-code" data-i18n="copy">نسخ</button></div>
+            <pre id="curl-code" class="code-sample active">curl http://localhost:3500/v1/chat/completions \
+  -H "Authorization: Bearer afaq_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"opencode//opencode/big-pickle","messages":[{"role":"user","content":"Hello"}]}'</pre>
+            <pre id="python-code" class="code-sample">import os
+import requests
+
+response = requests.post(
+    os.getenv("AFAQ_BASE_URL", "http://localhost:3500") + "/v1/chat/completions",
+    headers={"Authorization": f"Bearer {os.environ['AFAQ_API_KEY']}"},
+    json={"model": "opencode//opencode/big-pickle", "messages": [{"role": "user", "content": "Hello"}]},
+)
+response.raise_for_status()
+print(response.json()["choices"][0]["message"]["content"])</pre>
+            <pre id="javascript-code" class="code-sample">const response = await fetch("http://localhost:3500/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${process.env.AFAQ_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: "opencode//opencode/big-pickle", messages: [{ role: "user", content: "Hello" }] }) });
+const result = await response.json();
+console.log(result.choices[0].message.content);</pre>
+            <pre id="php-code" class="code-sample">&lt;?php
+$ch = curl_init("http://localhost:3500/v1/chat/completions");
+curl_setopt_array($ch, [CURLOPT_POST =&gt; true, CURLOPT_HTTPHEADER =&gt; ["Authorization: Bearer " . getenv("AFAQ_API_KEY"), "Content-Type: application/json"], CURLOPT_POSTFIELDS =&gt; json_encode(["model" =&gt; "opencode//opencode/big-pickle", "messages" =&gt; [["role" =&gt; "user", "content" =&gt; "Hello"]]]), CURLOPT_RETURNTRANSFER =&gt; true]);
+$result = json_decode(curl_exec($ch), true);
+echo $result["choices"][0]["message"]["content"];
+?&gt;</pre></div></div>
+          <div class="docs-section"><div class="docs-section-heading"><h3 data-i18n="docsStreamHeading">البث المباشر</h3><span class="method-badge">stream: true</span></div><p data-i18n="docsStreamText">فعّل stream للحصول على أجزاء SSE تدريجيًا، وتنتهي الاستجابة الناجحة بـ data: [DONE].</p></div><div class="docs-note"><strong data-i18n="docsErrorsTitle">أخطاء شائعة</strong><p data-i18n="docsErrorsText">401 يعني أن المصادقة فشلت (مفتاح غير صالح أو جلسة منتهية)، و400 يعني أن اسم الهارنس غير معروف، و502 يعني أن أداة CLI فشلت.</p></div>
+        </article>
+      </section>
+    </main>
+  </div>
+  <dialog id="key-modal" class="key-modal"><form method="dialog" id="key-form"><button type="button" class="modal-close" id="key-modal-close" aria-label="Close">×</button><p class="eyebrow" data-i18n="apiKeys">مفاتيح API</p><h2 id="key-modal-title" data-i18n="createKey">إنشاء مفتاح</h2><div id="key-create-fields"><label for="key-name" data-i18n="keyName">اسم المفتاح</label><input id="key-name" required maxlength="120" placeholder="مثال: تطبيق الإنتاج"><button id="key-create-submit" type="submit" data-i18n="create">إنشاء</button></div><div id="key-result" class="hidden"><p data-i18n="keyWarning">احفظ هذا المفتاح الآن، لن يظهر كاملًا مرة أخرى.</p><div class="key-copy-row"><input id="key-value" readonly><button type="button" id="key-copy" data-i18n="copy">نسخ</button></div><small id="key-copy-message"></small></div></form></dialog>
+  <dialog id="user-modal" class="key-modal"><form method="dialog" id="user-form"><button type="button" class="modal-close" id="user-modal-close" aria-label="Close">×</button><p class="eyebrow" data-i18n="users">المستخدمون</p><h2 data-i18n="addUser">إضافة مستخدم</h2><label for="user-email" data-i18n="email">البريد الإلكتروني</label><input id="user-email" type="email" required><label for="user-password" data-i18n="password">كلمة المرور</label><input id="user-password" type="password" required minlength="8"><label for="user-name" data-i18n="displayName">الاسم</label><input id="user-name"><button type="submit" data-i18n="create">إنشاء</button></form></dialog>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
