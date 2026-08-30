@@ -397,6 +397,35 @@ async function handleCancelRun(
   sendJson(res, 200, { id: runId, status: "cancelling" });
 }
 
+async function handleListRuns(
+  req: IncomingMessage,
+  res: ServerResponse,
+  runService: RunService,
+): Promise<void> {
+  if (req.method !== "GET") {
+    methodNotAllowed(res);
+    return;
+  }
+  const runs = runService.listRuns();
+  sendJson(res, 200, {
+    object: "list",
+    data: runs.map((row) => ({
+      id: row.id,
+      status: row.status,
+      requested_model: row.requested_model,
+      resolved_model: row.resolved_model,
+      harness: row.harness,
+      duration_ms: row.duration_ms,
+      usage: row.usage_json ? JSON.parse(row.usage_json) : null,
+      estimated_cost_usd: row.estimated_cost_usd,
+      created_at: row.created_at,
+      started_at: row.started_at,
+      finished_at: row.finished_at,
+      error_message: row.error_message,
+    })),
+  });
+}
+
 async function handleGetRun(
   req: IncomingMessage,
   res: ServerResponse,
@@ -690,6 +719,30 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
         return;
       }
 
+      if (url === "/v1/runs") {
+        if (authService) {
+          const token = getBearerToken(req);
+          let key: ApiKeyRow | undefined;
+          if (token) {
+            const result = authService.authenticateApiKey(token);
+            if (result.ok) {
+              key = result.key;
+              authService.setLastUsed(result.key.id);
+            } else {
+              const messages = { invalid: "Invalid API key.", disabled: "API key is disabled.", expired: "API key has expired." };
+              sendAuthError(res, messages[result.reason]);
+              return;
+            }
+          } else {
+            const user = await requireSession(req, res);
+            if (!user) return;
+          }
+        }
+        await handleListRuns(req, res, opts.runService);
+        logRequest(res.statusCode);
+        return;
+      }
+
       if (url.startsWith("/v1/runs/") && url.endsWith("/cancel")) {
         const key = requireApiKey(req, res);
         if (authService && !key) return;
@@ -707,8 +760,28 @@ export function createGatewayServer(opts: CreateGatewayServerOptions) {
       }
 
       if (url === "/v1/models") {
-        const key = requireApiKey(req, res);
-        if (authService && !key) return;
+        let key: ApiKeyRow | undefined;
+        if (authService) {
+          const token = getBearerToken(req);
+          if (token) {
+            const result = authService.authenticateApiKey(token);
+            if (result.ok) {
+              key = result.key;
+              authService.setLastUsed(result.key.id);
+            } else {
+              const messages = {
+                invalid: "Invalid API key.",
+                disabled: "API key is disabled.",
+                expired: "API key has expired.",
+              };
+              sendAuthError(res, messages[result.reason]);
+              return;
+            }
+          } else {
+            const user = await requireSession(req, res);
+            if (!user) return;
+          }
+        }
         const allowlist = key?.model_allowlist_json ? JSON.parse(key.model_allowlist_json) as string[] : undefined;
         await handleModels(req, res, opts.adapterRegistry, allowlist);
         logRequest(res.statusCode, key?.id);

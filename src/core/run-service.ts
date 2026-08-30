@@ -202,6 +202,10 @@ export class RunService {
     return this.store.getRun(runId);
   }
 
+  listRuns() {
+    return this.store.listRuns();
+  }
+
   getEstimatedCostSince(keyId: string, sinceIso: string): number {
     return this.store.sumEstimatedCostSince(keyId, sinceIso);
   }
