@@ -56,7 +56,9 @@ class CommandCodeAdapter(HarnessAdapter):
                 normalized = {"id": str(tc_id), "type": "function", "function": {"name": str(tc_name), "arguments": tc_args if isinstance(tc_args, str) else json.dumps(tc_args) if isinstance(tc_args, dict) else str(tc_args)}}
                 return "", {"tool_call": normalized, "raw": item}
             if item.get("type") == "result":
-                text = item.get("finalText") or ""
+                # For streaming, do not emit finalText again (already streamed via text_delta); return empty
+                # parse_output will handle finalText for non-stream
+                return "", {"event": "result", "finalText": item.get("finalText") or ""}
             elif event.get("type") == "text_delta":
                 text = event.get("delta") or ""
             elif event.get("type") == "message_end":
