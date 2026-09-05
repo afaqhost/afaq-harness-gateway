@@ -141,6 +141,10 @@ async def keys_page(request: Request):
 async def users_page(request: Request):
     return await render_page(request, "users")
 
+@app.get("/usage", response_class=HTMLResponse)
+async def usage_page(request: Request):
+    return await render_page(request, "usage")
+
 @app.get("/documentation", response_class=HTMLResponse)
 async def documentation_page(request: Request):
     return await render_page(request, "documentation")

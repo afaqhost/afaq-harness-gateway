@@ -7,11 +7,11 @@ let isStreaming = false;
 
 const translations = {
   ar: {
-    newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', addUser: 'إضافة مستخدم', displayName: 'الاسم', docsTitle: 'ابدأ خلال دقائق', docsIntro: 'استخدم Afaq Gateway كواجهة متوافقة مع OpenAI للوصول إلى أدوات الذكاء الاصطناعي من أي تطبيق.', docsAuthTitle: 'المصادقة', docsAuthText: 'أنشئ API Key وأرسله في ترويسة Bearer مع كل طلب شات.', docsModelsTitle: 'الموديلات', docsModelsText: 'استخدم GET /v1/models لمعرفة الموديلات المتاحة.', docsResponseTitle: 'الاستجابة', docsResponseText: 'النص النهائي موجود في choices[0].message.content.', docsModelsHeading: 'جلب الموديلات', docsModelsBody: 'يعيد هذا المسار الموديلات المكتشفة من الهارنسس المثبتة.', docsChatHeading: 'إرسال رسالة', docsChatBody: 'استبدل API Key والموديل بقيم موجودة في حسابك.', docsStreamHeading: 'البث المباشر', docsStreamText: 'فعّل stream للحصول على أجزاء SSE تدريجيًا، وتنتهي الاستجابة الناجحة بـ data: [DONE].', docsErrorsTitle: 'أخطاء شائعة', docsErrorsText: '401 يعني أن المصادقة فشلت (مفتاح غير صالح أو جلسة منتهية)، و400 يعني أن اسم الهارنس غير معروف، و502 يعني أن أداة CLI فشلت.', keyName: 'اسم المفتاح', create: 'إنشاء', keyWarning: 'احفظ هذا المفتاح الآن، لن يظهر كاملًا مرة أخرى.', copy: 'نسخ', copied: 'تم نسخ المفتاح', active: 'فعال', disabled: 'معطل', enable: 'تفعيل', disable: 'تعطيل', delete: 'حذف', noKeys: 'لا توجد مفاتيح حتى الآن', deleteConfirm: 'هل تريد حذف هذا المفتاح نهائيًا؟', keyError: 'تعذر إنشاء المفتاح', toggleError: 'تعذر تغيير حالة المفتاح', deleteError: 'تعذر حذف المفتاح', refreshError: 'تعذر تحديث الموديلات', sessionExpired: 'انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى', authRequired: 'المصادقة مطلوبة. يرجى تسجيل الدخول مرة أخرى.', chatError: 'تعذر إرسال الرسالة', history: 'السجل', noChats: 'لا توجد محادثات بعد', deleteChatConfirm: 'حذف هذه المحادثة؟', rename: 'إعادة تسمية', renamePrompt: 'عنوان جديد:', typing: 'يكتب...', copyMsg: 'نسخ', copiedMsg: 'تم النسخ', retry: 'إعادة', you: 'أنت', assistant: 'المساعد', newChatTitle: 'محادثة جديدة', messages: 'رسائل', clear: 'مسح',
+    newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', usage: 'الاستهلاك', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', addUser: 'إضافة مستخدم', displayName: 'الاسم', docsTitle: 'ابدأ خلال دقائق', docsIntro: 'استخدم Afaq Gateway كواجهة متوافقة مع OpenAI للوصول إلى أدوات الذكاء الاصطناعي من أي تطبيق.', docsAuthTitle: 'المصادقة', docsAuthText: 'أنشئ API Key وأرسله في ترويسة Bearer مع كل طلب شات.', docsModelsTitle: 'الموديلات', docsModelsText: 'استخدم GET /v1/models لمعرفة الموديلات المتاحة.', docsResponseTitle: 'الاستجابة', docsResponseText: 'النص النهائي موجود في choices[0].message.content.', docsModelsHeading: 'جلب الموديلات', docsModelsBody: 'يعيد هذا المسار الموديلات المكتشفة من الهارنسس المثبتة.', docsChatHeading: 'إرسال رسالة', docsChatBody: 'استبدل API Key والموديل بقيم موجودة في حسابك.', docsStreamHeading: 'البث المباشر', docsStreamText: 'فعّل stream للحصول على أجزاء SSE تدريجيًا، وتنتهي الاستجابة الناجحة بـ data: [DONE].', docsErrorsTitle: 'أخطاء شائعة', docsErrorsText: '401 يعني أن المصادقة فشلت (مفتاح غير صالح أو جلسة منتهية)، و400 يعني أن اسم الهارنس غير معروف، و502 يعني أن أداة CLI فشلت.', keyName: 'اسم المفتاح', create: 'إنشاء', keyWarning: 'احفظ هذا المفتاح الآن، لن يظهر كاملًا مرة أخرى.', copy: 'نسخ', copied: 'تم نسخ المفتاح', active: 'فعال', disabled: 'معطل', enable: 'تفعيل', disable: 'تعطيل', delete: 'حذف', noKeys: 'لا توجد مفاتيح حتى الآن', deleteConfirm: 'هل تريد حذف هذا المفتاح نهائيًا؟', keyError: 'تعذر إنشاء المفتاح', toggleError: 'تعذر تغيير حالة المفتاح', deleteError: 'تعذر حذف المفتاح', refreshError: 'تعذر تحديث الموديلات', sessionExpired: 'انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى', authRequired: 'المصادقة مطلوبة. يرجى تسجيل الدخول مرة أخرى.', chatError: 'تعذر إرسال الرسالة', history: 'السجل', noChats: 'لا توجد محادثات بعد', deleteChatConfirm: 'حذف هذه المحادثة؟', rename: 'إعادة تسمية', renamePrompt: 'عنوان جديد:', typing: 'يكتب...', copyMsg: 'نسخ', copiedMsg: 'تم النسخ', retry: 'إعادة', you: 'أنت', assistant: 'المساعد', newChatTitle: 'محادثة جديدة', messages: 'رسائل', clear: 'مسح', usage: 'الاستهلاك', usageTitle: 'سجل الاستهلاك', usageSubtitle: 'تتبع استخدام النماذج والتكاليف والزمن', filterAllHarnesses: 'كل الهارنسس', usageModelPlaceholder: 'تصفية حسب الموديل', prev: 'السابق', next: 'التالي', cancel: 'إلغاء', confirm: 'تأكيد', prompt: 'إدخال', usageEmpty: 'لا يوجد استهلاك بعد', usageTotal: 'الإجمالي', usageHarness: 'الهارنس', usageModel: 'الموديل', usageTokens: 'الرموز', usageLatency: 'الزمن', usageDate: 'التاريخ', usageTokensShort: 'رموز', confirmDelete: 'تأكيد الحذف',
     searchModels: 'ابحث عن موديل... (claude, gpt, gemini)', filterAll: 'الكل', modelFooterHint: '↑↓ للتنقل · Enter للاختيار · Esc للإغلاق', noModelsFound: 'لا توجد نتائج'
   },
   en: {
-    newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', addUser: 'Add user', displayName: 'Name', docsTitle: 'Get started in minutes', docsIntro: 'Use Afaq Gateway as an OpenAI-compatible interface for AI tools from any application.', docsAuthTitle: 'Authentication', docsAuthText: 'Create an API key and send it as a Bearer header with every chat request.', docsModelsTitle: 'Models', docsModelsText: 'Use GET /v1/models to see the available models.', docsResponseTitle: 'Response', docsResponseText: 'The final text is at choices[0].message.content.', docsModelsHeading: 'List models', docsModelsBody: 'This route returns models discovered from installed harnesses.', docsChatHeading: 'Send a message', docsChatBody: 'Replace the API key and model with values from your account.', docsStreamHeading: 'Streaming', docsStreamText: 'Set stream to true for incremental SSE chunks. Successful streams end with data: [DONE].', docsErrorsTitle: 'Common errors', docsErrorsText: '401 means authentication failed (invalid key or expired session), 400 means the harness is unknown, and 502 means the CLI failed.', keyName: 'Key name', create: 'Create', keyWarning: 'Save this key now. It will not be shown in full again.', copy: 'Copy', copied: 'Key copied', active: 'Active', disabled: 'Disabled', enable: 'Enable', disable: 'Disable', delete: 'Delete', noKeys: 'No keys yet', deleteConfirm: 'Delete this key permanently?', keyError: 'Could not create the key', toggleError: 'Could not change key status', deleteError: 'Could not delete the key', refreshError: 'Could not refresh models', sessionExpired: 'Session expired, please sign in again', authRequired: 'Authentication required. Please sign in again.', chatError: 'Could not send message', history: 'History', noChats: 'No chats yet', deleteChatConfirm: 'Delete this conversation?', rename: 'Rename', renamePrompt: 'New title:', typing: 'typing...', copyMsg: 'Copy', copiedMsg: 'Copied', retry: 'Retry', you: 'You', assistant: 'Assistant', newChatTitle: 'New chat', messages: 'messages',     newChatTitle: 'New chat', messages: 'messages', clear: 'Clear',
+    newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', usage: 'Usage', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', addUser: 'Add user', displayName: 'Name', docsTitle: 'Get started in minutes', docsIntro: 'Use Afaq Gateway as an OpenAI-compatible interface for AI tools from any application.', docsAuthTitle: 'Authentication', docsAuthText: 'Create an API key and send it as a Bearer header with every chat request.', docsModelsTitle: 'Models', docsModelsText: 'Use GET /v1/models to see the available models.', docsResponseTitle: 'Response', docsResponseText: 'The final text is at choices[0].message.content.', docsModelsHeading: 'List models', docsModelsBody: 'This route returns models discovered from installed harnesses.', docsChatHeading: 'Send a message', docsChatBody: 'Replace the API key and model with values from your account.', docsStreamHeading: 'Streaming', docsStreamText: 'Set stream to true for incremental SSE chunks. Successful streams end with data: [DONE].', docsErrorsTitle: 'Common errors', docsErrorsText: '401 means authentication failed (invalid key or expired session), 400 means the harness is unknown, and 502 means the CLI failed.', keyName: 'Key name', create: 'Create', keyWarning: 'Save this key now. It will not be shown in full again.', copy: 'Copy', copied: 'Key copied', active: 'Active', disabled: 'Disabled', enable: 'Enable', disable: 'Disable', delete: 'Delete', noKeys: 'No keys yet', deleteConfirm: 'Delete this key permanently?', keyError: 'Could not create the key', toggleError: 'Could not change key status', deleteError: 'Could not delete the key', refreshError: 'Could not refresh models', sessionExpired: 'Session expired, please sign in again', authRequired: 'Authentication required. Please sign in again.', chatError: 'Could not send message', history: 'History', noChats: 'No chats yet', deleteChatConfirm: 'Delete this conversation?', rename: 'Rename', renamePrompt: 'New title:', typing: 'typing...', copyMsg: 'Copy', copiedMsg: 'Copied', retry: 'Retry', you: 'You', assistant: 'Assistant', newChatTitle: 'New chat', messages: 'messages', clear: 'Clear', usage: 'Usage', usageTitle: 'Usage History', usageSubtitle: 'Track model usage, tokens and latency', filterAllHarnesses: 'All harnesses', usageModelPlaceholder: 'Filter by model', prev: 'Prev', next: 'Next', cancel: 'Cancel', confirm: 'Confirm', prompt: 'Input', usageEmpty: 'No usage yet', usageTotal: 'Total', usageHarness: 'Harness', usageModel: 'Model', usageTokens: 'Tokens', usageLatency: 'Latency', usageDate: 'Date', usageTokensShort: 'tokens', confirmDelete: 'Confirm delete',
     searchModels: 'Search models... (claude, gpt, gemini)', filterAll: 'All', modelFooterHint: '↑↓ Navigate · Enter Select · Esc Close', noModelsFound: 'No results'
   }
 };
@@ -71,10 +71,11 @@ function show(page, updateUrl = true) {
   target.classList.remove('hidden');
   document.querySelectorAll('.nav-link').forEach((el) => el.classList.toggle('active', el.dataset.page === page));
   if (updateUrl && page !== 'login') history.pushState({ page }, '', `/${page}`);
-  $('#page-title').textContent = page === 'chat' ? text('chat') : page === 'harnesses' ? text('harnesses') : page === 'keys' ? text('apiKeys') : page === 'users' ? text('users') : text('docs');
+  $('#page-title').textContent = page === 'chat' ? text('chat') : page === 'harnesses' ? text('harnesses') : page === 'keys' ? text('apiKeys') : page === 'usage' ? text('usage') : page === 'users' ? text('users') : text('docs');
   if (page === 'harnesses') loadHarnesses();
   if (page === 'keys') loadKeys();
   if (page === 'users') loadUsers();
+  if (page === 'usage') loadUsage();
   if (page === 'chat') { loadConversations(); }
 }
 
@@ -902,7 +903,8 @@ async function sendStream(content, model, assistantNode) {
 
 // ---------- Conversation actions ----------
 async function deleteConversation(id) {
-  if (!confirm(text('deleteChatConfirm'))) return;
+  const ok = await showConfirmBox({ title: text('confirmDelete') || text('delete'), message: text('deleteChatConfirm'), confirmText: text('delete'), cancelText: text('cancel') });
+  if (!ok) return;
   try {
     await api(`/api/chat/conversations/${id}`, { method: 'DELETE' });
     conversationsCache = conversationsCache.filter(c=>c.id!==id);
@@ -918,7 +920,7 @@ async function deleteConversation(id) {
 }
 async function renameConversation(id) {
   const conv = conversationsCache.find(c=>c.id===id);
-  const newTitle = prompt(text('renamePrompt'), conv?.title || '');
+  const newTitle = await showPromptBox({ title: text('rename') || 'Rename', message: text('renamePrompt'), defaultValue: conv?.title || '', placeholder: conv?.title || '' });
   if (!newTitle || !newTitle.trim()) return;
   try {
     const updated = await api(`/api/chat/conversations/${id}`, {
@@ -934,7 +936,8 @@ async function renameConversation(id) {
 }
 async function clearCurrentChat() {
   if (!currentConversationId) return;
-  if (!confirm(text('deleteChatConfirm'))) return;
+  const ok = await showConfirmBox({ title: text('confirmDelete') || text('delete'), message: text('deleteChatConfirm'), confirmText: text('delete'), cancelText: text('cancel') });
+  if (!ok) return;
   try {
     // delete all messages by deleting conversation and creating new one with same model
     const old = conversationsCache.find(c=>c.id===currentConversationId);
@@ -975,10 +978,111 @@ async function loadUsers(){
 function openKeyModal(){ $('#key-form').reset(); $('#key-create-fields').classList.remove('hidden'); $('#key-result').classList.add('hidden'); $('#key-modal-title').textContent=text('createKey'); $('#key-modal').showModal(); }
 async function createKey(e){ e.preventDefault(); const b=$('#key-create-submit'); b.disabled=true; try{ const k=await api('/api/admin/keys',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:$('#key-name').value.trim()})}); $('#key-value').value=k.key; $('#key-create-fields').classList.add('hidden'); $('#key-result').classList.remove('hidden'); await loadKeys(); }catch(err){ showToast(`${text('keyError')}: ${err.message}`);}finally{ b.disabled=false; } }
 async function updateKey(id){ try{ await api(`/api/admin/keys/${id}`,{method:'PATCH'}); await loadKeys(); }catch(e){ showToast(`${text('toggleError')}: ${e.message}`);} }
-async function deleteKey(id){ if(!confirm(text('deleteConfirm'))) return; try{ await api(`/api/admin/keys/${id}`,{method:'DELETE'}); await loadKeys(); }catch(e){ showToast(`${text('deleteError')}: ${e.message}`);} }
+async function deleteKey(id){
+  const ok = await showConfirmBox({ title: text('confirmDelete') || 'تأكيد', message: text('deleteConfirm'), confirmText: text('delete'), cancelText: text('cancel') });
+  if(!ok) return;
+  try{ await api(`/api/admin/keys/${id}`,{method:'DELETE'}); await loadKeys(); }catch(e){ showToast(`${text('deleteError')}: ${e.message}`);}
+}
 function openUserModal(){ $('#user-form').reset(); $('#user-modal').showModal(); }
 async function createUser(e){ e.preventDefault(); const s=e.submitter; s.disabled=true; try{ await api('/api/admin/users',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:$('#user-email').value.trim(), password:$('#user-password').value, display_name:$('#user-name').value.trim()})}); $('#user-modal').close(); await loadUsers(); }catch(err){ showToast(err.message);}finally{ s.disabled=false; } }
 function showToast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('visible'); setTimeout(()=>t.classList.remove('visible'),3500); }
+
+// ---------- UI Box (replaces alert/confirm/prompt) ----------
+function showConfirmBox({ title, message, confirmText, cancelText, eyebrow }={}){
+  return new Promise((resolve)=>{
+    const dlg = document.getElementById('confirm-modal');
+    if(!dlg || typeof dlg.showModal !== 'function'){
+      // fallback to non-blocking toast + resolve false to avoid native confirm
+      showToast(message || title || 'Confirm?');
+      resolve(false);
+      return;
+    }
+    document.getElementById('confirm-title').textContent = title || text('confirm') || 'Confirm';
+    document.getElementById('confirm-message').textContent = message || '';
+    if(eyebrow) document.getElementById('confirm-eyebrow').textContent = eyebrow;
+    const ok = document.getElementById('confirm-ok');
+    const cancel = document.getElementById('confirm-cancel');
+    if(confirmText) ok.textContent = confirmText;
+    if(cancelText) cancel.textContent = cancelText;
+    const close = (val)=>{ try{ dlg.close(); }catch{} ok.removeEventListener('click', onOk); cancel.removeEventListener('click', onCancel); dlg.removeEventListener('close', onClose); resolve(val); };
+    const onOk = ()=> close(true);
+    const onCancel = ()=> close(false);
+    const onClose = ()=> close(false);
+    ok.addEventListener('click', onOk, {once:true});
+    cancel.addEventListener('click', onCancel, {once:true});
+    dlg.addEventListener('close', onClose, {once:true});
+    dlg.showModal();
+  });
+}
+function showPromptBox({ title, message, defaultValue, placeholder, confirmText, cancelText }={}){
+  return new Promise((resolve)=>{
+    const dlg = document.getElementById('prompt-modal');
+    if(!dlg || typeof dlg.showModal !== 'function'){
+      showToast(message || title || 'Input required');
+      resolve(null);
+      return;
+    }
+    document.getElementById('prompt-title').textContent = title || text('prompt') || 'Input';
+    document.getElementById('prompt-message').textContent = message || '';
+    const input = document.getElementById('prompt-input');
+    input.value = defaultValue || '';
+    if(placeholder) input.placeholder = placeholder;
+    const ok = document.getElementById('prompt-ok');
+    const cancel = document.getElementById('prompt-cancel');
+    if(confirmText) ok.textContent = confirmText;
+    if(cancelText) cancel.textContent = cancelText;
+    const close = (val)=>{ try{ dlg.close(); }catch{} ok.removeEventListener('click', onOk); cancel.removeEventListener('click', onCancel); dlg.removeEventListener('close', onClose); const form=document.getElementById('prompt-form'); form.removeEventListener('submit', onSubmit); resolve(val); };
+    const onOk = (e)=>{ if(e) e.preventDefault(); const v = input.value; if(!v || !v.trim()){ input.focus(); return; } close(v.trim()); };
+    const onCancel = ()=> close(null);
+    const onClose = ()=> close(null);
+    const onSubmit = (e)=>{ e.preventDefault(); onOk(e); };
+    const form = document.getElementById('prompt-form');
+    form.addEventListener('submit', onSubmit, {once:true});
+    ok.addEventListener('click', onOk, {once:true});
+    cancel.addEventListener('click', onCancel, {once:true});
+    dlg.addEventListener('close', onClose, {once:true});
+    dlg.showModal();
+    setTimeout(()=> input.focus(), 50);
+  });
+}
+
+// ---------- Usage ----------
+let usageOffset = 0;
+const usageLimit = 20;
+async function loadUsage(){
+  const listEl = $('#usage-list');
+  const infoEl = $('#usage-page-info');
+  const summaryEl = $('#usage-summary');
+  if(!listEl) return;
+  const harness = $('#usage-harness')?.value || '';
+  const model = $('#usage-model')?.value?.trim() || '';
+  const params = new URLSearchParams({ limit: usageLimit, offset: usageOffset });
+  if(harness) params.set('harness', harness);
+  if(model) params.set('model', model);
+  listEl.innerHTML = `<p class="muted">${text('loading')}</p>`;
+  try{
+    const data = await api(`/api/chat/usage?${params}`);
+    const items = data.items || [];
+    const total = data.total || 0;
+    if(infoEl) infoEl.textContent = `${total} ${text('usageTotal')} · ${Math.floor(usageOffset/usageLimit)+1} / ${Math.max(1, Math.ceil(total/usageLimit))}`;
+    if(summaryEl){
+      const totalTokens = items.reduce((a,c)=> a + (c.total_tokens||0), 0);
+      summaryEl.innerHTML = `<span>${text('usageTotal')}: ${total}</span><span>·</span><span>${totalTokens} ${text('usageTokensShort')}</span>`;
+    }
+    if(!items.length){
+      listEl.innerHTML = `<p class="muted">${text('usageEmpty')}</p>`;
+      return;
+    }
+    listEl.innerHTML = `<div class="table-head" style="display:grid; grid-template-columns: 1.2fr 1.2fr 0.8fr 0.8fr 1fr; gap:10px; padding:10px 14px; font:600 11px var(--font-mono); color:var(--text-faint); text-transform:uppercase"><span>${text('usageHarness')}</span><span>${text('usageModel')}</span><span>${text('usageTokens')}</span><span>${text('usageLatency')}</span><span>${text('usageDate')}</span></div>` + items.map(i=> `<div class="row" style="display:grid; grid-template-columns: 1.2fr 1.2fr 0.8fr 0.8fr 1fr; gap:10px; align-items:center"><span><span class="badge">${escapeHtml(i.harness)}</span></span><span class="mono" title="${escapeHtml(i.model)}" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${escapeHtml(i.model)}</span><span>${(i.total_tokens||0)}<small class="muted"> (${i.prompt_tokens||0}→${i.completion_tokens||0})</small></span><span>${i.latency_ms||0} ms</span><span class="muted" style="font-size:12px">${new Date(i.created_at).toLocaleString(language==='ar'?'ar-EG':'en-US')}</span></div>`).join('');
+    // update pagination buttons
+    const prev = $('#usage-prev'), next = $('#usage-next');
+    if(prev) prev.disabled = usageOffset===0;
+    if(next) next.disabled = usageOffset + usageLimit >= total;
+  }catch(e){
+    listEl.innerHTML = `<p class="error-message">${escapeHtml(e.message)}</p>`;
+    if(infoEl) infoEl.textContent = '';
+  }
+}
 function selectCode(e){ const b=e.currentTarget; document.querySelectorAll('.code-tab').forEach(t=>t.classList.remove('active')); document.querySelectorAll('.code-sample').forEach(s=>s.classList.remove('active')); b.classList.add('active'); $(`#${b.dataset.code}`).classList.add('active'); $('#active-language').textContent=b.textContent; $('.code-panel .copy-code').dataset.copyTarget=b.dataset.code; }
 function addBubble(role, content){ /* kept for compatibility, now uses addOptimisticMessage */}
 async function login(){
@@ -1037,6 +1141,17 @@ $('#prompt')?.addEventListener('input', autoResize);
 $('#login-btn').onclick = login;
 $('#new-key').onclick = openKeyModal; $('#key-form').onsubmit = createKey; $('#key-modal-close').onclick = ()=> $('#key-modal').close();
 $('#new-user').onclick = openUserModal; $('#user-form').onsubmit = createUser; $('#user-modal-close').onclick = ()=> $('#user-modal').close();
+$('#confirm-modal-close')?.addEventListener('click', ()=> $('#confirm-modal').close());
+$('#prompt-modal-close')?.addEventListener('click', ()=> $('#prompt-modal').close());
+// allow backdrop click to close dialogs (native <dialog> does not close on backdrop, so add listener)
+document.querySelectorAll('dialog').forEach(dlg=>{
+  dlg.addEventListener('click', (e)=>{
+    const rect = dlg.getBoundingClientRect();
+    if(e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom){
+      dlg.close();
+    }
+  });
+});
 $('#key-copy').onclick = async ()=>{ await navigator.clipboard.writeText($('#key-value').value); $('#key-copy-message').textContent=text('copied'); };
 $('#keys-list').onclick = (e)=>{ const b=e.target.closest('[data-action]'); if(!b) return; b.dataset.action==='toggle'?updateKey(b.dataset.keyId):deleteKey(b.dataset.keyId); };
 $('#refresh-harnesses').onclick = refreshHarnesses;
@@ -1141,6 +1256,26 @@ window.onpopstate = ()=> show(document.body.dataset.page||'chat', false);
       closeModelDropdown();
     }
   });
+})();
+
+// ---------- Usage ----------
+(function initUsage(){
+  const harnessSel = document.getElementById('usage-harness');
+  const modelInput = document.getElementById('usage-model');
+  const refreshBtn = document.getElementById('usage-refresh');
+  const prevBtn = document.getElementById('usage-prev');
+  const nextBtn = document.getElementById('usage-next');
+  if(harnessSel) harnessSel.addEventListener('change', ()=>{ usageOffset=0; loadUsage(); });
+  if(modelInput){
+    let t;
+    modelInput.addEventListener('input', ()=>{
+      clearTimeout(t);
+      t=setTimeout(()=>{ usageOffset=0; loadUsage(); }, 400);
+    });
+  }
+  if(refreshBtn) refreshBtn.addEventListener('click', ()=>{ usageOffset=0; loadUsage(); });
+  if(prevBtn) prevBtn.addEventListener('click', ()=>{ if(usageOffset>=usageLimit){ usageOffset-=usageLimit; loadUsage(); }});
+  if(nextBtn) nextBtn.addEventListener('click', ()=>{ usageOffset+=usageLimit; loadUsage(); });
 })();
 
 // Init
