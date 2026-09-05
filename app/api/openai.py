@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.security import hash_api_key
 from app.db.database import APIKey, UsageRecord, User, get_db
 from app.harnesses.registry import cached_models, get_adapter, all_adapters
+from app.shared.model_utils import parse_model_identifier as split_model
 
 router = APIRouter()
 
@@ -58,12 +59,6 @@ async def resolve_identity(authorization: str | None, db: AsyncSession):
         return None, None
     user = await db.get(User, user_id)
     return (user.id, None) if user and user.is_active else (None, None)
-
-def split_model(model: str):
-    parts = model.split("/", 2)
-    if len(parts) == 3: return parts[0], parts[2]
-    if len(parts) == 2: return parts[0], parts[1]
-    return parts[0], "default"
 
 def make_id(prefix="chatcmpl"):
     return f"{prefix}-{uuid.uuid4().hex}"

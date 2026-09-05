@@ -11,6 +11,8 @@ from sqlalchemy.orm import selectinload
 from app.api.auth import current_user
 from app.db.database import Conversation, Message, UsageRecord, User, get_db
 from app.harnesses.registry import get_adapter, cached_models, all_adapters
+from app.shared.model_utils import parse_model_identifier as split_model
+from app.shared.model_utils import preview_text as _preview
 
 router = APIRouter()
 
@@ -50,14 +52,6 @@ class ConversationOut(BaseModel):
 class ConversationDetail(ConversationOut):
     messages: list[MessageOut]
 
-def split_model(model: str):
-    parts = model.split("/", 2)
-    if len(parts) == 3:
-        return parts[0], parts[2]
-    if len(parts) == 2:
-        return parts[0], parts[1]
-    return parts[0], "default"
-
 def _validate_model_or_400(full_model: str) -> tuple[str, str]:
     """Validate that harness exists and model is known. Raises HTTPException 400 if invalid."""
     harness_name, model_name = split_model(full_model)
@@ -80,10 +74,6 @@ def _validate_model_or_400(full_model: str) -> tuple[str, str]:
             sample = ", ".join(m.id for m in cached[:5])
             raise HTTPException(400, f"الموديل '{full_model}' غير متوفر للـ harness '{harness_name}'. جرب أحد هذه: {sample} ... (أعد تحميل الموديلات من /v1/models)")
     return harness_name, model_name
-
-def _preview(text: str, n: int = 80) -> str:
-    t = text.strip().replace("\n", " ")
-    return t[:n] + ("…" if len(t) > n else "")
 
 # ---------- Helpers ----------
 async def _get_conversation_or_404(conv_id: int, user: User, db: AsyncSession) -> Conversation:

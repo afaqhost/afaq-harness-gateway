@@ -1,7 +1,10 @@
 from app.domain.harness import ChatInput, ChatOutput, HarnessPort
+from app.shared.model_utils import parse_model_identifier
+
 
 class UnknownHarnessError(Exception):
     pass
+
 
 class ChatService:
     def __init__(self, registry: dict[str, HarnessPort]):
@@ -9,10 +12,7 @@ class ChatService:
 
     @staticmethod
     def parse_model(model: str) -> tuple[str, str]:
-        parts = model.split("/", 2)
-        if len(parts) == 3: return parts[0], parts[2]
-        if len(parts) == 2: return parts[0], parts[1]
-        return parts[0], "default"
+        return parse_model_identifier(model)
 
     def resolve(self, model: str) -> tuple[HarnessPort, str]:
         harness, model_name = self.parse_model(model)
