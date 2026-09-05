@@ -177,7 +177,8 @@ class CodexAdapter(HarnessAdapter):
     install_command = ["npm", "install", "-g", "@openai/codex"]
     update_command = ["npm", "update", "-g", "@openai/codex"]
     def build_command(self, prompt, model=None, session_id=None):
-        command = [self.executable, "exec", "--json", "--skip-git-repo-check"]
+        # read-only sandbox: allow search/read, block writes/exec
+        command = [self.executable, "exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only"]
         if model and model != "default": command += ["--model", model]
         command += [prompt]
         return command
@@ -233,7 +234,8 @@ class CommandCodeAdapter(HarnessAdapter):
     update_command = ["npm", "update", "-g", "command-code"]
 
     def build_command(self, prompt, model=None, session_id=None):
-        command = [self.executable, "--print", prompt, "--output-format", "json", "--skip-onboarding", "--no-auto-update"]
+        # plan mode = read-only, no file writes, allow search
+        command = [self.executable, "--print", prompt, "--output-format", "json", "--skip-onboarding", "--no-auto-update", "--permission-mode", "plan"]
         if model and model != "default": command += ["--model", model]
         if session_id: command += ["--session", session_id]
         return command
