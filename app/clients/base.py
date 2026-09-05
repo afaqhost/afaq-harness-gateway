@@ -75,7 +75,7 @@ class HarnessAdapter(ABC):
         return output.decode(errors="replace").strip()
 
     async def run(
-        self, prompt: str, model: str | None = None, session_id: str | None = None, env: dict | None = None
+        self, prompt: str, model: str | None = None, session_id: str | None = None, env: dict | None = None, request_id: str | None = None
     ) -> HarnessResult:
         model = model or "default"
         command = self.build_command(prompt, model, session_id)
@@ -86,6 +86,23 @@ class HarnessAdapter(ABC):
             stderr=asyncio.subprocess.PIPE,
             env={**os.environ, **(env or {})},
         )
+        # register for cancel if request_id provided
+        if request_id:
+            try:
+                from app.services.process_registry import ProcessHandle, process_registry
+
+                await process_registry.register(
+                    request_id,
+                    ProcessHandle(
+                        pid=process.pid or 0,
+                        process=process,
+                        harness=self.name,
+                        model=model,
+                        request_id=request_id,
+                    ),
+                )
+            except Exception:
+                pass
         run_timeout = min(settings.harness_timeout_seconds, 90)
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=run_timeout)
@@ -99,6 +116,14 @@ class HarnessAdapter(ABC):
                 f"{self.name} timed out after {run_timeout}s — model '{model}' may be unavailable or harness hung. "
                 "Try a different model (e.g. opencode/big-pickle)."
             )
+        finally:
+            if request_id:
+                try:
+                    from app.services.process_registry import process_registry
+
+                    await process_registry.cleanup(request_id)
+                except Exception:
+                    pass
         if process.returncode != 0:
             error = stderr.decode(errors="replace").strip() or stdout.decode(errors="replace").strip()
             if "ollama" in error.lower() or "model" in error.lower() and "not found" in error.lower():
@@ -116,7 +141,7 @@ class HarnessAdapter(ABC):
         )
 
     async def stream(
-        self, prompt: str, model: str | None = None, session_id: str | None = None, env: dict | None = None
+        self, prompt: str, model: str | None = None, session_id: str | None = None, env: dict | None = None, request_id: str | None = None
     ) -> AsyncIterator[tuple[str, dict]]:
         model = model or "default"
         command = self.build_command(prompt, model, session_id)
@@ -129,6 +154,22 @@ class HarnessAdapter(ABC):
         assert process.stdout
         assert process.stderr
         cur_timeout = min(settings.harness_timeout_seconds, 90)
+        if request_id:
+            try:
+                from app.services.process_registry import ProcessHandle, process_registry
+
+                await process_registry.register(
+                    request_id,
+                    ProcessHandle(
+                        pid=process.pid or 0,
+                        process=process,
+                        harness=self.name,
+                        model=model,
+                        request_id=request_id,
+                    ),
+                )
+            except Exception:
+                pass
         try:
             while True:
                 try:
@@ -170,6 +211,13 @@ class HarnessAdapter(ABC):
                     error = f"exit code {code}"
                 raise RuntimeError(f"{self.name} failed ({code}): {error}")
         finally:
+            if request_id:
+                try:
+                    from app.services.process_registry import process_registry
+
+                    await process_registry.cleanup(request_id)
+                except Exception:
+                    pass
             if process.returncode is None:
                 try:
                     process.kill()

@@ -28,7 +28,7 @@ async def test_daily_limit_blocks_sixth_request(client, db_session, regular_user
     await db_session.refresh(key)
     headers = {"Authorization": f"Bearer {raw}"}
 
-    async def fake_run(prompt, model=None, session_id=None, env=None):
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
         return HarnessResult(text="ok", model=model or "default")
 
     with patch("app.api.openai.get_adapter") as mock_get:
@@ -67,7 +67,7 @@ async def test_monthly_limit_blocks_third_request(client, db_session, regular_us
     await db_session.refresh(key)
     headers = {"Authorization": f"Bearer {raw}"}
 
-    async def fake_run(prompt, model=None, session_id=None, env=None):
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
         return HarnessResult(text="ok", model=model or "default")
 
     with patch("app.api.openai.get_adapter") as mock_get:
@@ -110,7 +110,7 @@ async def test_global_rate_limiter_blocks_after_burst(client, db_session, regula
         await db_session.refresh(key)
         headers = {"Authorization": f"Bearer {raw}"}
 
-        async def fake_run(prompt, model=None, session_id=None, env=None):
+        async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
             return HarnessResult(text="ok", model=model or "default")
 
         with patch("app.api.openai.get_adapter") as mock_get:

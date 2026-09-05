@@ -42,7 +42,7 @@ async def test_e2e_bootstrap_login_create_chat_and_history(client):
     conv_id = conv.json()["id"]
 
     # send two messages with mocked harness
-    async def fake_run(prompt, model=None, session_id=None, env=None):
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
         return HarnessResult(text=f"reply to {prompt[:10]}", model=model or "default")
 
     with patch("app.api.chat.get_adapter") as mock_get:
@@ -85,7 +85,7 @@ async def test_e2e_api_key_flow_for_external_client(client, db_session):
     raw_key = key_resp.json()["key"]
 
     # external client uses api key to hit openai endpoint
-    async def fake_run(prompt, model=None, session_id=None, env=None):
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
         return HarnessResult(text="external reply", model=model or "default")
 
     with patch("app.api.openai.get_adapter") as mock_get:
@@ -103,7 +103,7 @@ async def test_e2e_conversation_stream_persists_messages(client, user_headers):
     resp = await client.post("/api/chat/conversations", headers=user_headers, json={"model": "opencode//opencode/big-pickle"})
     conv_id = resp.json()["id"]
 
-    async def fake_stream(prompt, model=None, session_id=None, env=None):
+    async def fake_stream(prompt, model=None, session_id=None, env=None, request_id=None):
         yield "streamed ", {}
         yield "content", {}
 

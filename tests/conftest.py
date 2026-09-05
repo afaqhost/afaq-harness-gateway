@@ -40,6 +40,15 @@ def reset_rate_limiter():
     global_rate_limiter.reset()
 
 
+@pytest.fixture(autouse=True)
+def reset_process_registry():
+    from app.services.process_registry import process_registry
+
+    process_registry.clear()
+    yield
+    process_registry.clear()
+
+
 @pytest_asyncio.fixture
 async def client(db_session: AsyncSession, test_engine):
     async def override_get_db():
@@ -124,12 +133,12 @@ class FakeAdapter:
     def parse_output(self, output, model):
         return output.decode(errors="replace").strip()
 
-    async def run(self, prompt, model=None, session_id=None, env=None):
+    async def run(self, prompt, model=None, session_id=None, env=None, request_id=None):
         from app.models.harness import HarnessResult
 
         return HarnessResult(text=self._text, model=model or "default")
 
-    async def stream(self, prompt, model=None, session_id=None, env=None):
+    async def stream(self, prompt, model=None, session_id=None, env=None, request_id=None):
         for chunk in ["fake ", "response"]:
             yield chunk, {}
 

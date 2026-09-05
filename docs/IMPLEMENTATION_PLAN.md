@@ -248,7 +248,7 @@ This plan is designed to be resumed across sessions. Each session is self-contai
 **Progress tracker (check as you merge):**
 
 - [x] S1 Security & Rate Limit — done (116 tests green, middleware + quota + allowed_models + sanitization)
-- [ ] S2 Cancel & Lifecycle
+- [x] S2 Cancel & Lifecycle — done (127 tests green, process_registry + cancel endpoints + auto-disconnect)
 - [ ] S3 Usage/Pagination/Archive
 - [ ] S4 SSE Completeness
 - [ ] S5 Harness Lifecycle & Health
@@ -292,4 +292,4 @@ New tests live in `tests/{unit,integration,e2e,security,performance,contract}/` 
 
 ---
 
-*Last updated: after S1 (feat/s1-rate-limit) — 116 tests green (96 + 20 S1). Excludes file/image upload per request. Next: S2 Cancel & Lifecycle.*
+*Last updated: after S2 (feat/s2-cancel) — 127 tests green (96 + 31 S1+S2). Excludes file/image upload per request. Next: S3 Usage/Pagination/Archive.*

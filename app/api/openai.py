@@ -3,7 +3,7 @@ import logging
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -91,7 +91,7 @@ async def models():
 
 
 @router.post("/chat/completions")
-async def chat_completions(request_payload: ChatRequest, authorization: str | None = Header(default=None), db: AsyncSession = Depends(get_db)):
+async def chat_completions(request_payload: ChatRequest, request: Request, authorization: str | None = Header(default=None), db: AsyncSession = Depends(get_db)):
     user_id, key_id = await resolve_identity(authorization, db)
     if not user_id:
         raise HTTPException(401, "Authentication required. Please sign in or provide a valid API key.")
@@ -119,11 +119,12 @@ async def chat_completions(request_payload: ChatRequest, authorization: str | No
 
     if request_payload.stream:
         return StreamingResponse(
-            _stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db),
+            _stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request),
             media_type="text/event-stream",
+            headers={"X-Request-ID": completion_id},
         )
 
-    return await _non_stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db)
+    return await _non_stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request)
 
 
 def _sanitize_harness_error(exc: Exception) -> str:
@@ -135,13 +136,22 @@ def _sanitize_harness_error(exc: Exception) -> str:
     return "Harness error — please try again later"
 
 
-async def _stream_response(adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession):
+async def _stream_response(adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request):
     started = time.monotonic()
     collected: list[str] = []
 
     async def event_stream():
+        from app.services.process_registry import process_registry
+
+        cancelled = False
         try:
-            async for text, metadata in adapter.stream(prompt, model):
+            async for text, metadata in adapter.stream(prompt, model, request_id=completion_id):
+                if await request.is_disconnected():
+                    logger.info("client_disconnected cancelling completion_id=%s", completion_id)
+                    await process_registry.cancel(completion_id)
+                    cancelled = True
+                    yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled by client'}})}\n\n"
+                    break
                 collected.append(text)
                 chunk = {
                     "id": completion_id,
@@ -151,6 +161,13 @@ async def _stream_response(adapter, prompt: str, model: str, request_model: str,
                     "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
                 }
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                if await request.is_disconnected():
+                    await process_registry.cancel(completion_id)
+                    cancelled = True
+                    yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled by client'}})}\n\n"
+                    break
+            if cancelled:
+                return
             final = {
                 "id": completion_id,
                 "object": "chat.completion.chunk",
@@ -173,6 +190,12 @@ async def _stream_response(adapter, prompt: str, model: str, request_model: str,
             )
             await db.commit()
         except RuntimeError as exc:
+            msg_lower = str(exc).lower()
+            is_killed = "exit code -9" in msg_lower or "exit code -15" in msg_lower or "killed" in msg_lower
+            if cancelled or "cancel" in msg_lower or is_killed:
+                logger.info("stream_cancelled completion_id=%s error=%s", completion_id, str(exc))
+                yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled'}})}\n\n"
+                return
             logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
             sanitized = _sanitize_harness_error(exc)
             err = {"error": {"code": "harness_error", "message": sanitized, "type": "harness_error"}}
@@ -182,10 +205,24 @@ async def _stream_response(adapter, prompt: str, model: str, request_model: str,
         yield chunk
 
 
-async def _non_stream_response(adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession):
+@router.post("/chat/completions/{completion_id}/cancel")
+async def cancel_completion(completion_id: str, request: Request, authorization: str | None = Header(default=None), db: AsyncSession = Depends(get_db)):
+    user_id, key_id = await resolve_identity(authorization, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail={"error": {"code": "auth_error", "message": "Authentication required"}})
+    from app.services.process_registry import process_registry
+
+    ok = await process_registry.cancel(completion_id)
+    if ok:
+        return {"status": "cancelled", "completion_id": completion_id}
+    # also try without prefix if client sent full?
+    raise HTTPException(status_code=404, detail={"error": {"code": "not_found", "message": "No in-flight stream"}})
+
+
+async def _non_stream_response(adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request):
     started = time.monotonic()
     try:
-        result = await adapter.run(prompt, model)
+        result = await adapter.run(prompt, model, request_id=completion_id)
     except RuntimeError as exc:
         logger.error("harness_error harness=%s model=%s error=%s", harness_name, model, str(exc))
         sanitized = _sanitize_harness_error(exc)

@@ -1,9 +1,10 @@
 import json
 import logging
 import time
+import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import desc, select
@@ -189,6 +190,7 @@ async def delete_conversation(conv_id: int, user: User = Depends(current_user), 
 async def send_message(
     conv_id: int,
     payload: MessageCreate,
+    request: Request,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
@@ -225,10 +227,12 @@ async def send_message(
     harness_name, model_name = _validate_model_or_400(model)
     adapter = get_adapter(harness_name)
 
+    # request_id for non-stream cancel support
+    request_id = f"chat:{conv.id}:{uuid.uuid4().hex[:8]}"
     # Note: payload.stream is intentionally ignored here — streaming is served via /messages/stream
     started = time.monotonic()
     try:
-        result_h = await adapter.run(prompt, model_name)
+        result_h = await adapter.run(prompt, model_name, request_id=request_id)
     except HTTPException:
         raise
     except RuntimeError as exc:
@@ -279,6 +283,7 @@ async def send_message(
 async def stream_message(
     conv_id: int,
     payload: MessageCreate,
+    request: Request,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
@@ -312,13 +317,26 @@ async def stream_message(
     history = (await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))).scalars().all()
     prompt = _history_to_prompt(history)
 
+    # request_id for cancel tracking
+    request_id = f"chat:{conv.id}:{uuid.uuid4().hex[:8]}"
+
     async def event_stream():
         from app.db.database import SessionLocal
+        from app.services.process_registry import process_registry
 
         collected: list[str] = []
         started = time.monotonic()
+        cancelled = False
         try:
-            async for text, metadata in adapter.stream(prompt, model_name):
+            async for text, metadata in adapter.stream(prompt, model_name, request_id=request_id):
+                # auto-cancel on client disconnect
+                if await request.is_disconnected():
+                    logger.info("client_disconnected cancelling request_id=%s", request_id)
+                    await process_registry.cancel(request_id)
+                    cancelled = True
+                    # yield cancel event for S2 (S4 will use proper event: cancel)
+                    yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled by client'}})}\n\n"
+                    break
                 if not text:
                     continue
                 collected.append(text)
@@ -330,6 +348,15 @@ async def stream_message(
                     "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
                 }
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                # also check disconnect after yield
+                if await request.is_disconnected():
+                    await process_registry.cancel(request_id)
+                    cancelled = True
+                    yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled by client'}})}\n\n"
+                    break
+            if cancelled:
+                # do not emit DONE, do not persist success record
+                return
             if not collected:
                 raise RuntimeError("Harness returned empty response — لا يوجد رد من الموديل. جرب موديل آخر مثل opencode/big-pickle")
             final = {
@@ -361,6 +388,14 @@ async def stream_message(
                 )
                 await session.commit()
         except RuntimeError as exc:
+            # if we were cancelled, the process kill may surface as RuntimeError — treat as cancelled
+            # exit code -9 (SIGKILL) / -15 (SIGTERM) indicates killed via cancel
+            msg_lower = str(exc).lower()
+            is_killed = "exit code -9" in msg_lower or "exit code -15" in msg_lower or "killed" in msg_lower
+            if cancelled or "cancel" in msg_lower or is_killed:
+                logger.info("stream_cancelled request_id=%s error=%s", request_id, str(exc))
+                yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled'}})}\n\n"
+                return
             logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
             sanitized = _sanitize_harness_error(exc)
             try:
@@ -385,5 +420,51 @@ async def stream_message(
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
+            "X-Request-ID": request_id,
         },
     )
+
+
+@router.post("/conversations/{conv_id}/cancel")
+async def cancel_conversation_stream(conv_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    # verify ownership
+    await _get_conversation_or_404(conv_id, user, db)
+    from app.services.process_registry import process_registry
+
+    # try prefix cancel (any in-flight for this conv)
+    prefix = f"chat:{conv_id}:"
+    # snapshot keys to avoid holding lock while iterating
+    keys = list(process_registry._map.keys())
+    target = None
+    for k in keys:
+        if k.startswith(prefix):
+            target = k
+            break
+    if target:
+        ok = await process_registry.cancel(target)
+        if ok:
+            return {"status": "cancelled", "request_id": target}
+    raise HTTPException(status_code=404, detail={"error": {"code": "not_found", "message": "No in-flight stream for conversation"}})
+
+
+@router.post("/conversations/{conv_id}/messages/{msg_id}/cancel")
+async def cancel_message(conv_id: int, msg_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    await _get_conversation_or_404(conv_id, user, db)
+    from app.services.process_registry import process_registry
+
+    # try exact match f"chat:{conv_id}:{msg_id}" then msg_id alone then prefix
+    candidates = [f"chat:{conv_id}:{msg_id}", msg_id, f"chat:{msg_id}"]
+    for cid in candidates:
+        if cid in process_registry._map:
+            ok = await process_registry.cancel(cid)
+            if ok:
+                return {"status": "cancelled", "request_id": cid}
+    # fallback prefix search
+    prefix = f"chat:{conv_id}:"
+    keys = list(process_registry._map.keys())
+    for k in keys:
+        if k.startswith(prefix):
+            ok = await process_registry.cancel(k)
+            if ok:
+                return {"status": "cancelled", "request_id": k}
+    raise HTTPException(status_code=404, detail={"error": {"code": "not_found", "message": "No in-flight stream"}})

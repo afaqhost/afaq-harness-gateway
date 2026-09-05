@@ -40,10 +40,10 @@ async def test_chat_completions_contract_stream_vs_non_stream(client, user_heade
     MODEL_CACHE.clear()
     MODEL_CACHE["opencode"] = [HarnessModel(id="opencode//opencode/big-pickle", harness="opencode", provider="opencode", name="opencode/big-pickle")]
 
-    async def fake_run(prompt, model=None, session_id=None, env=None):
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
         return HarnessResult(text="contract reply", model=model or "default")
 
-    async def fake_stream(prompt, model=None, session_id=None, env=None):
+    async def fake_stream(prompt, model=None, session_id=None, env=None, request_id=None):
         yield "part1 ", {}
         yield "part2", {}
 

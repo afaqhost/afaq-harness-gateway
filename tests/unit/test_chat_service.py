@@ -28,14 +28,14 @@ class StubAdapter:
     def parse_output(self, output, model):
         return output.decode()
 
-    async def run(self, prompt, model=None, session_id=None, env=None):
+    async def run(self, prompt, model=None, session_id=None, env=None, request_id=None):
         self.last_prompt = prompt
         self.last_model = model
         from app.models.harness import HarnessResult
 
         return HarnessResult(text=self._text, model=model or "default")
 
-    async def stream(self, prompt, model=None, session_id=None, env=None):
+    async def stream(self, prompt, model=None, session_id=None, env=None, request_id=None):
         yield self._text, {}
 
 

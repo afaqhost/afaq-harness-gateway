@@ -47,7 +47,7 @@ async def test_send_message_persists_and_returns_assistant_reply(client, user_he
     # mock adapter.run to avoid subprocess
     from app.models.harness import HarnessResult
 
-    async def fake_run(prompt, model=None, session_id=None, env=None):
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
         return HarnessResult(text="hello from fake harness", model=model or "default")
 
     with patch("app.api.chat.get_adapter") as mock_get:
@@ -87,7 +87,7 @@ async def test_stream_message_sse_format(client, user_headers):
     resp = await client.post("/api/chat/conversations", headers=user_headers, json={"model": "opencode//opencode/big-pickle"})
     conv_id = resp.json()["id"]
 
-    async def fake_stream(prompt, model=None, session_id=None, env=None):
+    async def fake_stream(prompt, model=None, session_id=None, env=None, request_id=None):
         yield "hello ", {}
         yield "world", {}
 
@@ -107,7 +107,7 @@ async def test_openai_chat_completions_non_stream_with_api_key(client, db_sessio
     # Mock harness for openai endpoint as well
     from app.models.harness import HarnessResult
 
-    async def fake_run(prompt, model=None, session_id=None, env=None):
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
         return HarnessResult(text="openai fake reply", model=model or "default")
 
     with patch("app.api.openai.get_adapter") as mock_get:

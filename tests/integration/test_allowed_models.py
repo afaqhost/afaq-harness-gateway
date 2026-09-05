@@ -33,7 +33,7 @@ async def test_allowed_models_allows_listed(client, db_session, regular_user):
     await db_session.refresh(key)
     headers = {"Authorization": f"Bearer {raw}"}
 
-    async def fake_run(prompt, model=None, session_id=None, env=None):
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
         return HarnessResult(text="ok", model=model or "default")
 
     with patch("app.api.openai.get_adapter") as mock_get:
@@ -91,7 +91,7 @@ async def test_allowed_models_allows_prefix_wildcard(client, db_session, regular
     await db_session.refresh(key)
     headers = {"Authorization": f"Bearer {raw}"}
 
-    async def fake_run(prompt, model=None, session_id=None, env=None):
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
         return HarnessResult(text="ok", model=model or "default")
 
     with patch("app.api.openai.get_adapter") as mock_get:
@@ -127,7 +127,7 @@ async def test_allowed_models_none_allows_any(client, db_session, regular_user):
     await db_session.refresh(key)
     headers = {"Authorization": f"Bearer {raw}"}
 
-    async def fake_run(prompt, model=None, session_id=None, env=None):
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
         return HarnessResult(text="ok", model=model or "default")
 
     with patch("app.api.openai.get_adapter") as mock_get:
