@@ -57,7 +57,12 @@ def test_commandcode_parse_line_handles_result_final_text():
     adapter = CommandCodeAdapter()
     line = json.dumps({"type": "result", "finalText": "final answer"})
     text, meta = adapter.parse_line(line, "default")
-    assert text == "final answer"
+    # streaming path suppresses finalText to avoid duplicate after incremental deltas
+    assert text == ""
+    assert meta.get("event") == "result"
+    assert meta.get("finalText") == "final answer"
+    # non-stream path still returns finalText via parse_output
+    assert adapter.parse_output(line.encode(), "default") == "final answer"
 
 
 def test_generic_adapter_from_params_and_config_equivalence():

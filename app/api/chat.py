@@ -31,19 +31,11 @@ try:
 except ImportError:
     HARNESS_CALLS = None
     HARNESS_LATENCY = None
+from app.shared.errors import sanitize_harness_error
 from app.shared.model_utils import preview_text as _preview
 from app.shared.prompt_utils import build_harness_prompt, build_history_prompt
 
 logger = logging.getLogger("afaq")
-
-
-def _sanitize_harness_error(exc: Exception) -> str:
-    msg = str(exc).lower()
-    if "ollama" in msg or ("model" in msg and "not found" in msg):
-        return "Harness failed — check model availability"
-    if "timed out" in msg or "timeout" in msg:
-        return "Harness timed out — try again or use a different model"
-    return "Harness error — please try again later"
 
 
 async def _resolve_api_key(authorization: str | None, db: AsyncSession) -> APIKey | None:
@@ -303,7 +295,7 @@ async def send_message(
         raise
     except RuntimeError as exc:
         logger.error("harness_error harness=%s model=%s error=%s", harness_name, model_name, str(exc))
-        sanitized = _sanitize_harness_error(exc)
+        sanitized = sanitize_harness_error(exc)
         status = 504 if "timed out" in str(exc).lower() or "timeout" in str(exc).lower() else 502
         err_text = f"⚠️ {sanitized}"
         err_msg = Message(conversation_id=conv.id, role="assistant", content=err_text)
@@ -533,7 +525,7 @@ async def stream_message(
                 yield _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled"}, id_val=seq)
                 return
             logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
-            sanitized = _sanitize_harness_error(exc)
+            sanitized = sanitize_harness_error(exc)
             try:
                 async with SessionLocal() as session:
                     err_text = f"⚠️ {sanitized}"
@@ -562,23 +554,13 @@ async def stream_message(
 
 @router.post("/conversations/{conv_id}/cancel")
 async def cancel_conversation_stream(conv_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    # verify ownership
     await _get_conversation_or_404(conv_id, user, db)
     from app.services.process_registry import process_registry
 
-    # try prefix cancel (any in-flight for this conv)
     prefix = f"chat:{conv_id}:"
-    # snapshot keys to avoid holding lock while iterating
-    keys = list(process_registry._map.keys())
-    target = None
-    for k in keys:
-        if k.startswith(prefix):
-            target = k
-            break
+    target = await process_registry.cancel_by_prefix(prefix)
     if target:
-        ok = await process_registry.cancel(target)
-        if ok:
-            return {"status": "cancelled", "request_id": target}
+        return {"status": "cancelled", "request_id": target}
     raise HTTPException(status_code=404, detail={"error": {"code": "not_found", "message": "No in-flight stream for conversation"}})
 
 
@@ -587,19 +569,14 @@ async def cancel_message(conv_id: int, msg_id: str, user: User = Depends(current
     await _get_conversation_or_404(conv_id, user, db)
     from app.services.process_registry import process_registry
 
-    # try exact match f"chat:{conv_id}:{msg_id}" then msg_id alone then prefix
     candidates = [f"chat:{conv_id}:{msg_id}", msg_id, f"chat:{msg_id}"]
     for cid in candidates:
-        if cid in process_registry._map:
+        if await process_registry.contains(cid):
             ok = await process_registry.cancel(cid)
             if ok:
                 return {"status": "cancelled", "request_id": cid}
-    # fallback prefix search
     prefix = f"chat:{conv_id}:"
-    keys = list(process_registry._map.keys())
-    for k in keys:
-        if k.startswith(prefix):
-            ok = await process_registry.cancel(k)
-            if ok:
-                return {"status": "cancelled", "request_id": k}
+    target = await process_registry.cancel_by_prefix(prefix)
+    if target:
+        return {"status": "cancelled", "request_id": target}
     raise HTTPException(status_code=404, detail={"error": {"code": "not_found", "message": "No in-flight stream"}})

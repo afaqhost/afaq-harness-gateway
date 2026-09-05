@@ -22,6 +22,7 @@ except ImportError:
     HARNESS_CALLS = None
     HARNESS_LATENCY = None
 from app.services.model_service import is_model_allowed, validate_model_or_400
+from app.shared.errors import sanitize_harness_error
 from app.shared.model_utils import parse_model_identifier as split_model
 from app.shared.prompt_utils import build_harness_prompt, build_history_prompt
 
@@ -183,15 +184,6 @@ async def chat_completions(
     return await _non_stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request, request_payload)
 
 
-def _sanitize_harness_error(exc: Exception) -> str:
-    msg = str(exc).lower()
-    if "ollama" in msg or "model" in msg and "not found" in msg:
-        return "Harness failed — check model availability"
-    if "timed out" in msg or "timeout" in msg:
-        return "Harness timed out — try again or use a different model"
-    return "Harness error — please try again later"
-
-
 async def _stream_response(
     adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request, last_event_id: str | None = None, request_payload: ChatRequest | None = None
 ):
@@ -351,7 +343,7 @@ async def _stream_response(
                 yield _store("cancel", {"code": "cancelled", "message": "cancelled"}, id_val=seq)
                 return
             logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
-            sanitized = _sanitize_harness_error(exc)
+            sanitized = sanitize_harness_error(exc)
             err = {"code": "harness_error", "message": sanitized, "type": "harness_error"}
             yield _store("error", err, id_val=seq)
 
@@ -413,7 +405,7 @@ async def _non_stream_response(adapter, prompt: str, model: str, request_model: 
         raise
     except RuntimeError as exc:
         logger.error("harness_error harness=%s model=%s error=%s", harness_name, model, str(exc))
-        sanitized = _sanitize_harness_error(exc)
+        sanitized = sanitize_harness_error(exc)
         status = 504 if "timed out" in str(exc).lower() or "timeout" in str(exc).lower() else 502
         raise HTTPException(status_code=status, detail={"error": {"code": "harness_error", "message": sanitized}})
     usage = {

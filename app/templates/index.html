@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{{ app_name }}</title>
-  <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#0B1020">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0B1020" id="theme-color-meta">
+  <script>(function(){try{var t=localStorage.getItem('afaq_theme');if(!t){t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);document.documentElement.style.colorScheme=t;var m=document.getElementById('theme-color-meta');if(m)m.content=t==='light'?'#f8fafc':'#0B1020';}catch(e){}})();</script>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" sizes="48x48" href="/static/brand/favicon-48.png">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
-  <link rel="stylesheet" href="/static/app.css?v=20250904-11">
+  <link rel="stylesheet" href="/static/app.css?v=20250905-07">
 </head>
 <body data-page="{{ page }}">
   <div id="app-shell">
@@ -42,7 +43,7 @@
 
       <div class="sidebar-footer">
         <button class="logout-button" id="logout"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span data-i18n="logout">تسجيل الخروج</span></button>
-        <div class="sidebar-bottom"><button class="language-switch" id="lang">EN <span>/</span> AR</button><span class="license">Apache 2.0</span></div>
+        <div class="sidebar-bottom"><button class="language-switch" id="lang">EN <span>/</span> AR</button><div style="display:flex;gap:8px;align-items:center"><button class="theme-switch" id="theme-toggle" aria-label="Toggle theme" title="Auto / Light / Dark"><svg id="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button><span class="license">Apache 2.0</span></div></div>
       </div>
     </aside>
 
@@ -79,7 +80,7 @@
                 <!-- Hidden native select for compatibility -->
                 <select id="model-select" class="model-select" style="display:none"><option data-i18n="loading">جارٍ التحميل...</option></select>
                 <button type="button" class="model-trigger" id="model-trigger" aria-haspopup="listbox" aria-expanded="false">
-                  <span class="model-trigger-icon">◈</span>
+                  <span class="model-trigger-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
                   <span class="model-trigger-text" id="model-trigger-text" data-i18n="loading">جارٍ التحميل...</span>
                   <span class="model-trigger-count" id="model-trigger-count"></span>
                   <svg class="model-trigger-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
@@ -120,10 +121,10 @@
                 </div>
               </div>
               <div class="welcome-suggestions" id="welcome-suggestions">
-                <button class="suggestion" data-suggest="اشرح لي كيف تعمل البوابة">💡 اشرح لي كيف تعمل البوابة</button>
-                <button class="suggestion" data-suggest="اكتب دالة بلغة Python">🐍 اكتب دالة بلغة Python</button>
-                <button class="suggestion" data-suggest="ما الفرق بين Harnesses؟">🔀 ما الفرق بين Harnesses؟</button>
-                <button class="suggestion" data-suggest="ساعدني في كتابة API">⚡ ساعدني في كتابة API</button>
+                <button class="suggestion" data-suggest="اشرح لي كيف تعمل البوابة"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg> اشرح لي كيف تعمل البوابة</button>
+                <button class="suggestion" data-suggest="اكتب دالة بلغة Python"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2H8a4 4 0 0 0-4 4v4a4 4 0 0 0 4 4h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H7a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4h8z"/><path d="M17 6v4a4 4 0 0 0 4 4h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a4 4 0 0 1-4-4V6"/></svg> اكتب دالة بلغة Python</button>
+                <button class="suggestion" data-suggest="ما الفرق بين Harnesses؟"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg> ما الفرق بين Harnesses؟</button>
+                <button class="suggestion" data-suggest="ساعدني في كتابة API"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ساعدني في كتابة API</button>
               </div>
             </div>
           </div>
@@ -146,38 +147,399 @@
 
       <section id="harnesses" class="page hidden"><div class="section-heading"><div><p class="eyebrow">02 / <span data-i18n="harnesses">الهارنسس</span></p><h2 data-i18n="harnessTitle">الأدوات المتصلة</h2></div><button class="outline-button" id="refresh-harnesses"><span class="refresh-symbol">↻</span><span data-i18n="refresh">تحديث الموديلات</span></button></div><div id="harness-grid" class="harness-grid"></div></section>
       <section id="keys" class="page hidden"><div class="section-heading"><div><p class="eyebrow">03 / API KEYS</p><h2 data-i18n="keyTitle">مفاتيح الوصول</h2></div><button id="new-key"><span>+</span><span data-i18n="createKey">إنشاء مفتاح</span></button></div><div id="keys-list" class="table-card"></div></section>
-      <section id="usage" class="page hidden"><div class="section-heading"><div><p class="eyebrow">04 / <span data-i18n="usage">الاستهلاك</span></p><h2 data-i18n="usageTitle">سجل الاستهلاك</h2><p class="subtitle" data-i18n="usageSubtitle">تتبع استخدام النماذج والتكاليف والزمن</p></div><div class="usage-controls"><div class="usage-filters"><select id="usage-harness"><option value="" data-i18n="filterAllHarnesses">كل الهارنسس</option><option value="opencode">opencode</option><option value="commandcode">commandcode</option><option value="claude">claude</option><option value="codex">codex</option></select><input id="usage-model" type="text" placeholder="model filter" data-i18n-placeholder="usageModelPlaceholder"><button id="usage-refresh" class="outline-button"><span data-i18n="refresh">تحديث</span></button></div><div class="usage-pagination"><button id="usage-prev" class="outline-button" data-i18n="prev">السابق</button><span id="usage-page-info" class="muted"></span><button id="usage-next" class="outline-button" data-i18n="next">التالي</button></div></div><div id="usage-list" class="table-card"></div><div id="usage-summary" class="usage-summary"></div></section>
+      <section id="usage" class="page hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">04 / <span data-i18n="usage">الاستهلاك</span> — <span data-i18n="usageSubtitle">تتبع استخدام النماذج والتكاليف والزمن</span></p>
+            <h2 data-i18n="usageTitle">سجل الاستهلاك</h2>
+            <p class="subtitle" data-i18n="usageSubtitle">تتبع استخدام النماذج والتكاليف والزمن</p>
+          </div>
+          <div style="display:flex; gap:8px">
+            <button id="usage-export" class="outline-button" title="Export CSV"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span data-i18n="export">تصدير</span></button>
+            <button id="usage-refresh" class="outline-button"><span class="refresh-symbol">↻</span><span data-i18n="refresh">تحديث</span></button>
+          </div>
+        </div>
+
+        <!-- Pro Max: Aurora Glass Stats -->
+        <div class="usage-stats-grid" id="usage-stats">
+          <div class="usage-stat-card" style="--accent:#3b82f6">
+            <div class="usage-stat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+            <div class="usage-stat-content"><p class="usage-stat-label" data-i18n="usageTotal">إجمالي الطلبات</p><p class="usage-stat-value" id="usage-stat-total">—</p><p class="usage-stat-sub" id="usage-stat-total-sub">—</p></div>
+            <div class="usage-stat-spark" id="usage-spark-total"></div>
+          </div>
+          <div class="usage-stat-card" style="--accent:#8b5cf6">
+            <div class="usage-stat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12 2.69 12"/><path d="M12 12 12 2"/></svg></div>
+            <div class="usage-stat-content"><p class="usage-stat-label" data-i18n="usageTokens">إجمالي الرموز</p><p class="usage-stat-value" id="usage-stat-tokens">—</p><p class="usage-stat-sub" id="usage-stat-tokens-sub">—</p></div>
+            <div class="usage-stat-spark" id="usage-spark-tokens"></div>
+          </div>
+          <div class="usage-stat-card" style="--accent:#22d3ee">
+            <div class="usage-stat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <div class="usage-stat-content"><p class="usage-stat-label" data-i18n="usageLatency">متوسط الزمن</p><p class="usage-stat-value" id="usage-stat-latency">—</p><p class="usage-stat-sub" id="usage-stat-latency-sub">—</p></div>
+            <div class="usage-stat-spark" id="usage-spark-latency"></div>
+          </div>
+          <div class="usage-stat-card" style="--accent:#22c55e">
+            <div class="usage-stat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <div class="usage-stat-content"><p class="usage-stat-label">التكلفة</p><p class="usage-stat-value" id="usage-stat-cost">—</p><p class="usage-stat-sub" id="usage-stat-cost-sub">—</p></div>
+            <div class="usage-stat-spark" id="usage-spark-cost"></div>
+          </div>
+        </div>
+
+        <!-- Chart + Filters -->
+        <div class="usage-main-grid">
+          <div class="usage-chart-card">
+            <div class="usage-card-header">
+              <h3 data-i18n="usageChartTitle">الاستهلاك خلال 7 أيام</h3>
+              <div class="usage-card-actions">
+                <span class="usage-legend"><span class="legend-dot" style="background:var(--brand-primary)"></span> Tokens</span>
+                <span class="usage-legend"><span class="legend-dot" style="background:var(--brand-cyan)"></span> Requests</span>
+              </div>
+            </div>
+            <div class="usage-chart" id="usage-chart">
+              <div class="usage-chart-empty" data-i18n="usageChartEmpty">لا توجد بيانات كافية للرسم</div>
+            </div>
+          </div>
+          <div class="usage-filters-card">
+            <h3 data-i18n="filters">الفلاتر</h3>
+            <label class="usage-filter-label" data-i18n="usageHarness">الهارنس</label>
+            <select id="usage-harness" class="usage-select"><option value="" data-i18n="filterAllHarnesses">كل الهارنسس</option><option value="opencode">opencode</option><option value="commandcode">commandcode</option><option value="claude">claude</option><option value="codex">codex</option></select>
+            <label class="usage-filter-label" data-i18n="usageModel">الموديل</label>
+            <input id="usage-model" type="text" class="usage-input" placeholder="model filter" data-i18n-placeholder="usageModelPlaceholder">
+            <label class="usage-filter-label" data-i18n="dateRange">النطاق الزمني</label>
+            <select id="usage-range" class="usage-select"><option value="7" data-i18n="last7Days">آخر 7 أيام</option><option value="30" data-i18n="last30Days">آخر 30 يوم</option><option value="90" data-i18n="last90Days">آخر 90 يوم</option><option value="all" data-i18n="allTime">كل الوقت</option></select>
+            <button id="usage-apply" class="usage-apply-btn" data-i18n="apply">تطبيق</button>
+            <button id="usage-clear" class="outline-button" style="width:100%; margin-top:8px" data-i18n="clearFilters">مسح الفلاتر</button>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="usage-table-card">
+          <div class="usage-table-header">
+            <h3 data-i18n="usageHistory">السجل التفصيلي</h3>
+            <span id="usage-page-info" class="muted" style="font:500 12px var(--font-mono)"></span>
+          </div>
+          <div id="usage-list" class="usage-table-wrap">
+            <div class="usage-loading"><div class="usage-skeleton"></div><div class="usage-skeleton"></div><div class="usage-skeleton"></div></div>
+          </div>
+          <div class="usage-pagination">
+            <button id="usage-prev" class="outline-button" data-i18n="prev">السابق</button>
+            <div class="usage-page-dots" id="usage-dots"></div>
+            <button id="usage-next" class="outline-button" data-i18n="next">التالي</button>
+          </div>
+        </div>
+        <div id="usage-summary" class="usage-summary hidden"></div>
+      </section>
       <section id="users" class="page hidden"><div class="section-heading"><div><p class="eyebrow">05 / <span data-i18n="users">المستخدمون</span></p><h2 data-i18n="userTitle">المستخدمون والصلاحيات</h2></div><button id="new-user"><span>+</span><span data-i18n="addUser">إضافة مستخدم</span></button></div><div id="users-list" class="table-card"></div></section>
       <section id="docs" class="page hidden">
-        <div class="section-heading"><div><p class="eyebrow">06 / DOCS</p><h2 data-i18n="docsTitle">ابدأ خلال دقائق</h2></div></div>
-        <article class="docs"><p data-i18n="docsIntro">استخدم Afaq Gateway كواجهة متوافقة مع OpenAI للوصول إلى أدوات الذكاء الاصطناعي من أي تطبيق.</p>
-          <div class="docs-grid"><div class="docs-card"><span class="docs-number">01</span><h3 data-i18n="docsAuthTitle">المصادقة</h3><p data-i18n="docsAuthText">أنشئ API Key وأرسله في ترويسة Bearer مع كل طلب شات.</p></div><div class="docs-card"><span class="docs-number">02</span><h3 data-i18n="docsModelsTitle">الموديلات</h3><p data-i18n="docsModelsText">استخدم GET /v1/models لمعرفة الموديلات المتاحة.</p></div><div class="docs-card"><span class="docs-number">03</span><h3 data-i18n="docsResponseTitle">الاستجابة</h3><p data-i18n="docsResponseText">النص النهائي موجود في choices[0].message.content.</p></div></div>
-          <div class="docs-section"><div class="docs-section-heading"><h3 data-i18n="docsModelsHeading">جلب الموديلات</h3><span class="method-badge">GET /v1/models</span></div><p data-i18n="docsModelsBody">يعيد هذا المسار الموديلات المكتشفة من الهارنسس المثبتة.</p><div class="code-block"><div class="code-toolbar"><span class="code-label">curl</span><button class="copy-code" data-copy-target="models-code" data-i18n="copy">نسخ</button></div><pre id="models-code">curl http://localhost:3500/v1/models</pre></div></div>
-          <div class="docs-section"><div class="docs-section-heading"><h3 data-i18n="docsChatHeading">إرسال رسالة</h3><span class="method-badge">POST /v1/chat/completions</span></div><p data-i18n="docsChatBody">استبدل API Key والموديل بقيم موجودة في حسابك.</p><div class="code-tabs"><button class="code-tab active" data-code="curl-code">curl</button><button class="code-tab" data-code="python-code">Python</button><button class="code-tab" data-code="javascript-code">JavaScript</button><button class="code-tab" data-code="php-code">PHP</button></div><div class="code-panel"><div class="code-toolbar"><span class="code-label" id="active-language">curl</span><button class="copy-code" data-copy-target="curl-code" data-i18n="copy">نسخ</button></div>
-            <pre id="curl-code" class="code-sample active">curl http://localhost:3500/v1/chat/completions \
+        <div class="docs-hero">
+          <div class="docs-hero-badge">OpenAI-Compatible API</div>
+          <h1 class="docs-hero-title" data-i18n="docsTitle">توثيق API</h1>
+          <p class="docs-hero-sub" data-i18n="docsIntro">AFAQ Gateway واجهة متوافقة مع OpenAI تتيح الوصول إلى نماذج الذكاء الاصطناعي من أي تطبيق. جميع النماذج المثبتة متاحة فورًا.</p>
+          <div class="docs-base-url">
+            <span class="docs-base-url-label" data-i18n="docsBaseUrl">رابط القاعدة</span>
+            <code class="docs-base-url-value">https://your-gateway.com/v1</code>
+          </div>
+        </div>
+
+        <!-- Quick Nav Cards -->
+        <div class="docs-grid docs-nav-grid">
+          <a href="#auth" class="docs-nav-card">
+            <span class="docs-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <span class="docs-nav-title" data-i18n="docsAuthTitle">المصادقة</span>
+            <span class="docs-nav-desc" data-i18n="docsAuthText">Bearer token مع كل طلب</span>
+          </a>
+          <a href="#models" class="docs-nav-card">
+            <span class="docs-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></span>
+            <span class="docs-nav-title" data-i18n="docsModelsTitle">الموديلات</span>
+            <span class="docs-nav-desc" data-i18n="docsModelsText">GET /v1/models</span>
+          </a>
+          <a href="#chat" class="docs-nav-card">
+            <span class="docs-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+            <span class="docs-nav-title" data-i18n="docsChatHeading">إرسال رسالة</span>
+            <span class="docs-nav-desc">POST /v1/chat/completions</span>
+          </a>
+          <a href="#streaming" class="docs-nav-card">
+            <span class="docs-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+            <span class="docs-nav-title" data-i18n="docsStreamHeading">البث المباشر</span>
+            <span class="docs-nav-desc" data-i18n="docsStreamText">SSE streaming</span>
+          </a>
+          <a href="#context" class="docs-nav-card">
+            <span class="docs-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.16z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.16z"/></svg></span>
+            <span class="docs-nav-title" data-i18n="docsContextTitle">الذاكرة</span>
+            <span class="docs-nav-desc">سياق محفوظ تلقائيًا</span>
+          </a>
+          <a href="#errors" class="docs-nav-card">
+            <span class="docs-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+            <span class="docs-nav-title" data-i18n="docsErrorsTitle">أخطاء شائعة</span>
+            <span class="docs-nav-desc">401 · 400 · 502 · 504</span>
+          </a>
+        </div>
+
+        <article class="docs">
+          <!-- Overview -->
+          <div class="docs-section" id="overview">
+            <div class="docs-section-heading"><h3 data-i18n="docsOverviewTitle">نظرة عامة</h3></div>
+            <p data-i18n="docsOverviewText">تدعم البوابة معايير OpenAI كاملة —authentication, list models, chat completions, streaming — مع إضافات خاصة بالبوابة.</p>
+            <div class="docs-feature-grid">
+              <div class="docs-feature"><span class="docs-feature-dot">✓</span><span>OpenAI-compatible endpoints</span></div>
+              <div class="docs-feature"><span class="docs-feature-dot">✓</span><span>Context memory per conversation</span></div>
+              <div class="docs-feature"><span class="docs-feature-dot">✓</span><span>Streaming via SSE</span></div>
+              <div class="docs-feature"><span class="docs-feature-dot">✓</span><span>Multi-harness support</span></div>
+              <div class="docs-feature"><span class="docs-feature-dot">✓</span><span>API key management</span></div>
+              <div class="docs-feature"><span class="docs-feature-dot">✓</span><span>Bilingual (Arabic / English)</span></div>
+            </div>
+          </div>
+
+          <!-- Authentication -->
+          <div class="docs-section" id="auth">
+            <div class="docs-section-heading"><h3 data-i18n="docsAuthTitle">المصادقة</h3><span class="method-badge method-get">Bearer Token</span></div>
+            <p data-i18n="docsAuthText">أنشئ مفتاح API من لوحة التحكم وأرسله في ترويسة Authorization مع كل طلب.</p>
+            <div class="code-block"><div class="code-toolbar"><span class="code-label">Header</span></div><pre>Authorization: Bearer afaq_YOUR_KEY</pre></div>
+            <div class="docs-note docs-note-info"><strong><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> مفتاح API</strong><p>أنشئ مفتاح جديد من صفحة <a href="/keys">مفاتيح API</a>. احفظه — لن يظهر كاملًا مرة أخرى.</p></div>
+          </div>
+
+          <!-- List Models -->
+          <div class="docs-section" id="models">
+            <div class="docs-section-heading"><h3 data-i18n="docsModelsHeading">جلب الموديلات</h3><span class="method-badge method-get">GET /v1/models</span></div>
+            <p data-i18n="docsModelsBody">يعيد هذا المسار قائمة بجميع الموديلات المتاحة. كل موديل له معرف فريد بصيغة harness/provider/model.</p>
+            <div class="code-tabs"><button class="code-tab active" data-code="models-curl">curl</button><button class="code-tab" data-code="models-python">Python</button><button class="code-tab" data-code="models-js">JavaScript</button></div>
+            <div class="code-panel"><div class="code-toolbar"><span class="code-label" id="active-language">curl</span><button class="copy-code" data-copy-target="models-curl" data-i18n="copy">نسخ</button></div>
+              <pre id="models-curl" class="code-sample active">curl https://your-gateway.com/v1/models \
+  -H "Authorization: Bearer afaq_YOUR_KEY"</pre>
+              <pre id="models-python" class="code-sample">import requests
+resp = requests.get(
+    "https://your-gateway.com/v1/models",
+    headers={"Authorization": "Bearer afaq_YOUR_KEY"}
+)
+models = resp.json()["data"]
+for m in models:
+    print(m["id"])</pre>
+              <pre id="models-js" class="code-sample">const resp = await fetch("https://your-gateway.com/v1/models", {
+  headers: { "Authorization": "Bearer " + process.env.AFAQ_API_KEY }
+});
+const { data } = await resp.json();
+data.forEach(m => console.log(m.id));</pre>
+            </div>
+          </div>
+
+          <!-- Model ID Format -->
+          <div class="docs-section" id="model-id">
+            <div class="docs-section-heading"><h3 data-i18n="docsModelIdTitle">صيغة معرف الموديل</h3></div>
+            <p data-i18n="docsModelIdText">كل معرف موديل يتكون من ثلاثة أجزاء مفصولة بـ //: اسم الهارنسس // المزود // اسم الموديل.</p>
+            <div class="docs-example-box">
+              <div class="docs-example-row"><span class="docs-example-label">الصيغة</span><code class="docs-example-code">harness//provider/model-name</code></div>
+              <div class="docs-example-row"><span class="docs-example-label">مثال</span><code class="docs-example-code">opencode//opencode/big-pickle</code></div>
+              <div class="docs-example-row"><span class="docs-example-label">مثال آخر</span><code class="docs-example-code">commandcode//deepseek/deepseek-v4-flash</code></div>
+            </div>
+          </div>
+
+          <!-- Send Message -->
+          <div class="docs-section" id="chat">
+            <div class="docs-section-heading"><h3 data-i18n="docsChatHeading">إرسال رسالة</h3><span class="method-badge method-post">POST /v1/chat/completions</span></div>
+            <p data-i18n="docsChatBody">أرسل طلب POST مع مفتاح API ورسائل المحادثة.</p>
+            <div class="code-tabs">
+              <button class="code-tab active" data-code="chat-curl">curl</button>
+              <button class="code-tab" data-code="chat-python">Python</button>
+              <button class="code-tab" data-code="chat-js">JavaScript</button>
+              <button class="code-tab" data-code="chat-php">PHP</button>
+            </div>
+            <div class="code-panel">
+              <div class="code-toolbar"><span class="code-label" id="active-language-chat">curl</span><button class="copy-code" data-copy-target="chat-curl" data-i18n="copy">نسخ</button></div>
+              <pre id="chat-curl" class="code-sample active">curl https://your-gateway.com/v1/chat/completions \
   -H "Authorization: Bearer afaq_YOUR_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model":"opencode//opencode/big-pickle","messages":[{"role":"user","content":"Hello"}]}'</pre>
-            <pre id="python-code" class="code-sample">import os
-import requests
-
-response = requests.post(
-    os.getenv("AFAQ_BASE_URL", "http://localhost:3500") + "/v1/chat/completions",
+  -d '{
+    "model": "opencode//opencode/big-pickle",
+    "messages": [
+      {"role": "user", "content": "Hello"}
+    ]
+  }'</pre>
+              <pre id="chat-python" class="code-sample">import os, requests
+resp = requests.post(
+    "https://your-gateway.com/v1/chat/completions",
     headers={"Authorization": f"Bearer {os.environ['AFAQ_API_KEY']}"},
-    json={"model": "opencode//opencode/big-pickle", "messages": [{"role": "user", "content": "Hello"}]},
+    json={
+        "model": "opencode//opencode/big-pickle",
+        "messages": [{"role": "user", "content": "Hello"}]
+    }
 )
-response.raise_for_status()
-print(response.json()["choices"][0]["message"]["content"])</pre>
-            <pre id="javascript-code" class="code-sample">const response = await fetch("http://localhost:3500/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${process.env.AFAQ_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: "opencode//opencode/big-pickle", messages: [{ role: "user", content: "Hello" }] }) });
-const result = await response.json();
-console.log(result.choices[0].message.content);</pre>
-            <pre id="php-code" class="code-sample">&lt;?php
-$ch = curl_init("http://localhost:3500/v1/chat/completions");
-curl_setopt_array($ch, [CURLOPT_POST =&gt; true, CURLOPT_HTTPHEADER =&gt; ["Authorization: Bearer " . getenv("AFAQ_API_KEY"), "Content-Type: application/json"], CURLOPT_POSTFIELDS =&gt; json_encode(["model" =&gt; "opencode//opencode/big-pickle", "messages" =&gt; [["role" =&gt; "user", "content" =&gt; "Hello"]]]), CURLOPT_RETURNTRANSFER =&gt; true]);
+result = resp.json()
+print(result["choices"][0]["message"]["content"])</pre>
+              <pre id="chat-js" class="code-sample">const resp = await fetch("https://your-gateway.com/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.AFAQ_API_KEY}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    model: "opencode//opencode/big-pickle",
+    messages: [{ role: "user", content: "Hello" }]
+  })
+});
+const { choices } = await resp.json();
+console.log(choices[0].message.content);</pre>
+              <pre id="chat-php" class="code-sample">&lt;?php
+$ch = curl_init("https://your-gateway.com/v1/chat/completions");
+curl_setopt_array($ch, [
+  CURLOPT_POST =&gt; true,
+  CURLOPT_HTTPHEADER =&gt; [
+    "Authorization: Bearer " . getenv("AFAQ_API_KEY"),
+    "Content-Type: application/json"
+  ],
+  CURLOPT_POSTFIELDS =&gt; json_encode([
+    "model" =&gt; "opencode//opencode/big-pickle",
+    "messages" =&gt; [["role" =&gt; "user", "content" =&gt; "Hello"]]
+  ]),
+  CURLOPT_RETURNTRANSFER =&gt; true
+]);
 $result = json_decode(curl_exec($ch), true);
-echo $result["choices"][0]["message"]["content"];
-?&gt;</pre></div></div>
-          <div class="docs-section"><div class="docs-section-heading"><h3 data-i18n="docsStreamHeading">البث المباشر</h3><span class="method-badge">stream: true</span></div><p data-i18n="docsStreamText">فعّل stream للحصول على أجزاء SSE تدريجيًا، وتنتهي الاستجابة الناجحة بـ data: [DONE].</p></div><div class="docs-note"><strong data-i18n="docsErrorsTitle">أخطاء شائعة</strong><p data-i18n="docsErrorsText">401 يعني أن المصادقة فشلت (مفتاح غير صالح أو جلسة منتهية)، و400 يعني أن اسم الهارنس غير معروف، و502 يعني أن أداة CLI فشلت.</p></div>
+echo $result["choices"][0]["message"]["content"];</pre>
+            </div>
+            <div class="docs-note docs-note-info"><strong><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg> اختيار الموديل</strong><p>استخدم <a href="/harnesses">صفحة الهارنسس</a> لمشاهدة جميع الموديلات المتاحة، ثم اختر الموديل المناسب من القائمة.</p></div>
+          </div>
+
+          <!-- Context Memory -->
+          <div class="docs-section" id="context">
+            <div class="docs-section-heading"><h3 data-i18n="docsContextTitle">الذاكرة السياقية</h3></div>
+            <p data-i18n="docsContextText">البوابة تحفظ سياق المحادثة تلقائيًا لكل محادثة على حدة. أرسل الطلبات إلى نفس المحادثة للحفاظ على السياق دون إعادة إرسال السجل الكامل.</p>
+            <div class="docs-callout">
+              <div class="docs-callout-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.16z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.16z"/></svg></div>
+              <div class="docs-callout-body">
+                <strong>كيف تعمل الذاكرة:</strong>
+                <ul>
+                  <li>كل محادثة لها معرف فريد يتم إرفاقه بالطلبات</li>
+                  <li>النظام يرسل السجل السابق تلقائيًا مع كل طلب</li>
+                  <li>لا حاجة لإرسال entire conversation history في كل طلب</li>
+                  <li>لبدء محادثة جديدة، أرسل الطلب بدون معرف محادثة سابقة</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- System Prompt -->
+          <div class="docs-section" id="system-prompt">
+            <div class="docs-section-heading"><h3 data-i18n="docsSystemPromptTitle">التعليمات النظامية</h3></div>
+            <p data-i18n="docsSystemPromptText">أضف role: system في مصفوفة الرسائل لتعيين سلوك الموديل. سيتم إرسالها مع كل طلب.</p>
+            <div class="code-block"><div class="code-toolbar"><span class="code-label">JSON Body</span><button class="copy-code" data-copy-target="system-prompt-code" data-i18n="copy">نسخ</button></div><pre id="system-prompt-code">{
+  "model": "opencode//opencode/big-pickle",
+  "messages": [
+    {"role": "system", "content": "You are a helpful assistant that speaks Arabic."},
+    {"role": "user", "content": "ما هي عاصمة فرنسا؟"}
+  ]
+}</pre></div>
+          </div>
+
+          <!-- Streaming -->
+          <div class="docs-section" id="streaming">
+            <div class="docs-section-heading"><h3 data-i18n="docsStreamHeading">البث المباشر (Streaming)</h3><span class="method-badge method-stream">stream: true</span></div>
+            <p data-i18n="docsStreamText">فعّل stream: true للحصول على الرد تدريجيًا عبر SSE. كل جزء يحتوي delta.content يتم إلحاقه بالرد. الطلب الناجح ينتهي بـ data: [DONE].</p>
+            <div class="code-tabs">
+              <button class="code-tab active" data-code="stream-curl">curl</button>
+              <button class="code-tab" data-code="stream-python">Python</button>
+              <button class="code-tab" data-code="stream-js">JavaScript</button>
+            </div>
+            <div class="code-panel">
+              <div class="code-toolbar"><span class="code-label" id="active-language-stream">curl</span><button class="copy-code" data-copy-target="stream-curl" data-i18n="copy">نسخ</button></div>
+              <pre id="stream-curl" class="code-sample active">curl https://your-gateway.com/v1/chat/completions \
+  -H "Authorization: Bearer afaq_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "opencode//opencode/big-pickle",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "stream": true
+  }'</pre>
+              <pre id="stream-python" class="code-sample">import os, requests
+with requests.post(
+    "https://your-gateway.com/v1/chat/completions",
+    headers={"Authorization": f"Bearer {os.environ['AFAQ_API_KEY']}"},
+    json={
+        "model": "opencode//opencode/big-pickle",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "stream": True
+    },
+    stream=True
+) as resp:
+    for line in resp.iter_lines():
+        if line:
+            data = line.decode().replace("data: ", "")
+            if data == "[DONE]": break
+            print(data, end="", flush=True)</pre>
+              <pre id="stream-js" class="code-sample">const resp = await fetch("https://your-gateway.com/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.AFAQ_API_KEY}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    model: "opencode//opencode/big-pickle",
+    messages: [{ role: "user", content: "Hello" }],
+    stream: true
+  })
+});
+const reader = resp.body.getReader();
+const decoder = new TextDecoder();
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  const lines = decoder.decode(value).split("\n");
+  for (const line of lines) {
+    if (line.startsWith("data: ")) {
+      const data = line.slice(6);
+      if (data === "[DONE]") break;
+      const delta = JSON.parse(data)?.choices?.[0]?.delta?.content;
+      if (delta) process.stdout.write(delta);
+    }
+  }
+}</pre>
+            </div>
+          </div>
+
+          <!-- Response Structure -->
+          <div class="docs-section" id="response">
+            <div class="docs-section-heading"><h3 data-i18n="docsResponseTitle">الاستجابة</h3></div>
+            <p data-i18n="docsResponseText">الرد الكامل موجود في choices[0].message.content. تأكد من التحقق من ok === true.</p>
+            <div class="code-block"><div class="code-toolbar"><span class="code-label">Response</span></div><pre>{
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "opencode//opencode/big-pickle",
+  "choices": [{
+    "index": 0,
+    "message": {
+      "role": "assistant",
+      "content": "مرحبًا! كيف يمكنني مساعدتك؟"
+    },
+    "finish_reason": "stop"
+  }],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 20,
+    "total_tokens": 30
+  }
+}</pre></div>
+          </div>
+
+          <!-- Common Errors -->
+          <div class="docs-section" id="errors">
+            <div class="docs-section-heading"><h3 data-i18n="docsErrorsTitle">أخطاء شائعة</h3></div>
+            <div class="docs-error-grid">
+              <div class="docs-error-card docs-error-401">
+                <span class="docs-error-code">401</span>
+                <div class="docs-error-body"><strong>Unauthorized</strong><p>مفتاح API غير صالح أو انتهت صلاحيته. أنشئ مفتاحًا جديدًا من لوحة التحكم.</p></div>
+              </div>
+              <div class="docs-error-card docs-error-400">
+                <span class="docs-error-code">400</span>
+                <div class="docs-error-body"><strong>Bad Request</strong><p>اسم هارنس غير معروف أو معرف موديل غير صحيح. تأكد من صيغة الموديل: harness//provider/model</p></div>
+              </div>
+              <div class="docs-error-card docs-error-502">
+                <span class="docs-error-code">502</span>
+                <div class="docs-error-body"><strong>Bad Gateway</strong><p>خطأ في أداة CLI للهارنس. تأكد من تثبيت الهارنس وتشغيله بشكل صحيح.</p></div>
+              </div>
+              <div class="docs-error-card docs-error-504">
+                <span class="docs-error-code">504</span>
+                <div class="docs-error-body"><strong>Gateway Timeout</strong><p>انتهت مهلة الاتصال بالموديل. جرب موديلًا آخر أو تحقق من اتصال الشبكة.</p></div>
+              </div>
+            </div>
+          </div>
         </article>
       </section>
     </main>
@@ -188,6 +550,6 @@ echo $result["choices"][0]["message"]["content"];
   <dialog id="prompt-modal" class="key-modal"><form method="dialog" id="prompt-form"><button type="button" class="modal-close" id="prompt-modal-close" aria-label="Close">×</button><p class="eyebrow" id="prompt-eyebrow" data-i18n="prompt">إدخال</p><h2 id="prompt-title">إدخال</h2><p id="prompt-message" class="muted" style="margin:12px 0 10px; line-height:1.6"></p><label for="prompt-input" class="sr-only" data-i18n="prompt">قيمة</label><input id="prompt-input" type="text" required autocomplete="off"><div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px"><button type="button" id="prompt-cancel" class="outline-button" data-i18n="cancel">إلغاء</button><button type="submit" id="prompt-ok" style="background:var(--brand-primary); color:#fff; border:0; padding:8px 16px; border-radius:8px; cursor:pointer" data-i18n="confirm">تأكيد</button></div></form></dialog>
   <div id="toast" class="toast" role="status"></div>
   <script src="/static/marked.min.js?v=20250904-11"></script>
-  <script src="/static/app.js?v=20250904-11"></script>
+  <script src="/static/app.js?v=20250905-01"></script>
 </body>
 </html>

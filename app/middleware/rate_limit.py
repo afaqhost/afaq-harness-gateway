@@ -52,8 +52,80 @@ class InMemoryRateLimiter:
         return len(self._hits.get(key, []))
 
 
-# global singleton for tests to reset
-_global_limiter = InMemoryRateLimiter()
+class RedisRateLimiter:
+    """Redis sliding-window via INCR + EXPIRE (fallback to in-memory if Redis unavailable)."""
+
+    def __init__(self, redis_url: str) -> None:
+        self._url = redis_url
+        self._client = None
+        self._fallback = InMemoryRateLimiter()
+        self._available = False
+        try:
+            import redis.asyncio as redis  # type: ignore
+
+            self._client = redis.from_url(redis_url, decode_responses=True)
+            self._available = True
+        except Exception:
+            self._client = None
+            self._available = False
+
+    def allow(self, key: str, limit: int, window_s: int) -> tuple[bool, int]:
+        # sync wrapper — for middleware dispatch we need async? Keep sync fallback for now.
+        # This method is called inside async dispatch but is sync; for Redis we need async variant.
+        # We expose async_allow and keep this as fallback.
+        return self._fallback.allow(key, limit, window_s)
+
+    async def async_allow(self, key: str, limit: int, window_s: int) -> tuple[bool, int]:
+        if not self._available or self._client is None:
+            return self._fallback.allow(key, limit, window_s)
+        try:
+            # Use INCR with window key
+            redis_key = f"rl:{key}:{int(time.time() // window_s)}"
+            count = await self._client.incr(redis_key)
+            if count == 1:
+                await self._client.expire(redis_key, window_s)
+            if count > limit:
+                ttl = await self._client.ttl(redis_key)
+                retry = int(ttl) if ttl and ttl > 0 else window_s
+                return False, retry
+            return True, 0
+        except Exception:
+            # fallback to in-memory on Redis error
+            return self._fallback.allow(key, limit, window_s)
+
+    def reset(self) -> None:
+        self._fallback.reset()
+        # best-effort flush for tests
+        if self._client:
+            try:
+                import asyncio
+
+                asyncio.create_task(self._client.flushdb())
+            except Exception:
+                pass
+
+    def _size(self, key: str) -> int:
+        return self._fallback._size(key)
+
+
+def _choose_limiter() -> RateLimiter:
+    # lazy chooser — uses Redis if configured and available, else in-memory
+    try:
+        from app.core.config import get_settings
+
+        s = get_settings()
+        if s.redis_enabled and s.redis_url:
+            return RedisRateLimiter(s.redis_url)  # type: ignore
+    except Exception:
+        pass
+    return InMemoryRateLimiter()
+
+
+# global singleton for tests to reset — auto-chooses based on settings
+try:
+    _global_limiter = _choose_limiter()
+except Exception:
+    _global_limiter = InMemoryRateLimiter()
 # public alias
 global_rate_limiter = _global_limiter
 
@@ -79,7 +151,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         bucket = self._bucket_key(request)
         limit = getattr(settings, "rate_limit_per_minute", 60)
-        allowed, retry_after = self.limiter.allow(bucket, limit, window_s=60)
+        # support both sync (InMemory) and async (Redis) limiters
+        if hasattr(self.limiter, "async_allow"):
+            allowed, retry_after = await self.limiter.async_allow(bucket, limit, window_s=60)  # type: ignore
+        else:
+            allowed, retry_after = self.limiter.allow(bucket, limit, window_s=60)
         if not allowed:
             payload = {
                 "error": {

@@ -28,8 +28,14 @@ class ProcessRegistry:
         self._map: dict[str, ProcessHandle] = {}
         self._lock = asyncio.Lock()
         self._pending_cancel: set[str] = set()
-        # event history for SSE reconnect (per key, max 100)
-        self._history: dict[str, deque[tuple[int, str]]] = defaultdict(lambda: deque(maxlen=100))
+        # history delegated to transport layer — auto-chooses Redis if available, else in-memory
+        # lazy import to avoid circular
+        try:
+            from app.transport.history import get_history_store  # type: ignore
+
+            self._history = get_history_store()  # type: ignore
+        except Exception:
+            self._history: dict[str, deque[tuple[int, str]]] = defaultdict(lambda: deque(maxlen=100))  # type: ignore
 
     async def register(self, request_id: str, handle: ProcessHandle) -> None:
         # if cancel was requested before register (race), kill immediately and don't store
@@ -83,6 +89,26 @@ class ProcessRegistry:
         async with self._lock:
             return self._map.get(request_id)
 
+    async def contains(self, request_id: str) -> bool:
+        async with self._lock:
+            return request_id in self._map
+
+    async def find_by_prefix(self, prefix: str) -> str | None:
+        async with self._lock:
+            for key in self._map:
+                if key.startswith(prefix):
+                    return key
+            return None
+
+    async def cancel_by_prefix(self, prefix: str) -> str | None:
+        """Find first key with prefix and cancel it. Returns cancelled key or None."""
+        # locate under lock, then delegate to cancel for kill semantics
+        target = await self.find_by_prefix(prefix)
+        if target is None:
+            return None
+        ok = await self.cancel(target)
+        return target if ok else None
+
     def size(self) -> int:
         return len(self._map)
 
@@ -90,19 +116,33 @@ class ProcessRegistry:
         # sync clear for tests (no lock needed in single-threaded test)
         self._map.clear()
         self._pending_cancel.clear()
-        self._history.clear()
+        try:
+            self._history.clear()  # type: ignore
+        except Exception:
+            pass
 
     def append_history(self, key: str, seq: int, payload: str) -> None:
-        self._history[key].append((seq, payload))
+        try:
+            # new HistoryStore API
+            self._history.append(key, seq, payload)  # type: ignore
+        except AttributeError:
+            # fallback dict api (old)
+            self._history[key].append((seq, payload))  # type: ignore
 
     def get_replay(self, key: str, last_id: int) -> list[str]:
-        dq = self._history.get(key)
-        if not dq:
-            return []
-        return [payload for seq, payload in dq if seq > last_id]
+        try:
+            return self._history.replay(key, last_id)  # type: ignore
+        except AttributeError:
+            dq = self._history.get(key)  # type: ignore
+            if not dq:
+                return []
+            return [payload for seq, payload in dq if seq > last_id]
 
     def get_history(self, key: str) -> deque[tuple[int, str]]:
-        return self._history.get(key, deque())
+        try:
+            return self._history.get_history(key)  # type: ignore
+        except AttributeError:
+            return self._history.get(key, deque())  # type: ignore
 
     # for test introspection
     @property

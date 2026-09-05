@@ -1,4 +1,15 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: afaq-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - afaq_redis:/data
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    mem_limit: 64m
+
   afaq-gateway:
     build: .
     image: afaq-harness-gateway:latest
@@ -7,6 +18,11 @@ services:
       - "3500:3500"
     env_file:
       - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_ENABLED=true
+    depends_on:
+      - redis
     volumes:
       - afaq_data:/app/data
       - afaq_storage:/app/storage
@@ -17,3 +33,4 @@ volumes:
   afaq_data:
   afaq_storage:
   afaq_harnesses:
+  afaq_redis:

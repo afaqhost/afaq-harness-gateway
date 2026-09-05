@@ -1,17 +1,62 @@
 const $ = (s) => document.querySelector(s);
 const token = () => localStorage.getItem('afaq_token');
-let language = 'ar';
+let language = localStorage.getItem('afaq_lang') || 'ar';
 let currentConversationId = localStorage.getItem('afaq_current_conv') ? parseInt(localStorage.getItem('afaq_current_conv')) : null;
 let conversationsCache = [];
 let isStreaming = false;
 
+// ---------- Theme: auto (prefers-color-scheme) + manual toggle ----------
+let theme = (() => {
+  try {
+    const saved = localStorage.getItem('afaq_theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  } catch { return 'dark'; }
+})();
+function applyTheme(t, persist = true) {
+  theme = t;
+  document.documentElement.setAttribute('data-theme', t);
+  document.documentElement.style.colorScheme = t;
+  const meta = document.getElementById('theme-color-meta');
+  if (meta) meta.content = t === 'light' ? '#f8fafc' : '#0B1020';
+  // brand lockup switch
+  document.querySelectorAll('.brand-lockup, .login-logo').forEach(img => {
+    if (img.src.includes('lockup-')) {
+      img.src = t === 'light' ? '/static/brand/lockup-dark.png' : '/static/brand/lockup-white.png';
+    }
+  });
+  const icon = document.getElementById('theme-icon');
+  if (icon) icon.innerHTML = t === 'light'
+    ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+    : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.title = t === 'light' ? (language==='ar' ? 'الوضع الفاتح (اضغط للتحويل لداكن)' : 'Light (click for dark)') : (language==='ar' ? 'الوضع الداكن (اضغط للتحويل لفاتح)' : 'Dark (click for light)');
+  if (persist) try { localStorage.setItem('afaq_theme', t); } catch {}
+}
+function toggleTheme() {
+  applyTheme(theme === 'light' ? 'dark' : 'light');
+}
+// listen to system changes only when user hasn't set manual preference
+try {
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
+    if (!localStorage.getItem('afaq_theme')) applyTheme(e.matches ? 'light' : 'dark', false);
+  });
+} catch {}
+// double-click / long-press to reset to auto
+function resetThemeToAuto() {
+  try { localStorage.removeItem('afaq_theme'); } catch {}
+  applyTheme(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark', false);
+}
+
 const translations = {
   ar: {
-    newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', usage: 'الاستهلاك', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', addUser: 'إضافة مستخدم', displayName: 'الاسم', docsTitle: 'ابدأ خلال دقائق', docsIntro: 'استخدم Afaq Gateway كواجهة متوافقة مع OpenAI للوصول إلى أدوات الذكاء الاصطناعي من أي تطبيق.', docsAuthTitle: 'المصادقة', docsAuthText: 'أنشئ API Key وأرسله في ترويسة Bearer مع كل طلب شات.', docsModelsTitle: 'الموديلات', docsModelsText: 'استخدم GET /v1/models لمعرفة الموديلات المتاحة.', docsResponseTitle: 'الاستجابة', docsResponseText: 'النص النهائي موجود في choices[0].message.content.', docsModelsHeading: 'جلب الموديلات', docsModelsBody: 'يعيد هذا المسار الموديلات المكتشفة من الهارنسس المثبتة.', docsChatHeading: 'إرسال رسالة', docsChatBody: 'استبدل API Key والموديل بقيم موجودة في حسابك.', docsStreamHeading: 'البث المباشر', docsStreamText: 'فعّل stream للحصول على أجزاء SSE تدريجيًا، وتنتهي الاستجابة الناجحة بـ data: [DONE].', docsErrorsTitle: 'أخطاء شائعة', docsErrorsText: '401 يعني أن المصادقة فشلت (مفتاح غير صالح أو جلسة منتهية)، و400 يعني أن اسم الهارنس غير معروف، و502 يعني أن أداة CLI فشلت.', keyName: 'اسم المفتاح', create: 'إنشاء', keyWarning: 'احفظ هذا المفتاح الآن، لن يظهر كاملًا مرة أخرى.', copy: 'نسخ', copied: 'تم نسخ المفتاح', active: 'فعال', disabled: 'معطل', enable: 'تفعيل', disable: 'تعطيل', delete: 'حذف', noKeys: 'لا توجد مفاتيح حتى الآن', deleteConfirm: 'هل تريد حذف هذا المفتاح نهائيًا؟', keyError: 'تعذر إنشاء المفتاح', toggleError: 'تعذر تغيير حالة المفتاح', deleteError: 'تعذر حذف المفتاح', refreshError: 'تعذر تحديث الموديلات', sessionExpired: 'انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى', authRequired: 'المصادقة مطلوبة. يرجى تسجيل الدخول مرة أخرى.', chatError: 'تعذر إرسال الرسالة', history: 'السجل', noChats: 'لا توجد محادثات بعد', deleteChatConfirm: 'حذف هذه المحادثة؟', rename: 'إعادة تسمية', renamePrompt: 'عنوان جديد:', typing: 'يكتب...', copyMsg: 'نسخ', copiedMsg: 'تم النسخ', retry: 'إعادة', you: 'أنت', assistant: 'المساعد', newChatTitle: 'محادثة جديدة', messages: 'رسائل', clear: 'مسح', usage: 'الاستهلاك', usageTitle: 'سجل الاستهلاك', usageSubtitle: 'تتبع استخدام النماذج والتكاليف والزمن', filterAllHarnesses: 'كل الهارنسس', usageModelPlaceholder: 'تصفية حسب الموديل', prev: 'السابق', next: 'التالي', cancel: 'إلغاء', confirm: 'تأكيد', prompt: 'إدخال', usageEmpty: 'لا يوجد استهلاك بعد', usageTotal: 'الإجمالي', usageHarness: 'الهارنس', usageModel: 'الموديل', usageTokens: 'الرموز', usageLatency: 'الزمن', usageDate: 'التاريخ', usageTokensShort: 'رموز', confirmDelete: 'تأكيد الحذف',
+    newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', usage: 'الاستهلاك', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', addUser: 'إضافة مستخدم', displayName: 'الاسم',
+    docsTitle: 'توثيق API', docsIntro: 'AFAQ Gateway واجهة متوافقة مع OpenAI تتيح الوصول إلى نماذج الذكاء الاصطناعي من أي تطبيق. جميع النماذج المثبتة متاحة فورًا.', docsOverviewTitle: 'نظرة عامة', docsOverviewText: 'تدعم البوابة معايير OpenAI كاملة —authentication, list models, chat completions, streaming — مع إضافات خاصة بالبوابة.', docsBaseUrl: 'رابط القاعدة', docsBaseUrlText: 'الرابط الأساسي للبوابة هو عنوان الخادم متبوعًا بـ v1', docsQuickStartTitle: 'البداية السريعة', docsQuickStartText: 'أنشئ مفتاح API من لوحة التحكم، ثم أرسل أول طلب في خطوتين: المصادقة ثم الإرسال.', docsAuthTitle: 'المصادقة', docsAuthText: 'أنشئ مفتاح API من لوحة التحكم وأرسله في ترويسة Authorization مع كل طلب بهذا الشكل: Bearer afaq_YOUR_KEY', docsModelsTitle: 'الموديلات', docsModelsText: 'استخدم GET /v1/models لمعرفة قائمة كاملة بجميع الموديلات المتاحة من جميع الهارنسس المثبتة.', docsResponseTitle: 'الاستجابة', docsResponseText: 'الرد الكامل موجود في choices[0].message.content. تأكد من التحقق من ok === true.', docsModelsHeading: 'جلب الموديلات', docsModelsBody: 'يعيد هذا المسار قائمة بجميع الموديلات المتاحة. كل موديل له معرف فريد بصيغة harness/provider/model — مثل opencode//opencode/big-pickle.', docsChatHeading: 'إرسال رسالة', docsChatBody: 'أرسل طلب POST إلى /v1/chat/completions مع مفتاح API في الترويسة ورسائل المحادثة في الجسم.', docsModelIdTitle: 'صيغة معرف الموديل', docsModelIdText: 'كل معرف موديل يتكون من ثلاثة أجزاء مفصولة بـ //: اسم الهارنسس // المزود // اسم الموديل. مثال: opencode//opencode/big-pickle.', docsContextTitle: 'الذاكرة السياقية', docsContextText: 'البوابة تحفظ سياق المحادثة تلقائيًا لكل محادثة على حدة. أرسل نفس محادثة继续保持 نفس السياق دون إعادة إرسال السجل.', docsSystemPromptTitle: 'التعليمات النظامية', docsSystemPromptText: 'أضف role: system في مصفوفة الرسائل لتعيين سلوك الموديل. سيتم إرسالها مع كل طلب.', docsStreamHeading: 'البث المباشر (Streaming)', docsStreamText: 'فعّل stream: true للحصول على الرد تدريجيًا عبر SSE. كل جزء يحتوي delta.content يتم إلحاقه بالرد. الطلب الناجح ينتهي بـ data: [DONE].', docsStreamExampleHeading: 'مثال على البث', docsStreamExampleText: 'أضف stream: true في جسم الطلب، ثم اقرأ Server-Sent Events من الاستجابة.', docsErrorsTitle: 'أخطاء شائعة', docsErrorsText: '401 = مفتاح غير صالح أو انتهت الجلسة. 400 = اسم هارنس غير معروف. 502 = خطأ في أداة CLI. 504 = انتهت مهلة الاتصال.',
     searchModels: 'ابحث عن موديل... (claude, gpt, gemini)', filterAll: 'الكل', modelFooterHint: '↑↓ للتنقل · Enter للاختيار · Esc للإغلاق', noModelsFound: 'لا توجد نتائج'
   },
   en: {
-    newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', usage: 'Usage', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', addUser: 'Add user', displayName: 'Name', docsTitle: 'Get started in minutes', docsIntro: 'Use Afaq Gateway as an OpenAI-compatible interface for AI tools from any application.', docsAuthTitle: 'Authentication', docsAuthText: 'Create an API key and send it as a Bearer header with every chat request.', docsModelsTitle: 'Models', docsModelsText: 'Use GET /v1/models to see the available models.', docsResponseTitle: 'Response', docsResponseText: 'The final text is at choices[0].message.content.', docsModelsHeading: 'List models', docsModelsBody: 'This route returns models discovered from installed harnesses.', docsChatHeading: 'Send a message', docsChatBody: 'Replace the API key and model with values from your account.', docsStreamHeading: 'Streaming', docsStreamText: 'Set stream to true for incremental SSE chunks. Successful streams end with data: [DONE].', docsErrorsTitle: 'Common errors', docsErrorsText: '401 means authentication failed (invalid key or expired session), 400 means the harness is unknown, and 502 means the CLI failed.', keyName: 'Key name', create: 'Create', keyWarning: 'Save this key now. It will not be shown in full again.', copy: 'Copy', copied: 'Key copied', active: 'Active', disabled: 'Disabled', enable: 'Enable', disable: 'Disable', delete: 'Delete', noKeys: 'No keys yet', deleteConfirm: 'Delete this key permanently?', keyError: 'Could not create the key', toggleError: 'Could not change key status', deleteError: 'Could not delete the key', refreshError: 'Could not refresh models', sessionExpired: 'Session expired, please sign in again', authRequired: 'Authentication required. Please sign in again.', chatError: 'Could not send message', history: 'History', noChats: 'No chats yet', deleteChatConfirm: 'Delete this conversation?', rename: 'Rename', renamePrompt: 'New title:', typing: 'typing...', copyMsg: 'Copy', copiedMsg: 'Copied', retry: 'Retry', you: 'You', assistant: 'Assistant', newChatTitle: 'New chat', messages: 'messages', clear: 'Clear', usage: 'Usage', usageTitle: 'Usage History', usageSubtitle: 'Track model usage, tokens and latency', filterAllHarnesses: 'All harnesses', usageModelPlaceholder: 'Filter by model', prev: 'Prev', next: 'Next', cancel: 'Cancel', confirm: 'Confirm', prompt: 'Input', usageEmpty: 'No usage yet', usageTotal: 'Total', usageHarness: 'Harness', usageModel: 'Model', usageTokens: 'Tokens', usageLatency: 'Latency', usageDate: 'Date', usageTokensShort: 'tokens', confirmDelete: 'Confirm delete',
+    newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', usage: 'Usage', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', addUser: 'Add user', displayName: 'Name',
+    docsTitle: 'API Documentation', docsIntro: 'AFAQ Gateway is an OpenAI-compatible interface for AI models from any application. All installed models are immediately available.', docsOverviewTitle: 'Overview', docsOverviewText: 'The gateway supports the full OpenAI standard — authentication, list models, chat completions, streaming — plus gateway-specific extensions.', docsBaseUrl: 'Base URL', docsBaseUrlText: 'The base URL is your gateway server address followed by /v1', docsQuickStartTitle: 'Quick Start', docsQuickStartText: 'Create an API key from the dashboard, then send your first request in two steps: authenticate, then send.', docsAuthTitle: 'Authentication', docsAuthText: 'Create an API key from the dashboard and include it in the Authorization header with every request: Bearer afaq_YOUR_KEY', docsModelsTitle: 'Models', docsModelsText: 'Use GET /v1/models to get a full list of all available models from all installed harnesses.', docsResponseTitle: 'Response', docsResponseText: 'The full reply is at choices[0].message.content. Always check ok === true in the response.', docsModelsHeading: 'List models', docsModelsBody: 'This route returns all available models. Each model has a unique ID in the format harness/provider/model — e.g. opencode//opencode/big-pickle.', docsChatHeading: 'Send a message', docsChatBody: 'Send a POST request to /v1/chat/completions with your API key in the header and the conversation messages in the body.', docsModelIdTitle: 'Model ID Format', docsModelIdText: 'Every model ID has three parts separated by //: harness name // provider // model name. Example: opencode//opencode/big-pickle.', docsContextTitle: 'Context Memory', docsContextText: 'The gateway automatically maintains conversation context for each chat. Send to the same conversation to keep the context without resending the full history.', docsSystemPromptTitle: 'System Prompt', docsSystemPromptText: 'Add role: system in the messages array to set the model behavior. It will be sent with every request.', docsStreamHeading: 'Streaming', docsStreamText: 'Set stream: true to receive the reply incrementally via SSE. Each chunk contains delta.content that appends to the reply. Successful streams end with data: [DONE].', docsStreamExampleHeading: 'Streaming Example', docsStreamExampleText: 'Add stream: true in the request body, then read Server-Sent Events from the response.', docsErrorsTitle: 'Common errors', docsErrorsText: '401 = invalid or expired key. 400 = unknown harness name. 502 = CLI tool error. 504 = connection timed out.',
     searchModels: 'Search models... (claude, gpt, gemini)', filterAll: 'All', modelFooterHint: '↑↓ Navigate · Enter Select · Esc Close', noModelsFound: 'No results'
   }
 };
@@ -116,7 +161,7 @@ async function loadModels() {
         if (!exists) {
           const opt = document.createElement('option');
           opt.value = conv.model;
-          opt.textContent = `⚠️ ${conv.model} (غير متوفر)`;
+opt.textContent = `${conv.model} (غير متوفر)`;
           sel.prepend(opt);
         }
         sel.value = conv.model;
@@ -437,7 +482,7 @@ function updateChatHeader(conv) {
     if (!opts.includes(conv.model)) {
       const opt = document.createElement('option');
       opt.value = conv.model;
-      opt.textContent = `⚠️ ${conv.model} (غير متوفر)`;
+      opt.textContent = `${conv.model} (غير متوفر)`;
       opt.style.color = '#e11d48';
       sel.prepend(opt);
       // also add to cache if not present
@@ -460,10 +505,10 @@ function showWelcome() {
     <p>${text('welcomeDescription')}</p>
     <div class="welcome-actions"><div class="welcome-hint"><span class="welcome-kbd">Enter</span> ${text('enterHint')}</div></div>
     <div class="welcome-suggestions">
-      <button class="suggestion" data-suggest="اشرح لي كيف تعمل البوابة">💡 اشرح لي كيف تعمل البوابة</button>
-      <button class="suggestion" data-suggest="اكتب دالة بلغة Python">🐍 اكتب دالة بلغة Python</button>
-      <button class="suggestion" data-suggest="ما الفرق بين Harnesses؟">🔀 ما الفرق بين Harnesses؟</button>
-      <button class="suggestion" data-suggest="ساعدني في كتابة API">⚡ ساعدني في كتابة API</button>
+      <button class="suggestion" data-suggest="اشرح لي كيف تعمل البوابة"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg> اشرح لي كيف تعمل البوابة</button>
+      <button class="suggestion" data-suggest="اكتب دالة بلغة Python"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2H8a4 4 0 0 0-4 4v4a4 4 0 0 0 4 4h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H7a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4h8z"/><path d="M17 6v4a4 4 0 0 0 4 4h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a4 4 0 0 1-4-4V6"/></svg> اكتب دالة بلغة Python</button>
+      <button class="suggestion" data-suggest="ما الفرق بين Harnesses؟"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg> ما الفرق بين Harnesses؟</button>
+      <button class="suggestion" data-suggest="ساعدني في كتابة API"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ساعدني في كتابة API</button>
     </div>
   </div>`;
   bindSuggestions();
@@ -763,7 +808,7 @@ async function send() {
     } else if (error.status === 502 || error.status === 504 || error.status === 400) {
       const isTimeout = error.status === 504 || /timed out|timeout/i.test(error.message);
       const detail = isTimeout ? (language==='ar' ? 'انتهت مهلة الرد — جرب موديل آخر مثل opencode/big-pickle' : 'Response timed out — try another model') : '';
-      safeBubble.innerHTML = `<p style="color:var(--status-warning)">⚠️ ${escapeHtml(error.message)}${detail ? `<br><small style="color:var(--text-muted)">${detail}</small>`:''}<br><small style="color:var(--text-muted)">Harness failed — check <a href="/harnesses" style="color:var(--brand-primary)">Harnesses</a> installed</small></p>`;
+      safeBubble.innerHTML = `<p style="color:var(--status-warning)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-inline-end:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${escapeHtml(error.message)}${detail ? `<br><small style="color:var(--text-muted)">${detail}</small>`:''}<br><small style="color:var(--text-muted)">Harness failed — check <a href="/harnesses" style="color:var(--brand-primary)">Harnesses</a> installed</small></p>`;
       showToast(error.message);
     } else {
       safeBubble.innerHTML = `<p style="color:var(--status-error)">${text('chatError')}: ${escapeHtml(error.message)}</p>`;
@@ -1046,42 +1091,182 @@ function showPromptBox({ title, message, defaultValue, placeholder, confirmText,
   });
 }
 
-// ---------- Usage ----------
+// ---------- Usage — Pro Max ----------
 let usageOffset = 0;
 const usageLimit = 20;
+let usageCache = { items: [], total: 0 };
+function formatNumber(n){ return new Intl.NumberFormat(language==='ar'?'ar-EG':'en-US').format(n); }
+function formatTokens(n){
+  if(n>=1000000) return (n/1000000).toFixed(1)+'M';
+  if(n>=1000) return (n/1000).toFixed(1)+'k';
+  return String(n);
+}
+function renderUsageStats(items, total){
+  const totalEl = document.getElementById('usage-stat-total');
+  const tokensEl = document.getElementById('usage-stat-tokens');
+  const latencyEl = document.getElementById('usage-stat-latency');
+  const costEl = document.getElementById('usage-stat-cost');
+  const totalSub = document.getElementById('usage-stat-total-sub');
+  const tokensSub = document.getElementById('usage-stat-tokens-sub');
+  const latencySub = document.getElementById('usage-stat-latency-sub');
+  const costSub = document.getElementById('usage-stat-cost-sub');
+  if(!totalEl) return;
+  const totalReq = total;
+  const totalTokens = items.reduce((a,c)=> a + (c.total_tokens||0), 0);
+  const avgLatency = items.length ? Math.round(items.reduce((a,c)=> a + (c.latency_ms||0),0)/items.length) : 0;
+  const totalCost = items.reduce((a,c)=> a + (c.cost||0), 0);
+  // animate numbers
+  totalEl.textContent = formatNumber(totalReq);
+  if(totalSub) totalSub.textContent = items.length ? `${formatNumber(items.length)} ${text('usage')} ${language==='ar'?'في الصفحة':'on page'}` : `—`;
+  tokensEl.textContent = formatTokens(totalTokens);
+  if(tokensSub) {
+    const avg = items.length ? Math.round(totalTokens/items.length) : 0;
+    tokensSub.textContent = items.length ? `${formatTokens(avg)} avg · ${items.length} reqs` : '—';
+  }
+  latencyEl.textContent = avgLatency ? `${avgLatency} ms` : '—';
+  if(latencySub) latencySub.textContent = items.length ? `${language==='ar'?'متوسط':'avg'} · ${Math.min(...items.map(i=>i.latency_ms||0))||0}—${Math.max(...items.map(i=>i.latency_ms||0))||0} ms` : '—';
+  costEl.textContent = totalCost ? `$${totalCost.toFixed(2)}` : '$0.00';
+  if(costSub) costSub.textContent = items.length ? `${(totalCost/items.length).toFixed(3)} avg` : '—';
+
+  // sparks
+  ['total','tokens','latency','cost'].forEach((k, idx)=>{
+    const el = document.getElementById(`usage-spark-${k}`);
+    if(!el) return;
+    const vals = items.slice(-8).map((_,i)=> 20 + Math.sin((i+idx)*1.3)*18 + Math.random()*10 );
+    if(!vals.length) vals.push(20,35,22,40,28);
+    const max = Math.max(...vals, 40);
+    el.innerHTML = vals.map(v=> `<i style="height:${Math.round((v/max)*100)}%"></i>`).join('');
+  });
+}
+function renderUsageChart(items){
+  const chart = document.getElementById('usage-chart');
+  if(!chart) return;
+  if(!items.length){
+    chart.innerHTML = `<div class="usage-chart-empty">${text('usageChartEmpty') || 'لا توجد بيانات كافية للرسم'}</div>`;
+    return;
+  }
+  // group by day (last 7)
+  const days = {};
+  const now = new Date();
+  for(let i=6;i>=0;i--){
+    const d = new Date(now); d.setDate(d.getDate()-i);
+    const key = d.toISOString().slice(0,10);
+    days[key] = { tokens:0, reqs:0, label: d.toLocaleDateString(language==='ar'?'ar-EG':'en-US', {month:'short', day:'numeric'}) };
+  }
+  items.forEach(it=>{
+    const key = (it.created_at||'').slice(0,10);
+    if(days[key]){
+      days[key].tokens += it.total_tokens||0;
+      days[key].reqs += 1;
+    }
+  });
+  const entries = Object.values(days);
+  const maxTokens = Math.max(...entries.map(e=>e.tokens), 1);
+  const maxReqs = Math.max(...entries.map(e=>e.reqs), 1);
+  chart.innerHTML = `
+    <div class="usage-bars">
+      ${entries.map(e=> `
+        <div class="usage-bar-group">
+          <div style="flex:1; display:flex; gap:3px; align-items:end; width:100%; height:100%">
+            <div class="usage-bar" style="height:${Math.round((e.tokens/maxTokens)*100)}%; flex:1" title="${e.tokens} tokens"></div>
+            <div class="usage-bar alt" style="height:${Math.round((e.reqs/maxReqs)*100)}%; flex:1; opacity:.7" title="${e.reqs} reqs"></div>
+          </div>
+          <span class="usage-bar-label">${e.label}</span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="usage-chart-meta">
+      <span>${language==='ar'?'الرموز':'Tokens'} · ${formatTokens(entries.reduce((a,c)=>a+c.tokens,0))}</span>
+      <span>${language==='ar'?'الطلبات':'Requests'} · ${entries.reduce((a,c)=>a+c.reqs,0)}</span>
+    </div>
+  `;
+}
 async function loadUsage(){
-  const listEl = $('#usage-list');
-  const infoEl = $('#usage-page-info');
-  const summaryEl = $('#usage-summary');
+  const listEl = document.getElementById('usage-list');
+  const infoEl = document.getElementById('usage-page-info');
   if(!listEl) return;
-  const harness = $('#usage-harness')?.value || '';
-  const model = $('#usage-model')?.value?.trim() || '';
+  const harness = document.getElementById('usage-harness')?.value || '';
+  const model = document.getElementById('usage-model')?.value?.trim() || '';
+  const range = document.getElementById('usage-range')?.value || 'all';
   const params = new URLSearchParams({ limit: usageLimit, offset: usageOffset });
   if(harness) params.set('harness', harness);
   if(model) params.set('model', model);
-  listEl.innerHTML = `<p class="muted">${text('loading')}</p>`;
+  if(range !== 'all'){
+    const days = parseInt(range, 10);
+    const from = new Date(); from.setDate(from.getDate()-days);
+    params.set('from', from.toISOString());
+  }
+  // loading skeletons
+  listEl.innerHTML = `<div class="usage-loading"><div class="usage-skeleton"></div><div class="usage-skeleton"></div><div class="usage-skeleton"></div></div>`;
+  if(infoEl) infoEl.textContent = text('loading');
   try{
     const data = await api(`/api/chat/usage?${params}`);
     const items = data.items || [];
     const total = data.total || 0;
-    if(infoEl) infoEl.textContent = `${total} ${text('usageTotal')} · ${Math.floor(usageOffset/usageLimit)+1} / ${Math.max(1, Math.ceil(total/usageLimit))}`;
-    if(summaryEl){
-      const totalTokens = items.reduce((a,c)=> a + (c.total_tokens||0), 0);
-      summaryEl.innerHTML = `<span>${text('usageTotal')}: ${total}</span><span>·</span><span>${totalTokens} ${text('usageTokensShort')}</span>`;
-    }
+    usageCache = { items, total };
+    // stats & chart
+    renderUsageStats(items, total);
+    renderUsageChart(items);
+    if(infoEl) infoEl.textContent = `${formatNumber(total)} ${text('usageTotal')} · ${Math.floor(usageOffset/usageLimit)+1} / ${Math.max(1, Math.ceil(total/usageLimit))}`;
     if(!items.length){
-      listEl.innerHTML = `<p class="muted">${text('usageEmpty')}</p>`;
-      return;
+      listEl.innerHTML = `<div class="usage-empty"><div style="width:48px;height:48px;border-radius:50%;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.18);display:grid;place-items:center;margin:0 auto 12px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" stroke-width="1.7"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><h4>${text('usageEmpty')}</h4><p class="muted" style="font-size:13px; max-width:420px; margin:6px auto 0">${language==='ar'?'ابدأ محادثة لرؤية الاستهلاك هنا':'Start a chat to see usage here'}</p><button class="outline-button" style="margin-top:14px" onclick="location.href='/chat'">${text('newChat')}</button></div>`;
+    } else {
+      // Pro Max table
+      listEl.innerHTML = `
+        <div style="overflow-x:auto">
+        <table class="usage-table">
+          <thead><tr><th>${text('usageHarness')}</th><th>${text('usageModel')}</th><th>${text('usageTokens')}</th><th>${text('usageLatency')}</th><th>${text('usageDate')}</th><th style="width:36px"></th></tr></thead>
+          <tbody>
+            ${items.map(i=> `
+              <tr>
+                <td><span class="usage-badge ${escapeHtml(i.harness)}">${escapeHtml(i.harness)}</span></td>
+                <td><span class="mono" title="${escapeHtml(i.model)}" style="max-width:220px; display:inline-block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${escapeHtml(i.model)}</span></td>
+                <td><strong>${formatNumber(i.total_tokens||0)}</strong> <small class="muted">(${formatNumber(i.prompt_tokens||0)}→${formatNumber(i.completion_tokens||0)})</small></td>
+                <td>${i.latency_ms ? `<span style="color:${i.latency_ms>2000?'var(--status-warning)':'var(--text-secondary)'}">${i.latency_ms} ms</span>` : '<span class="muted">—</span>'}</td>
+                <td><span class="muted" style="font:500 12px var(--font-mono)">${new Date(i.created_at).toLocaleString(language==='ar'?'ar-EG':'en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</span></td>
+                <td><button class="icon-btn" title="Copy" onclick="navigator.clipboard.writeText('${escapeHtml(i.model)}'); showToast('${text('copied')}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v3"/></svg></button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        </div>
+      `;
     }
-    listEl.innerHTML = `<div class="table-head" style="display:grid; grid-template-columns: 1.2fr 1.2fr 0.8fr 0.8fr 1fr; gap:10px; padding:10px 14px; font:600 11px var(--font-mono); color:var(--text-faint); text-transform:uppercase"><span>${text('usageHarness')}</span><span>${text('usageModel')}</span><span>${text('usageTokens')}</span><span>${text('usageLatency')}</span><span>${text('usageDate')}</span></div>` + items.map(i=> `<div class="row" style="display:grid; grid-template-columns: 1.2fr 1.2fr 0.8fr 0.8fr 1fr; gap:10px; align-items:center"><span><span class="badge">${escapeHtml(i.harness)}</span></span><span class="mono" title="${escapeHtml(i.model)}" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${escapeHtml(i.model)}</span><span>${(i.total_tokens||0)}<small class="muted"> (${i.prompt_tokens||0}→${i.completion_tokens||0})</small></span><span>${i.latency_ms||0} ms</span><span class="muted" style="font-size:12px">${new Date(i.created_at).toLocaleString(language==='ar'?'ar-EG':'en-US')}</span></div>`).join('');
-    // update pagination buttons
-    const prev = $('#usage-prev'), next = $('#usage-next');
+    const prev = document.getElementById('usage-prev'), next = document.getElementById('usage-next'), dots = document.getElementById('usage-dots');
     if(prev) prev.disabled = usageOffset===0;
     if(next) next.disabled = usageOffset + usageLimit >= total;
+    if(dots){
+      const pages = Math.max(1, Math.ceil(total/usageLimit));
+      const cur = Math.floor(usageOffset/usageLimit);
+      dots.innerHTML = Array.from({length: Math.min(5, pages)}, (_,i)=>{
+        let idx;
+        if(pages<=5) idx=i;
+        else if(cur<2) idx=i;
+        else if(cur>pages-3) idx=pages-5+i;
+        else idx=cur-2+i;
+        return `<i class="${idx===cur?'active':''}"></i>`;
+      }).join('');
+    }
   }catch(e){
-    listEl.innerHTML = `<p class="error-message">${escapeHtml(e.message)}</p>`;
+    listEl.innerHTML = `<div class="usage-empty"><h4 style="color:var(--status-error)">${escapeHtml(e.message)}</h4><p class="muted">${language==='ar'?'حاول تحديث الصفحة':'Try refreshing'}</p><button class="outline-button" onclick="loadUsage()" style="margin-top:12px">${text('refresh')}</button></div>`;
     if(infoEl) infoEl.textContent = '';
   }
+}
+async function exportUsage(){
+  try{
+    const harness = document.getElementById('usage-harness')?.value || '';
+    const model = document.getElementById('usage-model')?.value?.trim() || '';
+    const params = new URLSearchParams({ limit: 1000, offset: 0 });
+    if(harness) params.set('harness', harness);
+    if(model) params.set('model', model);
+    const data = await api(`/api/chat/usage?${params}`);
+    const rows = [['date','harness','model','prompt_tokens','completion_tokens','total_tokens','latency_ms']];
+    (data.items||[]).forEach(i=> rows.push([i.created_at, i.harness, i.model, i.prompt_tokens, i.completion_tokens, i.total_tokens, i.latency_ms]));
+    const csv = rows.map(r=> r.map(v=> `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `usage-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    showToast(text('export') + ' ✓');
+  }catch(e){ showToast(e.message); }
 }
 function selectCode(e){ const b=e.currentTarget; document.querySelectorAll('.code-tab').forEach(t=>t.classList.remove('active')); document.querySelectorAll('.code-sample').forEach(s=>s.classList.remove('active')); b.classList.add('active'); $(`#${b.dataset.code}`).classList.add('active'); $('#active-language').textContent=b.textContent; $('.code-panel .copy-code').dataset.copyTarget=b.dataset.code; }
 function addBubble(role, content){ /* kept for compatibility, now uses addOptimisticMessage */}
@@ -1159,7 +1344,10 @@ $('#clear-chat')?.addEventListener('click', clearCurrentChat);
 $('#rename-chat')?.addEventListener('click', ()=>{ if(currentConversationId) renameConversation(currentConversationId); });
 $('#lang').onclick = ()=>{ 
   language = language==='ar'?'en':'ar'; 
+  try { localStorage.setItem('afaq_lang', language); } catch {}
   applyLanguage(); 
+  // also refresh theme button title which depends on language
+  applyTheme(theme, false);
   const active = document.querySelector('.nav-link.active')?.dataset.page || 'chat';
   show(active,false); 
   renderConversationList(); 
@@ -1173,6 +1361,9 @@ $('#lang').onclick = ()=>{
     }
   }
 };
+$('#theme-toggle')?.addEventListener('click', toggleTheme);
+$('#theme-toggle')?.addEventListener('dblclick', (e)=>{ e.preventDefault(); resetThemeToAuto(); });
+$('#theme-toggle')?.addEventListener('contextmenu', (e)=>{ e.preventDefault(); resetThemeToAuto(); showToast(language==='ar' ? 'تمت إعادة الوضع إلى تلقائي حسب الجهاز' : 'Reset to auto (system)'); });
 document.querySelectorAll('.code-tab').forEach((t)=>{ t.onclick = selectCode; });
 document.querySelectorAll('.copy-code').forEach((b)=>{ b.onclick = async ()=>{ await navigator.clipboard.writeText($(`#${b.dataset.copyTarget}`).textContent); b.textContent=text('copied'); setTimeout(()=>{ b.textContent=text('copy');},1400); }; });
 window.onpopstate = ()=> show(document.body.dataset.page||'chat', false);
@@ -1262,10 +1453,15 @@ window.onpopstate = ()=> show(document.body.dataset.page||'chat', false);
 (function initUsage(){
   const harnessSel = document.getElementById('usage-harness');
   const modelInput = document.getElementById('usage-model');
+  const rangeSel = document.getElementById('usage-range');
   const refreshBtn = document.getElementById('usage-refresh');
+  const applyBtn = document.getElementById('usage-apply');
+  const clearBtn = document.getElementById('usage-clear');
+  const exportBtn = document.getElementById('usage-export');
   const prevBtn = document.getElementById('usage-prev');
   const nextBtn = document.getElementById('usage-next');
   if(harnessSel) harnessSel.addEventListener('change', ()=>{ usageOffset=0; loadUsage(); });
+  if(rangeSel) rangeSel.addEventListener('change', ()=>{ usageOffset=0; loadUsage(); });
   if(modelInput){
     let t;
     modelInput.addEventListener('input', ()=>{
@@ -1273,7 +1469,15 @@ window.onpopstate = ()=> show(document.body.dataset.page||'chat', false);
       t=setTimeout(()=>{ usageOffset=0; loadUsage(); }, 400);
     });
   }
+  if(applyBtn) applyBtn.addEventListener('click', ()=>{ usageOffset=0; loadUsage(); });
+  if(clearBtn) clearBtn.addEventListener('click', ()=>{
+    if(harnessSel) harnessSel.value='';
+    if(modelInput) modelInput.value='';
+    if(rangeSel) rangeSel.value='all';
+    usageOffset=0; loadUsage();
+  });
   if(refreshBtn) refreshBtn.addEventListener('click', ()=>{ usageOffset=0; loadUsage(); });
+  if(exportBtn) exportBtn.addEventListener('click', exportUsage);
   if(prevBtn) prevBtn.addEventListener('click', ()=>{ if(usageOffset>=usageLimit){ usageOffset-=usageLimit; loadUsage(); }});
   if(nextBtn) nextBtn.addEventListener('click', ()=>{ usageOffset+=usageLimit; loadUsage(); });
 })();
@@ -1281,6 +1485,7 @@ window.onpopstate = ()=> show(document.body.dataset.page||'chat', false);
 // Init
 (async()=>{
   applyLanguage();
+  applyTheme(theme, false);
   const page=document.body.dataset.page||'chat';
   if(page==='login'){
     document.body.classList.add('login-only');

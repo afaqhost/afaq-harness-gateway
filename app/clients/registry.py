@@ -25,18 +25,80 @@ ADAPTERS: dict[str, HarnessAdapter] = {
 
 MODEL_CACHE: dict[str, list[HarnessModel]] = {}
 
+# Redis-backed cache for multi-replica deployments — fallback to in-memory
+_REDIS_TTL = 300  # seconds, matches model_refresh_seconds
+
+
+def _get_redis():
+    try:
+        from app.core.config import get_settings
+
+        s = get_settings()
+        if not s.redis_enabled or not s.redis_url:
+            return None
+        import redis as sync_redis  # type: ignore
+
+        client = sync_redis.from_url(s.redis_url, decode_responses=True)
+        client.ping()
+        return client
+    except Exception:
+        return None
+
+
+def _redis_key(adapter_name: str) -> str:
+    return f"models:{adapter_name}"
+
+
+def _harness_models_to_dicts(models: list[HarnessModel]) -> list[dict]:
+    return [m.__dict__ for m in models]
+
+
+def _dicts_to_harness_models(dicts: list[dict]) -> list[HarnessModel]:
+    # tolerant reconstruction
+    result: list[HarnessModel] = []
+    for d in dicts:
+        try:
+            result.append(HarnessModel(**{k: v for k, v in d.items() if k in HarnessModel.__dataclass_fields__}))
+        except Exception:
+            # fallback minimal
+            try:
+                result.append(HarnessModel(id=str(d.get("id", "")), harness=str(d.get("harness", "")), provider=d.get("provider"), name=str(d.get("name", ""))))
+            except Exception:
+                continue
+    return result
+
 
 async def refresh_models() -> None:
     from datetime import datetime
+    import json
+
+    redis_client = _get_redis()
 
     for adapter in all_adapters():
         if adapter.is_installed():
             try:
-                MODEL_CACHE[adapter.name] = await adapter.list_models()
+                models = await adapter.list_models()
+                MODEL_CACHE[adapter.name] = models
+                # also write to Redis if available
+                if redis_client:
+                    try:
+                        redis_client.set(_redis_key(adapter.name), json.dumps(_harness_models_to_dicts(models)), ex=_REDIS_TTL)
+                    except Exception:
+                        pass
             except (OSError, asyncio.TimeoutError):
                 MODEL_CACHE[adapter.name] = []
+                if redis_client:
+                    try:
+                        redis_client.delete(_redis_key(adapter.name))
+                    except Exception:
+                        pass
         else:
             MODEL_CACHE[adapter.name] = []
+            if redis_client:
+                try:
+                    redis_client.delete(_redis_key(adapter.name))
+                except Exception:
+                    pass
     # persist Harness.last_checked_at and installed to DB (best-effort)
     try:
         from app.db.database import Harness, SessionLocal
@@ -61,6 +123,19 @@ async def refresh_models() -> None:
 
 
 def cached_models(adapter_name: str) -> list[HarnessModel]:
+    # try Redis first for cross-replica consistency, fallback to in-memory
+    try:
+        redis_client = _get_redis()
+        if redis_client:
+            import json
+
+            raw = redis_client.get(_redis_key(adapter_name))
+            if raw:
+                dicts = json.loads(raw)
+                if isinstance(dicts, list):
+                    return _dicts_to_harness_models(dicts)
+    except Exception:
+        pass
     return MODEL_CACHE.get(adapter_name, [])
 
 

@@ -83,147 +83,153 @@ class HarnessAdapter(ABC):
         model = model or "default"
         command = self.build_command(prompt, model, session_id)
         started = time.monotonic()
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, **(env or {})},
-        )
-        # register for cancel if request_id provided
-        if request_id:
-            try:
-                from app.services.process_registry import ProcessHandle, process_registry
+        from app.services.harness_queue import harness_queue
 
-                await process_registry.register(
-                    request_id,
-                    ProcessHandle(
-                        pid=process.pid or 0,
-                        process=process,
-                        harness=self.name,
-                        model=model,
-                        request_id=request_id,
-                    ),
-                )
-            except Exception:
-                pass
-        run_timeout = min(settings.harness_timeout_seconds, 90)
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=run_timeout)
-        except asyncio.TimeoutError:
-            try:
-                process.kill()
-                await process.wait()
-            except ProcessLookupError:
-                pass
-            raise RuntimeError(
-                f"{self.name} timed out after {run_timeout}s — model '{model}' may be unavailable or harness hung. "
-                "Try a different model (e.g. opencode/big-pickle)."
+        async with harness_queue.slot():
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env={**os.environ, **(env or {})},
             )
-        finally:
+            # register for cancel if request_id provided
             if request_id:
                 try:
-                    from app.services.process_registry import process_registry
+                    from app.services.process_registry import ProcessHandle, process_registry
 
-                    await process_registry.cleanup(request_id)
+                    await process_registry.register(
+                        request_id,
+                        ProcessHandle(
+                            pid=process.pid or 0,
+                            process=process,
+                            harness=self.name,
+                            model=model,
+                            request_id=request_id,
+                        ),
+                    )
                 except Exception:
                     pass
-        if process.returncode != 0:
-            error = stderr.decode(errors="replace").strip() or stdout.decode(errors="replace").strip()
-            if "ollama" in error.lower() or "model" in error.lower() and "not found" in error.lower():
-                error = f"{error} — تأكد أن الموديل متاح. جرب opencode/big-pickle"
-            raise RuntimeError(f"{self.name} failed ({process.returncode}): {error}")
-        text = self.parse_output(stdout, model)
-        if not text:
-            serr = stderr.decode(errors="replace").strip()
-            if serr:
-                raise RuntimeError(f"{self.name} returned empty response (stderr: {serr[:500]})")
-        return HarnessResult(
-            text=text,
-            model=model,
-            raw={"stderr": stderr.decode(errors="replace"), "latency_ms": int((time.monotonic() - started) * 1000)},
-        )
-
-    async def stream(
-        self, prompt: str, model: str | None = None, session_id: str | None = None, env: dict | None = None, request_id: str | None = None
-    ) -> AsyncIterator[tuple[str, dict]]:
-        model = model or "default"
-        command = self.build_command(prompt, model, session_id)
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, **(env or {})},
-        )
-        assert process.stdout
-        assert process.stderr
-        cur_timeout = min(settings.harness_timeout_seconds, 90)
-        if request_id:
+            run_timeout = min(settings.harness_timeout_seconds, 90)
             try:
-                from app.services.process_registry import ProcessHandle, process_registry
-
-                await process_registry.register(
-                    request_id,
-                    ProcessHandle(
-                        pid=process.pid or 0,
-                        process=process,
-                        harness=self.name,
-                        model=model,
-                        request_id=request_id,
-                    ),
-                )
-            except Exception:
-                pass
-        try:
-            while True:
-                try:
-                    raw = await asyncio.wait_for(process.stdout.readline(), timeout=cur_timeout)
-                except asyncio.TimeoutError:
-                    try:
-                        process.kill()
-                        await process.wait()
-                    except ProcessLookupError:
-                        pass
-                    raise RuntimeError(
-                        f"{self.name} stream timed out after {cur_timeout}s — الموديل '{model}' لا يرد. "
-                        "جرب opencode/big-pickle أو تأكد من تثبيت الموديل."
-                    )
-                if not raw:
-                    break
-                line = raw.decode(errors="replace")
-                if not line.strip():
-                    continue
-                text, metadata = self.parse_line(line, model)
-                if text:
-                    yield text, metadata
-            try:
-                code = await asyncio.wait_for(process.wait(), timeout=5)
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=run_timeout)
             except asyncio.TimeoutError:
                 try:
                     process.kill()
                     await process.wait()
                 except ProcessLookupError:
                     pass
-                raise RuntimeError(f"{self.name} did not exit cleanly after stream")
-            if code != 0:
-                try:
-                    err_bytes = await asyncio.wait_for(process.stderr.read(), timeout=2)
-                    error = err_bytes.decode(errors="replace").strip()
-                except asyncio.TimeoutError:
-                    error = ""
-                if not error:
-                    error = f"exit code {code}"
-                raise RuntimeError(f"{self.name} failed ({code}): {error}")
-        finally:
+                raise RuntimeError(
+                    f"{self.name} timed out after {run_timeout}s — model '{model}' may be unavailable or harness hung. "
+                    "Try a different model (e.g. opencode/big-pickle)."
+                )
+            finally:
+                if request_id:
+                    try:
+                        from app.services.process_registry import process_registry
+
+                        await process_registry.cleanup(request_id)
+                    except Exception:
+                        pass
+            if process.returncode != 0:
+                error = stderr.decode(errors="replace").strip() or stdout.decode(errors="replace").strip()
+                if "ollama" in error.lower() or "model" in error.lower() and "not found" in error.lower():
+                    error = f"{error} — تأكد أن الموديل متاح. جرب opencode/big-pickle"
+                raise RuntimeError(f"{self.name} failed ({process.returncode}): {error}")
+            text = self.parse_output(stdout, model)
+            if not text:
+                serr = stderr.decode(errors="replace").strip()
+                if serr:
+                    raise RuntimeError(f"{self.name} returned empty response (stderr: {serr[:500]})")
+            return HarnessResult(
+                text=text,
+                model=model,
+                raw={"stderr": stderr.decode(errors="replace"), "latency_ms": int((time.monotonic() - started) * 1000)},
+            )
+
+    async def stream(
+        self, prompt: str, model: str | None = None, session_id: str | None = None, env: dict | None = None, request_id: str | None = None
+    ) -> AsyncIterator[tuple[str, dict]]:
+        model = model or "default"
+        command = self.build_command(prompt, model, session_id)
+        from app.services.harness_queue import harness_queue
+
+        async with harness_queue.slot():
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env={**os.environ, **(env or {})},
+            )
+            assert process.stdout
+            assert process.stderr
+            cur_timeout = min(settings.harness_timeout_seconds, 90)
             if request_id:
                 try:
-                    from app.services.process_registry import process_registry
+                    from app.services.process_registry import ProcessHandle, process_registry
 
-                    await process_registry.cleanup(request_id)
+                    await process_registry.register(
+                        request_id,
+                        ProcessHandle(
+                            pid=process.pid or 0,
+                            process=process,
+                            harness=self.name,
+                            model=model,
+                            request_id=request_id,
+                        ),
+                    )
                 except Exception:
                     pass
-            if process.returncode is None:
+            try:
+                while True:
+                    try:
+                        raw = await asyncio.wait_for(process.stdout.readline(), timeout=cur_timeout)
+                    except asyncio.TimeoutError:
+                        try:
+                            process.kill()
+                            await process.wait()
+                        except ProcessLookupError:
+                            pass
+                        raise RuntimeError(
+                            f"{self.name} stream timed out after {cur_timeout}s — الموديل '{model}' لا يرد. "
+                            "جرب opencode/big-pickle أو تأكد من تثبيت الموديل."
+                        )
+                    if not raw:
+                        break
+                    line = raw.decode(errors="replace")
+                    if not line.strip():
+                        continue
+                    text, metadata = self.parse_line(line, model)
+                    if text:
+                        yield text, metadata
                 try:
-                    process.kill()
-                    await process.wait()
-                except ProcessLookupError:
-                    pass
+                    code = await asyncio.wait_for(process.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    try:
+                        process.kill()
+                        await process.wait()
+                    except ProcessLookupError:
+                        pass
+                    raise RuntimeError(f"{self.name} did not exit cleanly after stream")
+                if code != 0:
+                    try:
+                        err_bytes = await asyncio.wait_for(process.stderr.read(), timeout=2)
+                        error = err_bytes.decode(errors="replace").strip()
+                    except asyncio.TimeoutError:
+                        error = ""
+                    if not error:
+                        error = f"exit code {code}"
+                    raise RuntimeError(f"{self.name} failed ({code}): {error}")
+            finally:
+                if request_id:
+                    try:
+                        from app.services.process_registry import process_registry
+
+                        await process_registry.cleanup(request_id)
+                    except Exception:
+                        pass
+                if process.returncode is None:
+                    try:
+                        process.kill()
+                        await process.wait()
+                    except ProcessLookupError:
+                        pass
