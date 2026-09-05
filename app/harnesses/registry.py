@@ -2,29 +2,10 @@ from __future__ import annotations
 import asyncio, json, os, shutil, time
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import AsyncIterator
 from app.core.config import settings
-
-@dataclass
-class HarnessModel:
-    id: str
-    harness: str
-    provider: str | None
-    name: str
-    context_window: int | None = None
-    pricing: dict = field(default_factory=dict)
-
-@dataclass
-class HarnessResult:
-    text: str
-    model: str
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    cached_tokens: int = 0
-    raw: dict | str | None = None
-    finish_reason: str = "stop"
+from app.models.harness import HarnessModel, HarnessResult
 
 class HarnessAdapter(ABC):
     name: str = "custom"

@@ -1,12 +1,10 @@
 from dataclasses import dataclass
 from typing import AsyncIterator, Protocol
 
-@dataclass(frozen=True)
-class ModelInfo:
-    id: str
-    harness: str
-    provider: str | None
-    name: str
+from app.models.harness import HarnessModel, HarnessResult
+
+# Backwards-compatible alias — older code imported ModelInfo from domain.
+ModelInfo = HarnessModel
 
 @dataclass(frozen=True)
 class ChatInput:
