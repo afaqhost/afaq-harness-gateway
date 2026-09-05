@@ -33,6 +33,28 @@ class CommandCodeAdapter(HarnessAdapter):
         try:
             item = json.loads(line)
             event = item.get("event") or {}
+            # tool_call detection: type tool_call or event.type tool_call or contains tool
+            if item.get("type") == "tool_call" or event.get("type") == "tool_call" or item.get("tool") or event.get("tool") or item.get("tool_call"):
+                # find inner tool dict
+                inner = None
+                if item.get("type") == "tool_call":
+                    inner = item.get("tool") or item.get("tool_call") or item
+                elif event.get("type") == "tool_call":
+                    inner = event.get("tool") or event.get("tool_call") or event
+                else:
+                    inner = item.get("tool") or event.get("tool") or item.get("tool_call") or event.get("tool_call") or item
+                # inner should be dict with name/id
+                if not isinstance(inner, dict):
+                    inner = item
+                tc_id = inner.get("id") or item.get("id") or f"call_{abs(hash(line))%10000}"
+                tc_name = inner.get("name") or "unknown"
+                if isinstance(inner.get("function"), dict):
+                    tc_name = inner["function"].get("name", tc_name)
+                    tc_args = inner["function"].get("arguments", {})
+                else:
+                    tc_args = inner.get("arguments") or inner.get("input") or inner.get("parameters") or {}
+                normalized = {"id": str(tc_id), "type": "function", "function": {"name": str(tc_name), "arguments": tc_args if isinstance(tc_args, str) else json.dumps(tc_args) if isinstance(tc_args, dict) else str(tc_args)}}
+                return "", {"tool_call": normalized, "raw": item}
             if item.get("type") == "result":
                 text = item.get("finalText") or ""
             elif event.get("type") == "text_delta":

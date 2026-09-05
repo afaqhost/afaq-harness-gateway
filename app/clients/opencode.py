@@ -22,6 +22,19 @@ class OpenCodeAdapter(HarnessAdapter):
     def parse_line(self, line, model):
         try:
             item = json.loads(line)
+            # tool_call detection for OpenCode: part.type == tool_call or item.type == tool_call
+            part = item.get("part") or {}
+            if item.get("type") == "tool_call" or part.get("type") == "tool_call" or item.get("tool") or part.get("tool"):
+                tool = item.get("tool") or part.get("tool") or item.get("tool_call") or part.get("tool_call") or item
+                if isinstance(tool, dict):
+                    tc = tool
+                else:
+                    tc = item
+                tc_id = tc.get("id") or item.get("id") or f"call_{abs(hash(line))%10000}"
+                tc_name = tc.get("name") or tc.get("tool") or (tc.get("function") or {}).get("name") or "unknown"
+                tc_args = tc.get("arguments") or tc.get("input") or tc.get("parameters") or {}
+                normalized = {"id": str(tc_id), "type": "function", "function": {"name": str(tc_name), "arguments": tc_args if isinstance(tc_args, str) else json.dumps(tc_args) if isinstance(tc_args, dict) else str(tc_args)}}
+                return "", {"tool_call": normalized, "raw": item}
             part = item.get("part") or {}
             text = part.get("text") if item.get("type") == "text" else ""
             return text or item.get("text") or "", item

@@ -71,6 +71,9 @@ class HarnessAdapter(ABC):
     def parse_line(self, line: str, model: str) -> tuple[str, dict]:
         return line, {}
 
+    def parse_tool_result(self, tool_call_id: str, content: str) -> dict:
+        return {"tool_call_id": tool_call_id, "content": content}
+
     def parse_output(self, output: bytes, model: str) -> str:
         return output.decode(errors="replace").strip()
 
