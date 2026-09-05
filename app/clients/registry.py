@@ -27,6 +27,8 @@ MODEL_CACHE: dict[str, list[HarnessModel]] = {}
 
 
 async def refresh_models() -> None:
+    from datetime import datetime
+
     for adapter in all_adapters():
         if adapter.is_installed():
             try:
@@ -35,6 +37,27 @@ async def refresh_models() -> None:
                 MODEL_CACHE[adapter.name] = []
         else:
             MODEL_CACHE[adapter.name] = []
+    # persist Harness.last_checked_at and installed to DB (best-effort)
+    try:
+        from app.db.database import Harness, SessionLocal
+
+        async with SessionLocal() as session:
+            from sqlalchemy import select
+
+            for adapter in all_adapters():
+                installed = adapter.is_installed()
+                row = (await session.execute(select(Harness).where(Harness.name == adapter.name))).scalar_one_or_none()
+                if not row:
+                    row = Harness(name=adapter.name, display_name=adapter.display_name, executable=adapter.executable, provider=adapter.provider or "", installed=installed, last_checked_at=datetime.utcnow())
+                    session.add(row)
+                else:
+                    row.installed = installed
+                    row.last_checked_at = datetime.utcnow()
+                    row.display_name = adapter.display_name
+            await session.commit()
+    except Exception:
+        # lifespan may run before DB ready or during tests with in-memory DB (different engine)
+        pass
 
 
 def cached_models(adapter_name: str) -> list[HarnessModel]:

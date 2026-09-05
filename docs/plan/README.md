@@ -16,7 +16,7 @@
 | 02 | [phase-02-cancel-process-lifecycle.md](phase-02-cancel-process-lifecycle.md) | Cancel & Process Lifecycle | 3h | S1 | ✅ Done (127 tests) |
 | 03 | [phase-03-usage-pagination-archive.md](phase-03-usage-pagination-archive.md) | Usage History, Pagination & Archive | 3h | — | ✅ Done (141 tests) |
 | 04 | [phase-04-sse-completeness.md](phase-04-sse-completeness.md) | SSE Completeness (IDs, Heartbeats, Reconnect) | 3h | S2 | ✅ Done (148 tests) |
-| 05 | [phase-05-harness-lifecycle-health.md](phase-05-harness-lifecycle-health.md) | Harness Lifecycle & Health | 3h | S1 | ⬜ |
+| 05 | [phase-05-harness-lifecycle-health.md](phase-05-harness-lifecycle-health.md) | Harness Lifecycle & Health | 3h | S1 | ✅ Done (160 tests) |
 | 06 | [phase-06-credential-profiles.md](phase-06-credential-profiles.md) | Credential Profiles (wire `encrypt_secret`) | 3h | S5 | ⬜ |
 | 07 | [phase-07-tool-calling-structured-output.md](phase-07-tool-calling-structured-output.md) | Tool Calling & Structured Output | 4h | S4 | ⬜ |
 | 08 | [phase-08-polish-observability.md](phase-08-polish-observability.md) | Polish: Key Rotation, Errors, Observability | 3h | S1–S7 | ⬜ |
@@ -34,7 +34,7 @@ Copy this to your PR description and check as you merge:
 - [x] S2 Cancel & Lifecycle (`phase-02`)
 - [x] S3 Usage/Pagination/Archive (`phase-03`)
 - [x] S4 SSE Completeness (`phase-04`)
-- [ ] S5 Harness Lifecycle & Health (`phase-05`)
+- [x] S5 Harness Lifecycle & Health (`phase-05`)
 - [ ] S6 Credential Profiles (`phase-06`)
 - [ ] S7 Tool Calling (`phase-07`)
 - [ ] S8 Polish (`phase-08`)
@@ -77,4 +77,4 @@ Each phase file's `## 7. Verification & Exit` lists its specific `curl` checks (
 
 ---
 
-*S4 done. Next: `phase-05-harness-lifecycle-health.md:4.1`.*
+*S5 done. Next: `phase-06-credential-profiles.md:4.1`.*

@@ -251,7 +251,7 @@ This plan is designed to be resumed across sessions. Each session is self-contai
 - [x] S2 Cancel & Lifecycle — done (127 tests green, process_registry + cancel endpoints + auto-disconnect)
 - [x] S3 Usage/Pagination/Archive — done (141 tests green, usage + pagination/search + archive/soft-delete)
 - [x] S4 SSE Completeness — done (148 tests green, sse envelope + heartbeat + reconnect + lifecycle)
-- [ ] S5 Harness Lifecycle & Health
+- [x] S5 Harness Lifecycle & Health — done (160 tests green, job manager + install/health + refresh)
 - [ ] S6 Credential Profiles
 - [ ] S7 Tool Calling
 - [ ] S8 Polish
@@ -292,4 +292,4 @@ New tests live in `tests/{unit,integration,e2e,security,performance,contract}/` 
 
 ---
 
-*Last updated: after S4 (feat/s4-sse) — 148 tests green (96 + 52 S1-S4). Excludes file/image upload per request. Next: S5 Harness Lifecycle & Health.*
+*Last updated: after S5 (feat/s5-harness) — 160 tests green (96 + 64 S1-S5). Excludes file/image upload per request. Next: S6 Credential Profiles.*

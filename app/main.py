@@ -1,12 +1,11 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
-from fastapi import Request
 from app.core.config import settings
-from app.db.database import init_db
+from app.db.database import get_db, init_db
 from app.api.openai import router as openai_router
 from app.api.auth import router as auth_router
 from app.api.admin import router as admin_router
@@ -65,5 +64,25 @@ async def documentation_page(request: Request):
     return await render_page(request, "documentation")
 
 @app.get("/health")
-async def health():
-    return {"status": "ok", "service": settings.app_name, "version": settings.version}
+async def health(db = Depends(get_db)):
+    # fast health: check gateway + per-harness installed flag without calling list_models
+    from sqlalchemy import select
+    from app.db.database import Harness
+    from app.harnesses.registry import all_adapters
+
+    try:
+        rows = {h.name: h for h in (await db.execute(select(Harness))).scalars().all()}
+    except Exception:
+        rows = {}
+    harnesses = []
+    for adapter in all_adapters():
+        installed = adapter.is_installed()
+        row = rows.get(adapter.name)
+        harnesses.append(
+            {
+                "name": adapter.name,
+                "installed": installed,
+                "last_checked_at": row.last_checked_at.isoformat() if row and row.last_checked_at else None,
+            }
+        )
+    return {"status": "ok", "service": settings.app_name, "version": settings.version, "harnesses": harnesses}
