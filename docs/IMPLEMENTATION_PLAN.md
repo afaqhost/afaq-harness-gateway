@@ -254,7 +254,7 @@ This plan is designed to be resumed across sessions. Each session is self-contai
 - [x] S5 Harness Lifecycle & Health — done (160 tests green, job manager + install/health + refresh)
 - [x] S6 Credential Profiles — done (173 tests green, encrypt wiring + env injection + harvest)
 - [x] S7 Tool Calling & Structured Output — done (189 tests green, tool parsing + SSE tool events + json_schema)
-- [ ] S8 Polish
+- [x] S8 Polish: Key Rotation, Errors, Observability — done (204 tests green, rotate + unified errors + request_id + metrics)
 
 ---
 
@@ -292,4 +292,4 @@ New tests live in `tests/{unit,integration,e2e,security,performance,contract}/` 
 
 ---
 
-*Last updated: after S7 (feat/s7-tools) — 189 tests green (96 + 93 S1-S7). Excludes file/image upload per request. Next: S8 Polish.*
+*Last updated: after S8 (feat/s8-polish) — 204 tests green (96 + 108 S1-S8). All phases done. Excludes file/image upload per request.*

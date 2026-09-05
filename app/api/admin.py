@@ -205,6 +205,20 @@ async def update_key(key_id: int, user: User = Depends(current_user), db: AsyncS
     await db.commit()
     return {"id": key.id, "is_active": key.is_active}
 
+@router.post("/keys/{key_id}/rotate")
+async def rotate_key(key_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    key = (await db.execute(select(APIKey).where(APIKey.id == key_id, APIKey.user_id == user.id))).scalar_one_or_none()
+    if not key:
+        raise HTTPException(404, detail={"error": {"code": "not_found", "message": "API key not found"}})
+    raw, prefix, digest = generate_api_key()
+    key.key_prefix = prefix
+    key.key_hash = digest
+    key.last_used_at = None
+    await db.commit()
+    await db.refresh(key)
+    return {"id": key.id, "key": raw, "prefix": prefix, "warning": "Old key revoked. Store new one securely."}
+
+
 @router.delete("/keys/{key_id}", status_code=204)
 async def delete_key(key_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     key = (await db.execute(select(APIKey).where(APIKey.id == key_id, APIKey.user_id == user.id))).scalar_one_or_none()

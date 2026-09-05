@@ -19,7 +19,7 @@
 | 05 | [phase-05-harness-lifecycle-health.md](phase-05-harness-lifecycle-health.md) | Harness Lifecycle & Health | 3h | S1 | ✅ Done (160 tests) |
 | 06 | [phase-06-credential-profiles.md](phase-06-credential-profiles.md) | Credential Profiles (wire `encrypt_secret`) | 3h | S5 | ✅ Done (173 tests) |
 | 07 | [phase-07-tool-calling-structured-output.md](phase-07-tool-calling-structured-output.md) | Tool Calling & Structured Output | 4h | S4 | ✅ Done (189 tests) |
-| 08 | [phase-08-polish-observability.md](phase-08-polish-observability.md) | Polish: Key Rotation, Errors, Observability | 3h | S1–S7 | ⬜ |
+| 08 | [phase-08-polish-observability.md](phase-08-polish-observability.md) | Polish: Key Rotation, Errors, Observability | 3h | S1–S7 | ✅ Done (204 tests) |
 
 **Combined:** See `../IMPLEMENTATION_PLAN.md` for the original 8-session table and resumption principles (`## 0. Principles & How to Resume`).
 
@@ -37,7 +37,7 @@ Copy this to your PR description and check as you merge:
 - [x] S5 Harness Lifecycle & Health (`phase-05`)
 - [x] S6 Credential Profiles (`phase-06`)
 - [x] S7 Tool Calling (`phase-07`)
-- [ ] S8 Polish (`phase-08`)
+- [x] S8 Polish (`phase-08`)
 ```
 
 ---
@@ -77,4 +77,4 @@ Each phase file's `## 7. Verification & Exit` lists its specific `curl` checks (
 
 ---
 
-*S7 done. Next: `phase-08-polish-observability.md:4.1`.*
+*All 8 phases done — 204 tests green. Excludes image upload per request.*

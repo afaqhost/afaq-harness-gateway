@@ -16,6 +16,11 @@ from app.core.security import hash_api_key
 from app.db.database import APIKey, UsageRecord, User, get_db
 from app.harnesses.registry import all_adapters, cached_models, get_adapter
 from app.services import credential_service, quota_service
+try:
+    from app.api.metrics import HARNESS_CALLS, HARNESS_LATENCY
+except ImportError:
+    HARNESS_CALLS = None
+    HARNESS_LATENCY = None
 from app.services.model_service import is_model_allowed, validate_model_or_400
 from app.shared.model_utils import parse_model_identifier as split_model
 from app.shared.prompt_utils import build_harness_prompt, build_history_prompt
@@ -313,6 +318,13 @@ async def _stream_response(
                 "harness": harness_name,
                 "model": request_model,
             }
+            if HARNESS_CALLS:
+                try:
+                    HARNESS_CALLS.labels(harness=harness_name, model=request_model).inc()
+                    if HARNESS_LATENCY:
+                        HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
+                except Exception:
+                    pass
             yield _store("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
             seq += 1
 
@@ -369,6 +381,13 @@ async def _non_stream_response(adapter, prompt: str, model: str, request_model: 
     fmt = request_payload.response_format if request_payload else None
     try:
         result = await adapter.run(prompt, model, request_id=completion_id, env=env)
+        if HARNESS_CALLS:
+            try:
+                HARNESS_CALLS.labels(harness=harness_name, model=request_model).inc()
+                if HARNESS_LATENCY:
+                    HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
+            except Exception:
+                pass
         # structured output validation with one retry
         if fmt is not None:
             from app.shared.structured_output import validate_json_response

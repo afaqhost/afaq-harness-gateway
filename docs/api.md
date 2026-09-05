@@ -44,15 +44,55 @@ The endpoint returns `text/event-stream` chunks and ends with `data: [DONE]` on 
 
 ## Error Responses
 
-- `401`: missing, invalid, inactive, or unrecognized Bearer credential.
-- `400`: unknown harness in the model identifier.
-- `502`: the selected harness process failed.
-
-Errors use FastAPI's JSON shape, for example:
+All errors use unified shape:
 
 ```json
-{"detail":"Authentication required. Please sign in or provide a valid API key."}
+{"error":{"code":"validation_error","message":"...","type":"validation_error","retryable":false}}
 ```
+
+Codes:
+
+| Code | Status | Description |
+| --- | --- | --- |
+| `auth_error` | 401 | missing, invalid, inactive, or unrecognized Bearer credential |
+| `validation_error` | 400 | unknown harness, invalid tool_choice/response_format |
+| `model_forbidden` | 403 | model not allowed for API key (`allowed_models`) |
+| `not_found` | 404 | harness, job, conversation, credential not found |
+| `conflict` | 409 | duplicate credential profile |
+| `rate_limited` | 429 | global or quota limit exceeded (`Retry-After` header) |
+| `quota_exceeded` | 429 | daily/monthly quota exceeded |
+| `harness_error` | 502/504 | harness process failed or timed out |
+| `malformed_output` | 502 | `response_format` JSON validation failed |
+
+Example:
+
+```json
+{"error":{"code":"auth_error","message":"Authentication required","type":"auth_error","retryable":false}}
+```
+
+## Request IDs
+
+Every response includes `X-Request-ID` (echoes incoming or generated `uuid4` 12 hex). Logs include it as `request_id` in JSON (`app/middleware/logging.py`).
+
+## Metrics
+
+`GET /metrics` returns Prometheus text (`prometheus_client` required, else `501`). Counters: `afaq_requests_total`, `afaq_harness_calls_total`, `afaq_harness_latency_ms`.
+
+## Tool Calling
+
+`POST /v1/chat/completions` accepts OpenAI-compatible `tools` and `tool_choice` (`auto|none|required` or `{"type":"function","function":{"name":...}}`). When harness emits `tool_call` via `parse_line`, SSE yields `event: tool_call` then `event: tool_result` (`requires_action`). Non-stream returns `tool_calls` in `choices[0].message`.
+
+## Structured Output
+
+`response_format: {"type":"json_object"}` or `{"type":"json_schema","json_schema":{...}}` — validated via `app/shared/structured_output.py` (one retry) else `502 malformed_output`.
+
+## Key Rotation
+
+`POST /api/admin/keys/{id}/rotate` returns new `key` (old revoked immediately).
+
+## SSE Events
+
+`event: start` (with `id`, `model`), `event: token` (`id`, `retry:3000`), `event: usage`, `event: done` (`[DONE]`), `event: error`, `event: cancel`, `event: log`/`done` for harness jobs, `: keepalive` every 15s, `Last-Event-ID` replay.
 
 ## Dashboard Authentication Endpoints
 

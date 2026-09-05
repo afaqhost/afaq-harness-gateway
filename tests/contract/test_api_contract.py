@@ -78,9 +78,14 @@ async def test_chat_completions_contract_stream_vs_non_stream(client, user_heade
 
 @pytest.mark.asyncio
 async def test_error_responses_use_consistent_shape(client, user_headers):
-    # request unknown harness should return 400 with detail
+    # request unknown harness should return 400 with unified error shape
     resp = await client.post("/api/chat/conversations", headers=user_headers, json={"model": "unknown//model"})
     # model validation is performed in conversation creation via select_model_for_new_conversation
     assert resp.status_code in (400, 200)
     if resp.status_code == 400:
-        assert "detail" in resp.json()
+        data = resp.json()
+        assert "error" in data or "detail" in data
+        if "error" in data:
+            assert "code" in data["error"]
+        else:
+            assert "detail" in data

@@ -20,6 +20,8 @@ Configuration is loaded from `.env` through `pydantic-settings`. Start from `.en
 | `MODEL_REFRESH_SECONDS` | `300` | Reserved setting; refresh is currently startup/button driven |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Global per-bucket rate limit (requests/minute) |
 | `RATE_LIMIT_ENABLED` | `true` | Set `false` to disable rate limiting (e.g., for load tests) |
+| `SSE_HEARTBEAT_SECONDS` | `15` | SSE keepalive interval (seconds) |
+| `SSE_RETRY_MS` | `3000` | SSE `retry:` field (milliseconds) |
 
 ## Secret Generation
 

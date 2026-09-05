@@ -26,6 +26,11 @@ from app.services.model_service import (
     select_model_for_new_conversation,
     validate_model_or_400,
 )
+try:
+    from app.api.metrics import HARNESS_CALLS, HARNESS_LATENCY
+except ImportError:
+    HARNESS_CALLS = None
+    HARNESS_LATENCY = None
 from app.shared.model_utils import preview_text as _preview
 from app.shared.prompt_utils import build_harness_prompt, build_history_prompt
 
@@ -286,6 +291,14 @@ async def send_message(
     started = time.monotonic()
     try:
         result_h = await adapter.run(prompt, model_name, request_id=request_id, env=env)
+        # metrics
+        if HARNESS_CALLS:
+            try:
+                HARNESS_CALLS.labels(harness=harness_name, model=model).inc()
+                if HARNESS_LATENCY:
+                    HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
+            except Exception:
+                pass
     except HTTPException:
         raise
     except RuntimeError as exc:
@@ -478,6 +491,14 @@ async def stream_message(
                 "harness": harness_name,
                 "model": model,
             }
+            # metrics
+            if HARNESS_CALLS:
+                try:
+                    HARNESS_CALLS.labels(harness=harness_name, model=model).inc()
+                    if HARNESS_LATENCY:
+                        HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
+                except Exception:
+                    pass
             yield _store_and_yield("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
             seq += 1
 
