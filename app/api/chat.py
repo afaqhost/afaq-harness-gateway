@@ -58,6 +58,29 @@ def split_model(model: str):
         return parts[0], parts[1]
     return parts[0], "default"
 
+def _validate_model_or_400(full_model: str) -> tuple[str, str]:
+    """Validate that harness exists and model is known. Raises HTTPException 400 if invalid."""
+    harness_name, model_name = split_model(full_model)
+    # Unknown harness
+    try:
+        get_adapter(harness_name)
+    except KeyError:
+        raise HTTPException(400, f"Unknown harness: {harness_name}. المتاح: {', '.join(a.name for a in all_adapters())}")
+    # Temporarily mark codex as unavailable due to transport errors (502)
+    if harness_name == "codex":
+        raise HTTPException(400, f"الموديل '{full_model}' من harness 'codex' غير متاح حالياً (خطأ transport). جرب opencode//opencode/big-pickle أو commandcode//deepseek/deepseek-v4-flash")
+    # If we have cached models for this harness, check that full id is known
+    # This prevents hanging on non-existent ollama models like ollama/qwen2.5-coder:7b
+    cached = cached_models(harness_name)
+    if cached:
+        ids = {m.id for m in cached}
+        # also allow short form without harness prefix inside model_name?
+        if full_model not in ids:
+            # Provide top 5 suggestions
+            sample = ", ".join(m.id for m in cached[:5])
+            raise HTTPException(400, f"الموديل '{full_model}' غير متوفر للـ harness '{harness_name}'. جرب أحد هذه: {sample} ... (أعد تحميل الموديلات من /v1/models)")
+    return harness_name, model_name
+
 def _preview(text: str, n: int = 80) -> str:
     t = text.strip().replace("\n", " ")
     return t[:n] + ("…" if len(t) > n else "")
@@ -101,12 +124,33 @@ async def list_conversations(user: User = Depends(current_user), db: AsyncSessio
 @router.post("/conversations", response_model=ConversationOut)
 async def create_conversation(data: ConversationCreate, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     model = data.model
+    if model:
+        # Validate explicitly provided model (fail fast for broken codex)
+        _validate_model_or_400(model)
     if not model:
-        for adapter in all_adapters():
-            models = cached_models(adapter.name)
-            if models:
-                model = models[0].id
+        # Prefer known working models: opencode/big-pickle first
+        preferred = ["opencode//opencode/big-pickle", "opencode//opencode/claude-sonnet-4", "commandcode//deepseek/deepseek-v4-flash"]
+        for pref in preferred:
+            h, _ = split_model(pref)
+            if any(m.id == pref for m in cached_models(h)):
+                model = pref
                 break
+        if not model:
+            for adapter in all_adapters():
+                # Skip broken codex by default unless explicitly requested
+                if adapter.name == "codex":
+                    continue
+                models = cached_models(adapter.name)
+                if models:
+                    model = models[0].id
+                    break
+        # Finally allow codex if nothing else
+        if not model:
+            for adapter in all_adapters():
+                models = cached_models(adapter.name)
+                if models:
+                    model = models[0].id
+                    break
         if not model:
             model = "opencode//opencode/big-pickle"
     title = data.title or "New chat"
@@ -157,11 +201,26 @@ async def send_message(conv_id: int, data: MessageCreate, user: User = Depends(c
     if not model or "/" not in model:
         model = conv.model
         if not model or "/" not in model:
-            for ad in all_adapters():
-                ms = cached_models(ad.name)
-                if ms:
-                    model = ms[0].id
+            preferred = ["opencode//opencode/big-pickle", "opencode//opencode/claude-sonnet-4", "commandcode//deepseek/deepseek-v4-flash"]
+            for pref in preferred:
+                h, _ = split_model(pref)
+                if any(m.id == pref for m in cached_models(h)):
+                    model = pref
                     break
+            if not model:
+                for ad in all_adapters():
+                    if ad.name == "codex":
+                        continue
+                    ms = cached_models(ad.name)
+                    if ms:
+                        model = ms[0].id
+                        break
+            if not model:
+                for ad in all_adapters():
+                    ms = cached_models(ad.name)
+                    if ms:
+                        model = ms[0].id
+                        break
             if not model:
                 model = "opencode//opencode/big-pickle"
     if model != conv.model:
@@ -178,13 +237,14 @@ async def send_message(conv_id: int, data: MessageCreate, user: User = Depends(c
 
     result = await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))
     history = result.scalars().all()
-    prompt = "\n".join(f"{m.role}: {m.content}" for m in history)
+    history_prompt = "\n".join(f"{m.role}: {m.content}" for m in history)
+    # Prepend default system prompt so AI always returns text with file names + code blocks
+    from app.core.config import settings as _settings
+    system_prompt = _settings.default_system_prompt
+    prompt = f"SYSTEM: {system_prompt}\n\n{history_prompt}" if system_prompt else history_prompt
 
-    harness_name, model_name = split_model(model)
-    try:
-        adapter = get_adapter(harness_name)
-    except KeyError:
-        raise HTTPException(400, f"Unknown harness: {harness_name}")
+    harness_name, model_name = _validate_model_or_400(model)
+    adapter = get_adapter(harness_name)
 
     if data.stream:
         pass
@@ -192,13 +252,18 @@ async def send_message(conv_id: int, data: MessageCreate, user: User = Depends(c
     started = time.monotonic()
     try:
         result_h = await adapter.run(prompt, model_name)
+    except HTTPException:
+        raise
     except Exception as exc:
-        err_text = f"⚠️ Harness error: {str(exc)}"
+        msg = str(exc)
+        # Timeout → 504, otherwise 502
+        status = 504 if "timed out" in msg.lower() or "timeout" in msg.lower() else 502
+        err_text = f"⚠️ Harness error: {msg}"
         err_msg = Message(conversation_id=conv.id, role="assistant", content=err_text)
         db.add(err_msg)
         conv.updated_at = datetime.utcnow()
         await db.commit()
-        raise HTTPException(502, str(exc))
+        raise HTTPException(status, msg)
 
     assistant_msg = Message(conversation_id=conv.id, role="assistant", content=result_h.text or "(no response)")
     db.add(assistant_msg)
@@ -246,13 +311,31 @@ async def stream_message(conv_id: int, data: MessageCreate, user: User = Depends
     if not model or "/" not in model:
         model = conv.model
         if not model or "/" not in model:
-            for ad in all_adapters():
-                ms = cached_models(ad.name)
-                if ms:
-                    model = ms[0].id
+            preferred = ["opencode//opencode/big-pickle", "opencode//opencode/claude-sonnet-4", "commandcode//deepseek/deepseek-v4-flash"]
+            for pref in preferred:
+                h, _ = split_model(pref)
+                if any(m.id == pref for m in cached_models(h)):
+                    model = pref
                     break
             if not model:
+                for ad in all_adapters():
+                    if ad.name == "codex":
+                        continue
+                    ms = cached_models(ad.name)
+                    if ms:
+                        model = ms[0].id
+                        break
+            if not model:
+                for ad in all_adapters():
+                    ms = cached_models(ad.name)
+                    if ms:
+                        model = ms[0].id
+                        break
+            if not model:
                 model = "opencode//opencode/big-pickle"
+    # Validate model before persisting user message — fail fast with 400 for unknown models
+    harness_name, model_name = _validate_model_or_400(model)
+    adapter = get_adapter(harness_name)
     if model != conv.model:
         conv.model = model
     is_first = (await db.execute(select(Message).where(Message.conversation_id == conv.id).limit(1))).scalar_one_or_none() is None
@@ -266,17 +349,16 @@ async def stream_message(conv_id: int, data: MessageCreate, user: User = Depends
 
     result = await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))
     history = result.scalars().all()
-    prompt = "\n".join(f"{m.role}: {m.content}" for m in history)
-    harness_name, model_name = split_model(model)
-    try:
-        adapter = get_adapter(harness_name)
-    except KeyError:
-        raise HTTPException(400, f"Unknown harness: {harness_name}")
+    history_prompt = "\n".join(f"{m.role}: {m.content}" for m in history)
+    from app.core.config import settings as _settings2
+    system_prompt2 = _settings2.default_system_prompt
+    prompt = f"SYSTEM: {system_prompt2}\n\n{history_prompt}" if system_prompt2 else history_prompt
 
     async def event_stream():
         from app.db.database import SessionLocal
         collected = []
         started = time.monotonic()
+        has_error = False
         try:
             async for text, metadata in adapter.stream(prompt, model_name):
                 if not text:
@@ -290,6 +372,9 @@ async def stream_message(conv_id: int, data: MessageCreate, user: User = Depends
                     "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
                 }
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+            # If stream finished without delta, treat as error rather than "(no response)"
+            if not collected:
+                raise RuntimeError("Harness returned empty response — لا يوجد رد من الموديل. جرب موديل آخر مثل opencode/big-pickle")
             final = {
                 "id": conv.id,
                 "object": "chat.completion.chunk",
@@ -299,7 +384,7 @@ async def stream_message(conv_id: int, data: MessageCreate, user: User = Depends
             }
             yield f"data: {json.dumps(final)}\n\ndata: [DONE]\n\n"
             async with SessionLocal() as session:
-                full_text = "".join(collected) if collected else "(no response)"
+                full_text = "".join(collected)
                 msg = Message(conversation_id=conv.id, role="assistant", content=full_text)
                 session.add(msg)
                 conv2 = await session.get(Conversation, conv.id)
@@ -319,7 +404,28 @@ async def stream_message(conv_id: int, data: MessageCreate, user: User = Depends
                 )
                 await session.commit()
         except Exception as exc:
+            has_error = True
+            # Persist error as assistant message so user sees it after reload
+            try:
+                async with SessionLocal() as session:
+                    err_text = f"⚠️ {str(exc)}"
+                    msg = Message(conversation_id=conv.id, role="assistant", content=err_text)
+                    session.add(msg)
+                    conv2 = await session.get(Conversation, conv.id)
+                    if conv2:
+                        conv2.updated_at = datetime.utcnow()
+                    await session.commit()
+            except Exception:
+                pass
             err = {"error": {"message": str(exc), "type": "harness_error"}}
-            yield f"data: {json.dumps(err)}\n\n"
+            yield f"data: {json.dumps(err, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

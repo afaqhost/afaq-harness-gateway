@@ -19,6 +19,21 @@ class Settings(BaseSettings):
     uploads_dir: Path = BASE_DIR / "storage" / "uploads"
     allowed_origins: str = "*"
     model_refresh_seconds: int = 300
+    default_system_prompt: str = (
+        "أنت مساعد ذكاء اصطناعي محترف. عندما يطلب منك كتابة برنامج أو كود (بايثون، جافاسكريبت، أو أي لغة)، "
+        "قم دائماً بإرجاع الرد كنص فقط — لا تنشئ ملفات فعلية ولا تنفذ أوامر نظام. "
+        "قسّم الكود حسب الملفات/الصفحات واذكر اسم كل ملف بوضوح ثم كتلة الكود الخاصة به، تماماً كما يفعل أي مزود API حقيقي. "
+        "مثال للتنسيق المطلوب:\n"
+        "الملف: main.py\n"
+        "```python\n"
+        "# كود هنا\n"
+        "```\n"
+        "الملف: utils.py\n"
+        "```python\n"
+        "# كود هنا\n"
+        "```\n"
+        "حافظ على الشرح مختصراً والكود كاملاً وقابلاً للنسخ."
+    )
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 @lru_cache

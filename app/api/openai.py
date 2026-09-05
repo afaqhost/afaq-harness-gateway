@@ -84,7 +84,13 @@ async def chat_completions(req: ChatRequest, authorization: str | None = Header(
     harness_name, model = split_model(req.model)
     try: adapter = get_adapter(harness_name)
     except KeyError: raise HTTPException(400, f"Unknown harness: {harness_name}")
-    prompt = "\n".join(f"{m.role}: {m.content}" for m in req.messages)
+    # Extract system messages if provided, otherwise use default system prompt
+    system_parts = [m.content for m in req.messages if m.role == "system"]
+    system_prompt = "\n".join(system_parts) if system_parts else settings.default_system_prompt
+    # Build prompt with system on top, then other messages
+    other = [m for m in req.messages if m.role != "system"]
+    history_prompt = "\n".join(f"{m.role}: {m.content}" for m in other)
+    prompt = f"SYSTEM: {system_prompt}\n\n{history_prompt}" if system_prompt else history_prompt
     completion_id = make_id()
     if req.stream:
         async def event_stream():

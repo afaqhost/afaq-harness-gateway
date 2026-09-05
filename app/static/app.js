@@ -7,14 +7,26 @@ let isStreaming = false;
 
 const translations = {
   ar: {
-    newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', addUser: 'إضافة مستخدم', displayName: 'الاسم', docsTitle: 'ابدأ خلال دقائق', docsIntro: 'استخدم Afaq Gateway كواجهة متوافقة مع OpenAI للوصول إلى أدوات الذكاء الاصطناعي من أي تطبيق.', docsAuthTitle: 'المصادقة', docsAuthText: 'أنشئ API Key وأرسله في ترويسة Bearer مع كل طلب شات.', docsModelsTitle: 'الموديلات', docsModelsText: 'استخدم GET /v1/models لمعرفة الموديلات المتاحة.', docsResponseTitle: 'الاستجابة', docsResponseText: 'النص النهائي موجود في choices[0].message.content.', docsModelsHeading: 'جلب الموديلات', docsModelsBody: 'يعيد هذا المسار الموديلات المكتشفة من الهارنسس المثبتة.', docsChatHeading: 'إرسال رسالة', docsChatBody: 'استبدل API Key والموديل بقيم موجودة في حسابك.', docsStreamHeading: 'البث المباشر', docsStreamText: 'فعّل stream للحصول على أجزاء SSE تدريجيًا، وتنتهي الاستجابة الناجحة بـ data: [DONE].', docsErrorsTitle: 'أخطاء شائعة', docsErrorsText: '401 يعني أن المصادقة فشلت (مفتاح غير صالح أو جلسة منتهية)، و400 يعني أن اسم الهارنس غير معروف، و502 يعني أن أداة CLI فشلت.', keyName: 'اسم المفتاح', create: 'إنشاء', keyWarning: 'احفظ هذا المفتاح الآن، لن يظهر كاملًا مرة أخرى.', copy: 'نسخ', copied: 'تم نسخ المفتاح', active: 'فعال', disabled: 'معطل', enable: 'تفعيل', disable: 'تعطيل', delete: 'حذف', noKeys: 'لا توجد مفاتيح حتى الآن', deleteConfirm: 'هل تريد حذف هذا المفتاح نهائيًا؟', keyError: 'تعذر إنشاء المفتاح', toggleError: 'تعذر تغيير حالة المفتاح', deleteError: 'تعذر حذف المفتاح', refreshError: 'تعذر تحديث الموديلات', sessionExpired: 'انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى', authRequired: 'المصادقة مطلوبة. يرجى تسجيل الدخول مرة أخرى.', chatError: 'تعذر إرسال الرسالة', history: 'السجل', noChats: 'لا توجد محادثات بعد', deleteChatConfirm: 'حذف هذه المحادثة؟', rename: 'إعادة تسمية', renamePrompt: 'عنوان جديد:', typing: 'يكتب...', copyMsg: 'نسخ', copiedMsg: 'تم النسخ', retry: 'إعادة', you: 'أنت', assistant: 'المساعد', newChatTitle: 'محادثة جديدة', messages: 'رسائل', clear: 'مسح'
+    newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', addUser: 'إضافة مستخدم', displayName: 'الاسم', docsTitle: 'ابدأ خلال دقائق', docsIntro: 'استخدم Afaq Gateway كواجهة متوافقة مع OpenAI للوصول إلى أدوات الذكاء الاصطناعي من أي تطبيق.', docsAuthTitle: 'المصادقة', docsAuthText: 'أنشئ API Key وأرسله في ترويسة Bearer مع كل طلب شات.', docsModelsTitle: 'الموديلات', docsModelsText: 'استخدم GET /v1/models لمعرفة الموديلات المتاحة.', docsResponseTitle: 'الاستجابة', docsResponseText: 'النص النهائي موجود في choices[0].message.content.', docsModelsHeading: 'جلب الموديلات', docsModelsBody: 'يعيد هذا المسار الموديلات المكتشفة من الهارنسس المثبتة.', docsChatHeading: 'إرسال رسالة', docsChatBody: 'استبدل API Key والموديل بقيم موجودة في حسابك.', docsStreamHeading: 'البث المباشر', docsStreamText: 'فعّل stream للحصول على أجزاء SSE تدريجيًا، وتنتهي الاستجابة الناجحة بـ data: [DONE].', docsErrorsTitle: 'أخطاء شائعة', docsErrorsText: '401 يعني أن المصادقة فشلت (مفتاح غير صالح أو جلسة منتهية)، و400 يعني أن اسم الهارنس غير معروف، و502 يعني أن أداة CLI فشلت.', keyName: 'اسم المفتاح', create: 'إنشاء', keyWarning: 'احفظ هذا المفتاح الآن، لن يظهر كاملًا مرة أخرى.', copy: 'نسخ', copied: 'تم نسخ المفتاح', active: 'فعال', disabled: 'معطل', enable: 'تفعيل', disable: 'تعطيل', delete: 'حذف', noKeys: 'لا توجد مفاتيح حتى الآن', deleteConfirm: 'هل تريد حذف هذا المفتاح نهائيًا؟', keyError: 'تعذر إنشاء المفتاح', toggleError: 'تعذر تغيير حالة المفتاح', deleteError: 'تعذر حذف المفتاح', refreshError: 'تعذر تحديث الموديلات', sessionExpired: 'انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى', authRequired: 'المصادقة مطلوبة. يرجى تسجيل الدخول مرة أخرى.', chatError: 'تعذر إرسال الرسالة', history: 'السجل', noChats: 'لا توجد محادثات بعد', deleteChatConfirm: 'حذف هذه المحادثة؟', rename: 'إعادة تسمية', renamePrompt: 'عنوان جديد:', typing: 'يكتب...', copyMsg: 'نسخ', copiedMsg: 'تم النسخ', retry: 'إعادة', you: 'أنت', assistant: 'المساعد', newChatTitle: 'محادثة جديدة', messages: 'رسائل', clear: 'مسح',
+    searchModels: 'ابحث عن موديل... (claude, gpt, gemini)', filterAll: 'الكل', modelFooterHint: '↑↓ للتنقل · Enter للاختيار · Esc للإغلاق', noModelsFound: 'لا توجد نتائج'
   },
   en: {
-    newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', addUser: 'Add user', displayName: 'Name', docsTitle: 'Get started in minutes', docsIntro: 'Use Afaq Gateway as an OpenAI-compatible interface for AI tools from any application.', docsAuthTitle: 'Authentication', docsAuthText: 'Create an API key and send it as a Bearer header with every chat request.', docsModelsTitle: 'Models', docsModelsText: 'Use GET /v1/models to see the available models.', docsResponseTitle: 'Response', docsResponseText: 'The final text is at choices[0].message.content.', docsModelsHeading: 'List models', docsModelsBody: 'This route returns models discovered from installed harnesses.', docsChatHeading: 'Send a message', docsChatBody: 'Replace the API key and model with values from your account.', docsStreamHeading: 'Streaming', docsStreamText: 'Set stream to true for incremental SSE chunks. Successful streams end with data: [DONE].', docsErrorsTitle: 'Common errors', docsErrorsText: '401 means authentication failed (invalid key or expired session), 400 means the harness is unknown, and 502 means the CLI failed.', keyName: 'Key name', create: 'Create', keyWarning: 'Save this key now. It will not be shown in full again.', copy: 'Copy', copied: 'Key copied', active: 'Active', disabled: 'Disabled', enable: 'Enable', disable: 'Disable', delete: 'Delete', noKeys: 'No keys yet', deleteConfirm: 'Delete this key permanently?', keyError: 'Could not create the key', toggleError: 'Could not change key status', deleteError: 'Could not delete the key', refreshError: 'Could not refresh models', sessionExpired: 'Session expired, please sign in again', authRequired: 'Authentication required. Please sign in again.', chatError: 'Could not send message', history: 'History', noChats: 'No chats yet', deleteChatConfirm: 'Delete this conversation?', rename: 'Rename', renamePrompt: 'New title:', typing: 'typing...', copyMsg: 'Copy', copiedMsg: 'Copied', retry: 'Retry', you: 'You', assistant: 'Assistant', newChatTitle: 'New chat', messages: 'messages', clear: 'Clear'
+    newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', addUser: 'Add user', displayName: 'Name', docsTitle: 'Get started in minutes', docsIntro: 'Use Afaq Gateway as an OpenAI-compatible interface for AI tools from any application.', docsAuthTitle: 'Authentication', docsAuthText: 'Create an API key and send it as a Bearer header with every chat request.', docsModelsTitle: 'Models', docsModelsText: 'Use GET /v1/models to see the available models.', docsResponseTitle: 'Response', docsResponseText: 'The final text is at choices[0].message.content.', docsModelsHeading: 'List models', docsModelsBody: 'This route returns models discovered from installed harnesses.', docsChatHeading: 'Send a message', docsChatBody: 'Replace the API key and model with values from your account.', docsStreamHeading: 'Streaming', docsStreamText: 'Set stream to true for incremental SSE chunks. Successful streams end with data: [DONE].', docsErrorsTitle: 'Common errors', docsErrorsText: '401 means authentication failed (invalid key or expired session), 400 means the harness is unknown, and 502 means the CLI failed.', keyName: 'Key name', create: 'Create', keyWarning: 'Save this key now. It will not be shown in full again.', copy: 'Copy', copied: 'Key copied', active: 'Active', disabled: 'Disabled', enable: 'Enable', disable: 'Disable', delete: 'Delete', noKeys: 'No keys yet', deleteConfirm: 'Delete this key permanently?', keyError: 'Could not create the key', toggleError: 'Could not change key status', deleteError: 'Could not delete the key', refreshError: 'Could not refresh models', sessionExpired: 'Session expired, please sign in again', authRequired: 'Authentication required. Please sign in again.', chatError: 'Could not send message', history: 'History', noChats: 'No chats yet', deleteChatConfirm: 'Delete this conversation?', rename: 'Rename', renamePrompt: 'New title:', typing: 'typing...', copyMsg: 'Copy', copiedMsg: 'Copied', retry: 'Retry', you: 'You', assistant: 'Assistant', newChatTitle: 'New chat', messages: 'messages',     newChatTitle: 'New chat', messages: 'messages', clear: 'Clear',
+    searchModels: 'Search models... (claude, gpt, gemini)', filterAll: 'All', modelFooterHint: '↑↓ Navigate · Enter Select · Esc Close', noModelsFound: 'No results'
   }
 };
 
 const text = (k) => translations[language][k] || k;
+
+// Global error handler for debugging
+window.addEventListener('error', (e) => {
+  console.error('Global error:', e.message, e.filename, e.lineno);
+  try { showToast('خطأ: ' + e.message); } catch {}
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('Unhandled rejection:', e.reason);
+  try { showToast('خطأ: ' + (e.reason?.message || e.reason)); } catch {}
+});
 
 function applyLanguage() {
   document.documentElement.lang = language;
@@ -67,37 +79,217 @@ function show(page, updateUrl = true) {
 }
 
 // ---------- Models ----------
+let allModelsCache = [];
+let modelFilter = 'all';
+let modelSearchQuery = '';
+let focusedModelIndex = -1;
+
 async function loadModels() {
   try {
     const res = await api('/v1/models');
+    allModelsCache = res.data || [];
     const sel = $('#model-select');
     if (!res.data.length) {
       sel.innerHTML = `<option>${text('loading')}</option>`;
+      updateModelTrigger();
       return;
     }
     const prev = sel.value;
+    // keep hidden select for compatibility
     sel.innerHTML = res.data.map((m) => `<option value="${m.id}">${m.id}</option>`).join('');
-    // restore previous or conversation model
+    // Prefer known working model as default if nothing selected
+    const preferred = ["opencode//opencode/big-pickle", "opencode//opencode/claude-sonnet-4", "commandcode//deepseek/deepseek-v4-flash"];
+    let defaultModel = null;
+    for (const pref of preferred) {
+      if (res.data.some(m=>m.id===pref)) { defaultModel = pref; break; }
+    }
+    if (!defaultModel) {
+      // fallback to first non-codex model
+      const nonCodex = res.data.find(m=> !m.id.startsWith('codex//'));
+      defaultModel = nonCodex ? nonCodex.id : res.data[0].id;
+    }
     if (currentConversationId) {
       const conv = conversationsCache.find(c=>c.id===currentConversationId);
-      if (conv && res.data.some(m=>m.id===conv.model)) sel.value = conv.model;
-      else if (prev && res.data.some(m=>m.id===prev)) sel.value = prev;
-    } else if (prev && res.data.some(m=>m.id===prev)) sel.value = prev;
+      if (conv && conv.model) {
+        const exists = res.data.some(m=>m.id===conv.model);
+        if (!exists) {
+          const opt = document.createElement('option');
+          opt.value = conv.model;
+          opt.textContent = `⚠️ ${conv.model} (غير متوفر)`;
+          sel.prepend(opt);
+        }
+        sel.value = conv.model;
+        if (!exists) {
+          setTimeout(()=> showToast(language==='ar' ? `الموديل '${conv.model}' غير متوفر — اختر موديلاً من القائمة` : `Model '${conv.model}' unavailable — pick one`), 600);
+        }
+      } else if (prev && res.data.some(m=>m.id===prev)) {
+        sel.value = prev;
+      }
+    } else if (prev && res.data.some(m=>m.id===prev)) {
+      sel.value = prev;
+    }
+    // Ensure default is preferred for new chats if still empty or broken codex
+    if (!currentConversationId && (!sel.value || sel.value === text('loading') || sel.value.startsWith('codex//'))) {
+      if (defaultModel) sel.value = defaultModel;
+    }
     updateComposerModel();
+    updateModelTrigger();
+    renderModelList();
+    // bind hidden select change (for programmatic use)
     sel.onchange = () => {
       updateComposerModel();
-      // if conversation exists, update its model on change
+      updateModelTrigger();
       if (currentConversationId) {
         const conv = conversationsCache.find(c=>c.id===currentConversationId);
         if (conv && sel.value !== conv.model) {
-          api(`/api/chat/conversations/${currentConversationId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model: sel.value})}).then(()=>{ conv.model = sel.value; renderConversationList(); updateChatHeader(conv); }).catch(()=>{});
+          api(`/api/chat/conversations/${currentConversationId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model: sel.value})}).then(()=>{ conv.model = sel.value; renderConversationList(); updateChatHeader(conv); renderModelList(); }).catch(()=>{});
         }
       }
     };
   } catch {
     $('#model-select').innerHTML = `<option>${text('loading')}</option>`;
+    updateModelTrigger();
   }
 }
+
+function getFilteredModels() {
+  let list = allModelsCache;
+  const q = (modelSearchQuery || '').trim().toLowerCase();
+  if (modelFilter !== 'all') {
+    if (modelFilter === 'claude') {
+      list = list.filter(m => m.id.toLowerCase().includes('claude'));
+    } else {
+      list = list.filter(m => m.owned_by === modelFilter || m.id.toLowerCase().startsWith(modelFilter + '/') || m.id.toLowerCase().startsWith(modelFilter + '//'));
+    }
+  }
+  if (q) {
+    const terms = q.split(/\s+/);
+    list = list.filter(m => {
+      const hay = (m.id + ' ' + (m.owned_by||'')).toLowerCase();
+      return terms.every(t => hay.includes(t));
+    });
+  }
+  return list;
+}
+
+function highlightMatch(text, query) {
+  if (!query) return escapeHtml(text);
+  const terms = query.trim().split(/\s+/).filter(Boolean);
+  let out = escapeHtml(text);
+  for (const t of terms) {
+    const re = new RegExp('(' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig');
+    out = out.replace(re, '<mark>$1</mark>');
+  }
+  return out;
+}
+
+function updateModelTrigger() {
+  const sel = $('#model-select');
+  const txt = $('#model-trigger-text');
+  const cnt = $('#model-trigger-count');
+  if (!sel || !txt) return;
+  const val = sel.value;
+  if (!val || val === text('loading')) {
+    txt.textContent = text('loading');
+    if (cnt) cnt.textContent = allModelsCache.length ? allModelsCache.length + ' ' + text('models') : '';
+    return;
+  }
+  txt.textContent = val;
+  txt.title = val;
+  if (cnt) cnt.textContent = allModelsCache.length ? allModelsCache.length : '';
+}
+
+function renderModelList() {
+  const listEl = $('#model-list');
+  const countEl = $('#model-count');
+  if (!listEl) return;
+  const filtered = getFilteredModels();
+  const query = modelSearchQuery;
+  if (countEl) countEl.textContent = filtered.length + ' / ' + allModelsCache.length + ' ' + text('models');
+  if (!filtered.length) {
+    listEl.innerHTML = `<div class="model-empty"><strong>${text('noModelsFound')}</strong><br><small style="color:var(--text-faint)">جرب كلمة أخرى مثل gpt, claude, gemini</small></div>`;
+    focusedModelIndex = -1;
+    return;
+  }
+  // Group by owned_by
+  const groups = {};
+  for (const m of filtered.slice(0, 200)) {
+    const g = m.owned_by || 'other';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(m);
+  }
+  let html = '';
+  let idx = 0;
+  const selVal = $('#model-select')?.value;
+  for (const [group, models] of Object.entries(groups)) {
+    html += `<div class="model-group-label">${escapeHtml(group)} · ${models.length}</div>`;
+    for (const m of models) {
+      const isActive = m.id === selVal;
+      const isFocused = idx === focusedModelIndex;
+      const provider = m.id.split('//').pop().split('/')[0] || '';
+      const short = m.id.split('/').pop();
+      html += `<div class="model-option ${isActive?'active':''} ${isFocused?'focused':''}" data-model-id="${escapeHtml(m.id)}" data-index="${idx}" role="option" aria-selected="${isActive}" tabindex="-1">
+        <div class="model-option-main">
+          <div class="model-option-id">${highlightMatch(m.id, query)}</div>
+          <div class="model-option-sub">${escapeHtml(m.owned_by)}${provider && provider!==m.owned_by ? ' · ' + escapeHtml(provider) : ''}</div>
+        </div>
+        <span class="model-option-badge">${escapeHtml(short.slice(0,18))}</span>
+        <span class="model-option-check">${isActive?'✓':''}</span>
+      </div>`;
+      idx++;
+    }
+  }
+  if (filtered.length > 200) {
+    html += `<div class="model-empty"><small>... و ${filtered.length - 200} موديل آخر — استخدم البحث للتصفية</small></div>`;
+  }
+  listEl.innerHTML = html;
+  // bind clicks
+  listEl.querySelectorAll('.model-option').forEach(el => {
+    el.onclick = () => selectModel(el.dataset.modelId);
+  });
+  // ensure focused visible
+  const focused = listEl.querySelector('.model-option.focused');
+  if (focused) focused.scrollIntoView({block:'nearest'});
+}
+
+function openModelDropdown() {
+  const dd = $('#model-dropdown');
+  const trig = $('#model-trigger');
+  if (!dd || !trig) return;
+  dd.classList.remove('hidden');
+  trig.setAttribute('aria-expanded', 'true');
+  const inp = $('#model-search-input');
+  if (inp) { inp.focus(); inp.select(); }
+  focusedModelIndex = -1;
+  renderModelList();
+}
+
+function closeModelDropdown() {
+  const dd = $('#model-dropdown');
+  const trig = $('#model-trigger');
+  if (!dd) return;
+  dd.classList.add('hidden');
+  if (trig) trig.setAttribute('aria-expanded','false');
+  focusedModelIndex = -1;
+}
+
+function selectModel(id) {
+  const sel = $('#model-select');
+  if (!sel) return;
+  sel.value = id;
+  sel.dispatchEvent(new Event('change', {bubbles:true}));
+  updateModelTrigger();
+  renderModelList();
+  closeModelDropdown();
+  // PATCH conversation if needed (already handled in sel.onchange, but ensure)
+  if (currentConversationId) {
+    const conv = conversationsCache.find(c=>c.id===currentConversationId);
+    if (conv && id !== conv.model) {
+      api(`/api/chat/conversations/${currentConversationId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model: id})}).then(()=>{ conv.model = id; renderConversationList(); updateChatHeader(conv); }).catch(()=>{});
+    }
+  }
+}
+
 function updateComposerModel() {
   const m = $('#model-select')?.value;
   if (m && $('#composer-model')) $('#composer-model').textContent = m;
@@ -164,10 +356,20 @@ function renderConversationList() {
 async function createConversation(model) {
   let m = model || $('#model-select')?.value || null;
   if(!m || m===text('loading') || !m.includes('/')){
-    // pick first available model from cache or fallback
-    const sel = $('#model-select');
-    if(sel && sel.options.length){
-      for(const o of sel.options){ if(o.value && o.value.includes('/')){ m=o.value; break; } }
+    // Prefer known working model
+    const preferred = ["opencode//opencode/big-pickle", "opencode//opencode/claude-sonnet-4", "commandcode//deepseek/deepseek-v4-flash"];
+    for (const pref of preferred) {
+      if (allModelsCache.some(x=>x.id===pref)) { m = pref; break; }
+    }
+    if (!m || !m.includes('/')) {
+      const sel = $('#model-select');
+      if(sel && sel.options.length){
+        // skip broken codex
+        for(const o of sel.options){ if(o.value && o.value.includes('/') && !o.value.startsWith('codex//')){ m=o.value; break; } }
+        if (!m || !m.includes('/')) {
+          for(const o of sel.options){ if(o.value && o.value.includes('/')){ m=o.value; break; } }
+        }
+      }
     }
     if(!m || !m.includes('/')) m = null;
   }
@@ -229,9 +431,23 @@ function updateChatHeader(conv) {
   if ($('#chat-model-name')) $('#chat-model-name').textContent = conv.model || '';
   // sync model select to conversation model
   if (conv.model && $('#model-select')) {
-    const opts = Array.from($('#model-select').options).map(o=>o.value);
-    if (opts.includes(conv.model)) $('#model-select').value = conv.model;
+    const sel = $('#model-select');
+    const opts = Array.from(sel.options).map(o=>o.value);
+    if (!opts.includes(conv.model)) {
+      const opt = document.createElement('option');
+      opt.value = conv.model;
+      opt.textContent = `⚠️ ${conv.model} (غير متوفر)`;
+      opt.style.color = '#e11d48';
+      sel.prepend(opt);
+      // also add to cache if not present
+      if (!allModelsCache.some(m=>m.id===conv.model)) {
+        allModelsCache.unshift({id: conv.model, owned_by: conv.model.split('/')[0]});
+      }
+    }
+    sel.value = conv.model;
     updateComposerModel();
+    updateModelTrigger();
+    renderModelList();
   }
 }
 
@@ -271,27 +487,102 @@ function escapeHtml(s) {
 
 function renderMarkdown(text) {
   if (!text) return '';
+  // Try marked library first (loaded via /static/marked.min.js)
+  const mk = (typeof window !== 'undefined' && window.marked) || (typeof marked !== 'undefined' ? marked : null);
+  if (mk) {
+    try {
+      if (!window._markedConfigured) {
+        mk.setOptions({
+          gfm: true,
+          breaks: true,
+          pedantic: false,
+          smartLists: true,
+          smartypants: false,
+          headerIds: false,
+          mangle: false
+        });
+        // No custom renderer needed for v15 - use default and post-process
+        // We will add code language labels and table wrappers via string replacement after parsing
+        window._markedConfigured = true;
+      }
+      // Use marked to parse
+      let html = mk.parse(text);
+      // Basic sanitization: remove script tags
+      html = html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
+      // Post-process: wrap tables for scrolling
+      html = html.replace(/<table>/g, '<div class="table-wrap"><table>').replace(/<\/table>/g, '</table></div>');
+      // Post-process: add copy button to code blocks
+      html = html.replace(/<pre><code class="language-(\w+)">/g, '<pre><span class="code-lang">$1</span><button class="code-copy" onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText).then(()=>{const t=this.textContent;this.textContent=\'✓\';setTimeout(()=>this.textContent=\'نسخ\',1200)})">نسخ</button><code class="language-$1">');
+      html = html.replace(/<pre><code>/g, '<pre><button class="code-copy" onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText).then(()=>{const t=this.textContent;this.textContent=\'✓\';setTimeout(()=>this.textContent=\'نسخ\',1200)})">نسخ</button><code>');
+      return html;
+    } catch (e) {
+      console.warn('marked parse failed, fallback', e);
+    }
+  }
+  // Fallback: simple parser (previous logic) with improved headings/tables
   let html = escapeHtml(text);
   // code blocks ```lang ... ```
   html = html.replace(/```(\w+)?\n?([\s\S]*?)```/g, (m, lang, code) => {
-    const l = lang ? `<span style="position:absolute;top:8px;inset-inline-end:10px;font:600 10px var(--font-mono);color:var(--text-faint);text-transform:uppercase">${lang}</span>` : '';
-    return `<pre>${l}<code>${code.trim()}</code></pre>`;
+    const l = lang ? `<span class="code-lang">${escapeHtml(lang)}</span>` : '';
+    const btn = `<button class="code-copy" onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText).then(()=>{const t=this.textContent;this.textContent='✓';setTimeout(()=>this.textContent='نسخ',1200)})">نسخ</button>`;
+    return `<pre>${l}${btn}<code>${code.trim()}</code></pre>`;
+  });
+  // headings # ## ###
+  html = html.replace(/^######\s+(.*)$/gm, '<h6>$1</h6>');
+  html = html.replace(/^#####\s+(.*)$/gm, '<h5>$1</h5>');
+  html = html.replace(/^####\s+(.*)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^###\s+(.*)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^##\s+(.*)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^#\s+(.*)$/gm, '<h1>$1</h1>');
+  // blockquotes
+  html = html.replace(/^>\s+(.*)$/gm, '<blockquote>$1</blockquote>');
+  // horizontal rule
+  html = html.replace(/^---+$|^\*\*\*+$|^___+$/gm, '<hr>');
+  // images ![alt](url)
+  html = html.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s\)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">');
+  // tables | a | b |
+  // Simple table detection: lines with | and header separator
+  html = html.replace(/(\|.*\|\n\|[-| :]+\|\n(\|.*\|\n?)+)/g, (m) => {
+    const lines = m.trim().split('\n');
+    if (lines.length < 2) return m;
+    const header = lines[0].split('|').filter(c=>c.trim()).map(c=>`<th>${c.trim()}</th>`).join('');
+    const rows = lines.slice(2).map(line => {
+      const cells = line.split('|').filter(c=>c.trim()).map(c=>`<td>${c.trim()}</td>`).join('');
+      return `<tr>${cells}</tr>`;
+    }).join('');
+    return `<div class="table-wrap"><table><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table></div>`;
   });
   // inline code
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
   // bold
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // strikethrough
+  html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   // italic
   html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
   // links [text](url)
   html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  // line breaks -> paragraphs
-  // split by double newline
+  // split by double newline into blocks
   const blocks = html.split(/\n{2,}/).map(b=>{
-    if (b.trim().startsWith('<pre')) return b;
-    // lists
+    const t = b.trim();
+    if (!t) return '';
+    if (t.startsWith('<pre') || t.startsWith('<h') || t.startsWith('<blockquote') || t.startsWith('<hr') || t.startsWith('<div class="table-wrap"') || t.startsWith('<table')) return b;
     if (/^(\s*[-*] )/m.test(b)) {
-      const items = b.split('\n').map(l=>l.replace(/^\s*[-*] (.*)/,'<li>$1</li>')).join('');
+      const items = b.split('\n').map(l=>{
+        const m = l.match(/^\s*[-*]\s+(?:\[([ x])\]\s+)?(.*)/);
+        if (m) {
+          const checked = m[1];
+          const content = m[2];
+          if (checked !== undefined) {
+            const isChecked = checked.toLowerCase() === 'x';
+            return `<li class="task-list-item"><input type="checkbox" ${isChecked?'checked':''} disabled> ${content}</li>`;
+          }
+          return `<li>${content}</li>`;
+        }
+        return l;
+      }).join('');
+      // check if task list
+      if (b.includes('task-list-item')) return `<ul class="task-list">${items}</ul>`;
       return `<ul>${items}</ul>`;
     }
     if (/^\s*\d+\.\s/m.test(b)) {
@@ -363,14 +654,51 @@ function autoResize() {
 
 // ---------- Send ----------
 async function send() {
-  if (isStreaming) return;
-  const promptEl = $('#prompt');
-  const content = promptEl.value.trim();
-  const model = $('#model-select').value;
-  if (!content) return;
-  if (!model || !model.includes('/')) {
-    showToast(text('chatError') + ': ' + text('loading'));
+  console.log('send() called', {isStreaming, content: document.getElementById('prompt')?.value?.slice(0,20), model: document.getElementById('model-select')?.value, currentConv: currentConversationId});
+  if (isStreaming) {
+    console.warn('send blocked: already streaming');
+    showToast(language==='ar' ? 'انتظر انتهاء الرد الحالي' : 'Wait for current response');
     return;
+  }
+  const promptEl = $('#prompt');
+  if (!promptEl) { console.error('prompt element not found'); showToast('خطأ: حقل الرسالة غير موجود'); return; }
+  const content = promptEl.value.trim();
+  let model = $('#model-select')?.value || '';
+  console.log('send model before fallback', JSON.stringify(model), 'allModels', allModelsCache.length);
+  if (!content) {
+    console.warn('send: empty content');
+    return;
+  }
+  if (!model || !model.includes('/') || model === text('loading')) {
+    console.warn('send: invalid model', model, 'trying fallback');
+    // Try conversation model first
+    const conv = currentConversationId ? conversationsCache.find(c=>c.id===currentConversationId) : null;
+    if (conv && conv.model && conv.model.includes('/')) {
+      model = conv.model;
+      console.log('fallback to conv.model', model);
+    } else if (allModelsCache.length) {
+      // Prefer big-pickle
+      const pref = allModelsCache.find(m=>m.id==='opencode//opencode/big-pickle') || allModelsCache.find(m=>!m.id.startsWith('codex//')) || allModelsCache[0];
+      model = pref.id;
+      console.log('fallback to', model);
+      const sel = $('#model-select');
+      if (sel) { sel.value = model; updateModelTrigger(); }
+    } else {
+      showToast(text('chatError') + ': ' + text('loading') + ' — حاول تحديث الصفحة');
+      console.error('send: no model available, allModelsCache empty');
+      return;
+    }
+  }
+  // Final validation: if still codex, switch
+  if (model.startsWith('codex//')) {
+    console.warn('send: codex model detected, switching to big-pickle');
+    const pref = allModelsCache.find(m=>m.id==='opencode//opencode/big-pickle');
+    if (pref) {
+      model = pref.id;
+      const sel = $('#model-select');
+      if (sel) { sel.value = model; updateModelTrigger(); }
+      showToast(language==='ar' ? 'موديل codex غير متاح، تم التبديل إلى big-pickle' : 'codex unavailable, switched to big-pickle');
+    }
   }
   // ChatGPT-like lazy creation: if no conversation, create with first message title (ephemeral -> persist only after send)
   const newChatBtn = $('#new-chat');
@@ -379,9 +707,20 @@ async function send() {
     if(newChatBtn) newChatBtn.disabled = true;
     try {
       let m = model;
-      if(!m || m===text('loading') || !m.includes('/')){
-        const sel=$('#model-select');
-        if(sel){ for(const o of sel.options){ if(o.value && o.value.includes('/')){ m=o.value; break; } } }
+      if(!m || m===text('loading') || !m.includes('/') || m.startsWith('codex//')){
+        const preferred = ["opencode//opencode/big-pickle", "opencode//opencode/claude-sonnet-4", "commandcode//deepseek/deepseek-v4-flash"];
+        for (const pref of preferred) {
+          if (allModelsCache.some(x=>x.id===pref)) { m = pref; break; }
+        }
+        if (!m || !m.includes('/') || m.startsWith('codex//')) {
+          const sel=$('#model-select');
+          if(sel){
+            for(const o of sel.options){ if(o.value && o.value.includes('/') && !o.value.startsWith('codex//')){ m=o.value; break; } }
+            if (!m || !m.includes('/')) {
+              for(const o of sel.options){ if(o.value && o.value.includes('/')){ m=o.value; break; } }
+            }
+          }
+        }
       }
       const conv = await api('/api/chat/conversations', {
         method: 'POST',
@@ -410,22 +749,26 @@ async function send() {
     await sendStream(content, model, assistantNode);
     // update cache title if first message
     const idx = conversationsCache.findIndex(c=>c.id===currentConversationId);
-    if(idx>=0 && !conversationsCache[idx].title || conversationsCache[idx].title===text('newChatTitle')){
+    if(idx>=0 && (!conversationsCache[idx].title || conversationsCache[idx].title===text('newChatTitle'))){
       // will be updated via loadConversations
     }
   } catch (error) {
-    const bubble = assistantNode.querySelector('.bubble');
+    const bubble = assistantNode.querySelector('.bubble') || assistantNode.querySelector('.typing')?.parentElement || assistantNode.querySelector('.message-content-wrap');
+    const safeBubble = bubble || assistantNode;
     if (error.status === 401) {
-      bubble.innerHTML = `<p>${text('sessionExpired')}</p>`;
+      safeBubble.innerHTML = `<p>${text('sessionExpired')}</p>`;
       showToast(text('sessionExpired'));
       setTimeout(()=>{ localStorage.removeItem('afaq_token'); location.href='/login';},1500);
-    } else if (error.status === 502) {
-      bubble.innerHTML = `<p style="color:var(--status-warning)">⚠️ ${escapeHtml(error.message)}<br><small style="color:var(--text-muted)">Harness failed — check <a href="/harnesses" style="color:var(--brand-primary)">Harnesses</a> installed</small></p>`;
+    } else if (error.status === 502 || error.status === 504 || error.status === 400) {
+      const isTimeout = error.status === 504 || /timed out|timeout/i.test(error.message);
+      const detail = isTimeout ? (language==='ar' ? 'انتهت مهلة الرد — جرب موديل آخر مثل opencode/big-pickle' : 'Response timed out — try another model') : '';
+      safeBubble.innerHTML = `<p style="color:var(--status-warning)">⚠️ ${escapeHtml(error.message)}${detail ? `<br><small style="color:var(--text-muted)">${detail}</small>`:''}<br><small style="color:var(--text-muted)">Harness failed — check <a href="/harnesses" style="color:var(--brand-primary)">Harnesses</a> installed</small></p>`;
       showToast(error.message);
     } else {
-      bubble.innerHTML = `<p style="color:var(--status-error)">${text('chatError')}: ${escapeHtml(error.message)}</p>`;
+      safeBubble.innerHTML = `<p style="color:var(--status-error)">${text('chatError')}: ${escapeHtml(error.message)}</p>`;
       showToast(error.message);
     }
+    console.error('send error', error);
   } finally {
     isStreaming = false;
     sendBtn.disabled = false;
@@ -452,7 +795,7 @@ function addOptimisticMessage(role, content, conv, isTyping=false) {
   const avatar = isUser ? `<div class="message-avatar user">${text('you').charAt(0).toUpperCase()}</div>` : `<div class="message-avatar assistant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2a7 7 0 0 0-7 7c0 3.5 2.5 6 7 10 4.5-4 7-6.5 7-10a7 7 0 0 0-7-7z"/><circle cx="12" cy="9" r="2.2"/></svg></div>`;
   const roleLabel = isUser ? text('you') : text('assistant');
   const modelInfo = !isUser && conv?.model ? `<span class="mono">${escapeHtml(conv.model.split('/').pop())}</span>` : '';
-  const inner = isTyping ? `<div class="typing"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span><span style="margin-inline-start:6px;font:500 11px var(--font-mono);color:var(--text-faint)">${text('typing')}</span></div>` : (isUser ? `<div class="bubble user"><p>${escapeHtml(content).replace(/\n/g,'<br>')}</p></div>` : `<div class="bubble assistant">${renderMarkdown(content)}</div>`);
+  const inner = isTyping ? `<div class="bubble assistant"><div class="typing"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span><span style="margin-inline-start:6px;font:500 11px var(--font-mono);color:var(--text-faint)">${text('typing')}</span></div></div>` : (isUser ? `<div class="bubble user"><p>${escapeHtml(content).replace(/\n/g,'<br>')}</p></div>` : `<div class="bubble assistant">${renderMarkdown(content)}</div>`);
   const group = document.createElement('div');
   group.className = 'message-group';
   group.innerHTML = `<div class="message-row ${role}">${avatar}<div class="message-content-wrap"><div class="message-role">${roleLabel} ${modelInfo}</div>${inner}</div></div>`;
@@ -462,15 +805,45 @@ function addOptimisticMessage(role, content, conv, isTyping=false) {
 }
 
 async function sendStream(content, model, assistantNode) {
-  const bubble = assistantNode.querySelector('.bubble');
+  console.log('sendStream start', {content: content.slice(0,30), model});
+  let bubble = assistantNode.querySelector('.bubble');
+  if (!bubble) {
+    // fallback for typing placeholder
+    bubble = document.createElement('div');
+    bubble.className = 'bubble assistant';
+    const wrap = assistantNode.querySelector('.message-content-wrap');
+    if (wrap) {
+      const typing = wrap.querySelector('.typing');
+      if (typing) typing.replaceWith(bubble);
+      else wrap.appendChild(bubble);
+    } else {
+      assistantNode.appendChild(bubble);
+    }
+  }
   bubble.innerHTML = '';
   let full = '';
   let hasDelta = false;
-  const resp = await fetch(`/api/chat/conversations/${currentConversationId}/messages/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-    body: JSON.stringify({ content, model })
-  });
+  const controller = new AbortController();
+  const timeoutMs = 95000;
+  const timeoutId = setTimeout(()=> controller.abort(), timeoutMs);
+  let resp;
+  try {
+    resp = await fetch(`/api/chat/conversations/${currentConversationId}/messages/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify({ content, model }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      const err = new Error(language==='ar' ? 'انتهت مهلة الاتصال (95s) — جرب موديل آخر' : 'Request timed out (95s) — try another model');
+      err.status = 504;
+      throw err;
+    }
+    throw e;
+  }
+  clearTimeout(timeoutId);
   if (!resp.ok) {
     const body = await resp.json().catch(()=>({}));
     const err = new Error(body.detail || body.error?.message || resp.statusText);
@@ -503,17 +876,26 @@ async function sendStream(content, model, assistantNode) {
             const box=$('#messages'); if(box) box.scrollTop=box.scrollHeight;
           }
         } catch (e) {
-          // ignore JSON parse errors for keepalive
           if (e.message && e.message.includes('harness_error')) throw e;
           if (e.message && !e.message.toLowerCase().includes('json')) throw e;
         }
       }
     }
   } catch(e){
+    if (e.name === 'AbortError') {
+      const err = new Error(language==='ar' ? 'انتهت مهلة القراءة — جرب موديل آخر' : 'Read timed out — try another model');
+      err.status = 504;
+      throw err;
+    }
     if(!hasDelta) throw e;
   }
   bubble.innerHTML = renderMarkdown(full);
   if (!full || !full.trim()) {
+    if (!hasDelta) {
+      const err = new Error(language==='ar' ? 'لا يوجد رد من الموديل — تأكد أن الموديل متاح وجرب opencode/big-pickle' : 'No response from model — try opencode/big-pickle');
+      err.status = 502;
+      throw err;
+    }
     bubble.innerHTML = `<p style="color:var(--text-muted)">${language==='ar' ? '— لا يوجد رد —' : '— no response —'}</p>`;
   }
 }
@@ -679,6 +1061,87 @@ $('#lang').onclick = ()=>{
 document.querySelectorAll('.code-tab').forEach((t)=>{ t.onclick = selectCode; });
 document.querySelectorAll('.copy-code').forEach((b)=>{ b.onclick = async ()=>{ await navigator.clipboard.writeText($(`#${b.dataset.copyTarget}`).textContent); b.textContent=text('copied'); setTimeout(()=>{ b.textContent=text('copy');},1400); }; });
 window.onpopstate = ()=> show(document.body.dataset.page||'chat', false);
+
+// ---------- Model Search bindings ----------
+(function initModelSearch(){
+  const trigger = document.getElementById('model-trigger');
+  const dropdown = document.getElementById('model-dropdown');
+  const input = document.getElementById('model-search-input');
+  const clearBtn = document.getElementById('model-search-clear');
+  const pills = document.getElementById('model-filter-pills');
+  if (!trigger || !dropdown) return;
+
+  trigger.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const isOpen = !dropdown.classList.contains('hidden');
+    if (isOpen) closeModelDropdown(); else openModelDropdown();
+  });
+
+  // Search input
+  if (input) {
+    input.addEventListener('input', ()=>{
+      modelSearchQuery = input.value;
+      if (clearBtn) clearBtn.classList.toggle('hidden', !modelSearchQuery);
+      focusedModelIndex = -1;
+      renderModelList();
+    });
+    input.addEventListener('keydown', (e)=>{
+      const filtered = getFilteredModels().slice(0,200);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedModelIndex = Math.min(focusedModelIndex + 1, filtered.length - 1);
+        renderModelList();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedModelIndex = Math.max(focusedModelIndex - 1, 0);
+        renderModelList();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focusedModelIndex >= 0 && filtered[focusedModelIndex]) {
+          selectModel(filtered[focusedModelIndex].id);
+        } else if (filtered.length === 1) {
+          selectModel(filtered[0].id);
+        }
+      } else if (e.key === 'Escape') {
+        closeModelDropdown();
+        trigger.focus();
+      }
+    });
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener('click', ()=>{
+      modelSearchQuery = '';
+      if (input) { input.value = ''; input.focus(); }
+      clearBtn.classList.add('hidden');
+      focusedModelIndex = -1;
+      renderModelList();
+    });
+  }
+  if (pills) {
+    pills.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.pill');
+      if (!btn) return;
+      pills.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      modelFilter = btn.dataset.filter || 'all';
+      focusedModelIndex = -1;
+      renderModelList();
+      if (input) input.focus();
+    });
+  }
+  // Close on outside click
+  document.addEventListener('click', (e)=>{
+    if (!dropdown.classList.contains('hidden') && !dropdown.contains(e.target) && !trigger.contains(e.target)) {
+      closeModelDropdown();
+    }
+  });
+  // Close on Esc globally
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape' && !dropdown.classList.contains('hidden')) {
+      closeModelDropdown();
+    }
+  });
+})();
 
 // Init
 (async()=>{

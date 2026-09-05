@@ -79,26 +79,85 @@ class HarnessAdapter(ABC):
         command = self.build_command(prompt, model, session_id)
         started = time.monotonic()
         process = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env={**os.environ, **(env or {})})
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.harness_timeout_seconds)
+        # Cap run timeout to 90s for UX (600s is too long) — allow override via env but keep fast fail
+        run_timeout = min(settings.harness_timeout_seconds, 90)
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=run_timeout)
+        except asyncio.TimeoutError:
+            try:
+                process.kill()
+                await process.wait()
+            except ProcessLookupError:
+                pass
+            raise RuntimeError(f"{self.name} timed out after {run_timeout}s — model '{model}' may be unavailable or harness hung. Try a different model (e.g. opencode/big-pickle).")
         if process.returncode != 0:
             error = stderr.decode(errors="replace").strip() or stdout.decode(errors="replace").strip()
+            # Provide clearer message for missing ollama / model errors
+            if "ollama" in error.lower() or "model" in error.lower() and "not found" in error.lower():
+                error = f"{error} — تأكد أن الموديل متاح. جرب opencode/big-pickle"
             raise RuntimeError(f"{self.name} failed ({process.returncode}): {error}")
         text = self.parse_output(stdout, model)
+        if not text:
+            # Include stderr hint for debugging
+            serr = stderr.decode(errors="replace").strip()
+            if serr:
+                raise RuntimeError(f"{self.name} returned empty response (stderr: {serr[:500]})")
         return HarnessResult(text=text, model=model, raw={"stderr": stderr.decode(errors="replace"), "latency_ms": int((time.monotonic()-started)*1000)})
 
     async def stream(self, prompt: str, model: str | None = None, session_id: str | None = None, env: dict | None = None) -> AsyncIterator[tuple[str, dict]]:
         model = model or "default"
-        process = await asyncio.create_subprocess_exec(*self.build_command(prompt, model, session_id), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env={**os.environ, **(env or {})})
+        command = self.build_command(prompt, model, session_id)
+        process = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env={**os.environ, **(env or {})})
         assert process.stdout
-        async for raw in process.stdout:
-            line = raw.decode(errors="replace")
-            text, metadata = self.parse_line(line, model)
-            if text:
-                yield text, metadata
-        code = await process.wait()
-        if code != 0:
-            error = (await process.stderr.read()).decode(errors="replace")
-            raise RuntimeError(f"{self.name} failed ({code}): {error}")
+        assert process.stderr
+        # Stream should fail faster than run (600s is too long for UX) — use 90s cap
+        cur_timeout = min(settings.harness_timeout_seconds, 90)
+        try:
+            while True:
+                try:
+                    raw = await asyncio.wait_for(process.stdout.readline(), timeout=cur_timeout)
+                except asyncio.TimeoutError:
+                    try:
+                        process.kill()
+                        await process.wait()
+                    except ProcessLookupError:
+                        pass
+                    raise RuntimeError(f"{self.name} stream timed out after {cur_timeout}s — الموديل '{model}' لا يرد. جرب opencode/big-pickle أو تأكد من تثبيت الموديل.")
+                if not raw:
+                    break
+                line = raw.decode(errors="replace")
+                if not line.strip():
+                    continue
+                text, metadata = self.parse_line(line, model)
+                if text:
+                    yield text, metadata
+            # Wait for process with short timeout to detect failure
+            try:
+                code = await asyncio.wait_for(process.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                try:
+                    process.kill()
+                    await process.wait()
+                except ProcessLookupError:
+                    pass
+                raise RuntimeError(f"{self.name} did not exit cleanly after stream")
+            if code != 0:
+                # Drain stderr for error details without blocking
+                try:
+                    err_bytes = await asyncio.wait_for(process.stderr.read(), timeout=2)
+                    error = err_bytes.decode(errors="replace").strip()
+                except asyncio.TimeoutError:
+                    error = ""
+                if not error:
+                    error = f"exit code {code}"
+                raise RuntimeError(f"{self.name} failed ({code}): {error}")
+        finally:
+            if process.returncode is None:
+                try:
+                    process.kill()
+                    await process.wait()
+                except ProcessLookupError:
+                    pass
 
 class ClaudeAdapter(HarnessAdapter):
     name, display_name, executable, provider = "claude", "Claude Code", "claude", ""
