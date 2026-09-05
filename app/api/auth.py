@@ -36,12 +36,20 @@ async def admin_user(user: User = Depends(current_user)) -> User:
     return user
 
 @router.post("/bootstrap", response_model=UserOut)
-async def bootstrap(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    count = await db.scalar(select(User).count()) if False else None
+async def bootstrap(registration: RegisterRequest, db: AsyncSession = Depends(get_db)):
     existing = (await db.execute(select(User).limit(1))).scalar_one_or_none()
-    if existing: raise HTTPException(status_code=409, detail="Bootstrap already completed")
-    user = User(email=data.email, password_hash=hash_password(data.password), display_name=data.display_name or data.email.split("@")[0], role="admin")
-    db.add(user); await db.commit(); await db.refresh(user); return user
+    if existing:
+        raise HTTPException(status_code=409, detail="Bootstrap already completed")
+    user = User(
+        email=registration.email,
+        password_hash=hash_password(registration.password),
+        display_name=registration.display_name or registration.email.split("@")[0],
+        role="admin",
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 @router.post("/login")
 async def login(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):

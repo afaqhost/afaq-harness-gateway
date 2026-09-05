@@ -146,7 +146,7 @@ async def _stream_response(adapter, prompt: str, model: str, request_model: str,
                 )
             )
             await db.commit()
-        except Exception as exc:
+        except RuntimeError as exc:
             err = {"error": {"message": str(exc), "type": "harness_error"}}
             yield f"data: {json.dumps(err)}\n\n"
 
@@ -158,7 +158,7 @@ async def _non_stream_response(adapter, prompt: str, model: str, request_model: 
     started = time.monotonic()
     try:
         result = await adapter.run(prompt, model)
-    except Exception as exc:
+    except RuntimeError as exc:
         raise HTTPException(502, str(exc))
     usage = {
         "prompt_tokens": result.prompt_tokens or len(prompt.split()),

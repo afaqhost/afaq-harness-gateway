@@ -181,15 +181,13 @@ async def send_message(conv_id: int, payload: MessageCreate, user: User = Depend
     harness_name, model_name = _validate_model_or_400(model)
     adapter = get_adapter(harness_name)
 
-    if payload.stream:
-        pass
-
+    # Note: payload.stream is intentionally ignored here — streaming is served via /messages/stream
     started = time.monotonic()
     try:
         result_h = await adapter.run(prompt, model_name)
     except HTTPException:
         raise
-    except Exception as exc:
+    except RuntimeError as exc:
         msg = str(exc)
         status = 504 if "timed out" in msg.lower() or "timeout" in msg.lower() else 502
         err_text = f"⚠️ Harness error: {msg}"
@@ -306,7 +304,7 @@ async def stream_message(conv_id: int, payload: MessageCreate, user: User = Depe
                     )
                 )
                 await session.commit()
-        except Exception as exc:
+        except RuntimeError as exc:
             try:
                 async with SessionLocal() as session:
                     err_text = f"⚠️ {str(exc)}"
@@ -317,6 +315,7 @@ async def stream_message(conv_id: int, payload: MessageCreate, user: User = Depe
                         conv2.updated_at = datetime.utcnow()
                     await session.commit()
             except Exception:
+                # best-effort persistence after harness failure — never mask original harness error
                 pass
             err = {"error": {"message": str(exc), "type": "harness_error"}}
             yield f"data: {json.dumps(err, ensure_ascii=False)}\n\n"

@@ -1,4 +1,3 @@
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -45,20 +44,39 @@ async def install_harness(name: str, _: User = Depends(admin_user)):
     raise HTTPException(404, "Harness not found")
 
 @router.post("/users", response_model=dict)
-async def create_user(data: UserCreate, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
-    if (await db.execute(select(User).where(User.email == data.email))).scalar_one_or_none(): raise HTTPException(409, "Email already exists")
-    user = User(email=data.email, password_hash=hash_password(data.password), display_name=data.display_name, role=data.role)
-    db.add(user); await db.commit(); await db.refresh(user); return {"id": user.id, "email": user.email, "role": user.role}
+async def create_user(user_payload: UserCreate, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
+    if (await db.execute(select(User).where(User.email == user_payload.email))).scalar_one_or_none():
+        raise HTTPException(409, "Email already exists")
+    user = User(
+        email=user_payload.email,
+        password_hash=hash_password(user_payload.password),
+        display_name=user_payload.display_name,
+        role=user_payload.role,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return {"id": user.id, "email": user.email, "role": user.role}
 
 @router.get("/users")
 async def list_users(_: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
     return [{"id": u.id, "email": u.email, "display_name": u.display_name, "role": u.role, "is_active": u.is_active} for u in (await db.execute(select(User).order_by(User.id))).scalars().all()]
 
 @router.post("/keys")
-async def create_key(data: KeyCreate, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def create_key(key_payload: KeyCreate, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     raw, prefix, digest = generate_api_key()
-    key = APIKey(user_id=user.id, name=data.name, key_prefix=prefix, key_hash=digest, daily_limit=data.daily_limit, monthly_limit=data.monthly_limit, allowed_models=data.allowed_models)
-    db.add(key); await db.commit(); await db.refresh(key)
+    key = APIKey(
+        user_id=user.id,
+        name=key_payload.name,
+        key_prefix=prefix,
+        key_hash=digest,
+        daily_limit=key_payload.daily_limit,
+        monthly_limit=key_payload.monthly_limit,
+        allowed_models=key_payload.allowed_models,
+    )
+    db.add(key)
+    await db.commit()
+    await db.refresh(key)
     return {"id": key.id, "name": key.name, "key": raw, "prefix": prefix, "warning": "This key is shown once. Store it securely."}
 
 @router.get("/keys")
