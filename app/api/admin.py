@@ -29,14 +29,21 @@ class KeyCreate(BaseModel):
     allowed_models: list[str] | None = None
 
 @router.get("/harnesses")
-async def harnesses(_: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def harnesses(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     rows = {h.name: h for h in (await db.execute(select(Harness))).scalars().all()}
+    # also fetch credential profiles for this user to determine authenticated per harness
+    from app.db.database import CredentialProfile
+
+    cred_rows = (await db.execute(select(CredentialProfile).where(CredentialProfile.user_id == user.id, CredentialProfile.status == "authenticated"))).scalars().all()
+    authenticated_harnesses = {c.harness for c in cred_rows}
     result = []
     for adapter in all_adapters():
         installed = adapter.is_installed()
         row = rows.get(adapter.name)
         models = cached_models(adapter.name)
-        result.append({"name": adapter.name, "display_name": adapter.display_name, "provider": adapter.provider or None, "installed": installed, "authenticated": bool(row.authenticated) if row else False, "models": [m.__dict__ for m in models], "last_checked_at": row.last_checked_at.isoformat() if row and row.last_checked_at else None})
+        # authenticated is true if either Harness table says so or credential profile is authenticated
+        is_auth = bool(row.authenticated) if row and row.authenticated else (adapter.name in authenticated_harnesses)
+        result.append({"name": adapter.name, "display_name": adapter.display_name, "provider": adapter.provider or None, "installed": installed, "authenticated": is_auth, "models": [m.__dict__ for m in models], "last_checked_at": row.last_checked_at.isoformat() if row and row.last_checked_at else None})
     return result
 
 

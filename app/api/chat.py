@@ -20,7 +20,7 @@ from app.repositories.conversation_repository import (
     fetch_conversation_summary,
     get_conversation_or_404 as repo_get_conversation_or_404,
 )
-from app.services import quota_service
+from app.services import credential_service, quota_service
 from app.services.model_service import (
     select_model_for_conversation,
     select_model_for_new_conversation,
@@ -280,10 +280,12 @@ async def send_message(
 
     # request_id for non-stream cancel support
     request_id = f"chat:{conv.id}:{uuid.uuid4().hex[:8]}"
+    # credential env injection
+    env = await credential_service.get_env_for_harness(db, user.id, harness_name)
     # Note: payload.stream is intentionally ignored here — streaming is served via /messages/stream
     started = time.monotonic()
     try:
-        result_h = await adapter.run(prompt, model_name, request_id=request_id)
+        result_h = await adapter.run(prompt, model_name, request_id=request_id, env=env)
     except HTTPException:
         raise
     except RuntimeError as exc:
@@ -372,6 +374,8 @@ async def stream_message(
     # request_id for cancel tracking
     request_id = f"chat:{conv.id}:{uuid.uuid4().hex[:8]}"
     history_key = f"conv:{conv.id}"
+    # credential env for harness
+    stream_env = await credential_service.get_env_for_harness(db, user.id, harness_name)
 
     async def event_stream():
         from app.db.database import SessionLocal
@@ -417,7 +421,7 @@ async def stream_message(
         seq += 1
 
         # heartbeat + token loop with configurable timeout (keep pending task alive)
-        stream_iter = adapter.stream(prompt, model_name, request_id=request_id).__aiter__()
+        stream_iter = adapter.stream(prompt, model_name, request_id=request_id, env=stream_env).__aiter__()
         pending = None
         try:
             while True:

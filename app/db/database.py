@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import AsyncGenerator
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, JSON
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, JSON, UniqueConstraint
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from app.core.config import settings
@@ -49,6 +49,21 @@ class Harness(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class CredentialProfile(Base):
+    __tablename__ = "credential_profiles"
+    __table_args__ = (UniqueConstraint("user_id", "harness", "profile_name", name="uq_credential_user_harness_profile"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    harness: Mapped[str] = mapped_column(String(80), index=True)
+    profile_name: Mapped[str] = mapped_column(String(80), default="default")
+    auth_type: Mapped[str] = mapped_column(String(20), default="environment")  # environment|cli|token
+    encrypted_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="unknown")  # unknown|authenticated|failed|manual_required
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    user: Mapped[User] = relationship()
 
 class Conversation(Base):
     __tablename__ = "conversations"

@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.security import hash_api_key
 from app.db.database import APIKey, UsageRecord, User, get_db
 from app.harnesses.registry import all_adapters, cached_models, get_adapter
-from app.services import quota_service
+from app.services import credential_service, quota_service
 from app.services.model_service import is_model_allowed, validate_model_or_400
 from app.shared.model_utils import parse_model_identifier as split_model
 from app.shared.prompt_utils import build_harness_prompt, build_history_prompt
@@ -186,7 +186,9 @@ async def _stream_response(
         seq += 1
 
         cancelled = False
-        stream_iter = adapter.stream(prompt, model, request_id=completion_id).__aiter__()
+        # env injection for harness
+        env = await credential_service.get_env_for_harness(db, user_id, harness_name)
+        stream_iter = adapter.stream(prompt, model, request_id=completion_id, env=env).__aiter__()
         pending = None
         try:
             while True:
@@ -289,8 +291,10 @@ async def cancel_completion(completion_id: str, request: Request, authorization:
 
 async def _non_stream_response(adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request):
     started = time.monotonic()
+    # env injection
+    env = await credential_service.get_env_for_harness(db, user_id, harness_name)
     try:
-        result = await adapter.run(prompt, model, request_id=completion_id)
+        result = await adapter.run(prompt, model, request_id=completion_id, env=env)
     except RuntimeError as exc:
         logger.error("harness_error harness=%s model=%s error=%s", harness_name, model, str(exc))
         sanitized = _sanitize_harness_error(exc)
