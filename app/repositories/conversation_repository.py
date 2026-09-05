@@ -18,6 +18,8 @@ async def get_conversation_or_404(conv_id: int, user: User, db: AsyncSession) ->
     conv = await db.get(Conversation, conv_id)
     if not conv or conv.user_id != user.id:
         raise HTTPException(404, "Conversation not found")
+    if conv.deleted_at is not None:
+        raise HTTPException(404, "Conversation not found")
     return conv
 
 
@@ -33,8 +35,22 @@ async def fetch_conversation_summary(conv: Conversation, db: AsyncSession) -> tu
     return count, preview
 
 
-async def list_conversations_for_user(user: User, db: AsyncSession) -> list[Conversation]:
-    result = await db.execute(
-        select(Conversation).where(Conversation.user_id == user.id).order_by(desc(Conversation.updated_at))
+async def list_conversations_for_user(
+    user: User,
+    db: AsyncSession,
+    limit: int = 20,
+    offset: int = 0,
+    q: str | None = None,
+    archived: bool = False,
+) -> list[Conversation]:
+    stmt = select(Conversation).where(
+        Conversation.user_id == user.id,
+        Conversation.deleted_at.is_(None),
+        Conversation.archived == archived,
     )
+    if q:
+        # use bound param via ilike, SQLAlchemy parameterizes
+        stmt = stmt.where(Conversation.title.ilike(f"%{q}%"))
+    stmt = stmt.order_by(desc(Conversation.updated_at)).limit(limit).offset(offset)
+    result = await db.execute(stmt)
     return list(result.scalars().all())

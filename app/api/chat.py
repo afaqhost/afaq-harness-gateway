@@ -4,7 +4,7 @@ import time
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import desc, select
@@ -60,6 +60,7 @@ class ConversationCreate(BaseModel):
 class ConversationUpdate(BaseModel):
     title: str | None = None
     model: str | None = None
+    archived: bool | None = None
 
 
 class MessageCreate(BaseModel):
@@ -82,6 +83,9 @@ class ConversationOut(BaseModel):
     id: int
     title: str
     model: str
+    archived: bool = False
+    archived_at: datetime | None = None
+    deleted_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     message_count: int | None = None
@@ -109,6 +113,9 @@ async def _conversation_to_out(conv: Conversation, db: AsyncSession) -> Conversa
         id=conv.id,
         title=conv.title,
         model=conv.model,
+        archived=bool(conv.archived),
+        archived_at=conv.archived_at,
+        deleted_at=conv.deleted_at,
         created_at=conv.created_at,
         updated_at=conv.updated_at,
         message_count=count,
@@ -127,10 +134,17 @@ def _history_to_prompt(history: list[Message]) -> str:
 
 
 @router.get("/conversations", response_model=list[ConversationOut])
-async def list_conversations(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def list_conversations(
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None, max_length=200),
+    archived: bool = Query(default=False),
+):
     from app.repositories.conversation_repository import list_conversations_for_user
 
-    convs = await list_conversations_for_user(user, db)
+    convs = await list_conversations_for_user(user, db, limit=limit, offset=offset, q=q, archived=archived)
     return [await _conversation_to_out(c, db) for c in convs]
 
 
@@ -155,9 +169,21 @@ async def create_conversation(
 
 
 @router.get("/conversations/{conv_id}", response_model=ConversationDetail)
-async def get_conversation(conv_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def get_conversation(
+    conv_id: int,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    limit_messages: int = Query(default=100, ge=1, le=200),
+    offset_messages: int = Query(default=0, ge=0),
+):
     conv = await _get_conversation_or_404(conv_id, user, db)
-    result = await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))
+    result = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conv.id)
+        .order_by(Message.created_at)
+        .limit(limit_messages)
+        .offset(offset_messages)
+    )
     msgs = result.scalars().all()
     base = await _conversation_to_out(conv, db)
     return ConversationDetail(
@@ -173,6 +199,9 @@ async def update_conversation(conv_id: int, payload: ConversationUpdate, user: U
         conv.title = payload.title.strip() or conv.title
     if payload.model is not None:
         conv.model = payload.model
+    if payload.archived is not None:
+        conv.archived = payload.archived
+        conv.archived_at = datetime.utcnow() if payload.archived else None
     conv.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(conv)
@@ -182,8 +211,29 @@ async def update_conversation(conv_id: int, payload: ConversationUpdate, user: U
 @router.delete("/conversations/{conv_id}", status_code=204)
 async def delete_conversation(conv_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     conv = await _get_conversation_or_404(conv_id, user, db)
-    await db.delete(conv)
+    # soft delete
+    conv.deleted_at = datetime.utcnow()
+    conv.archived = True
+    conv.archived_at = conv.archived_at or datetime.utcnow()
     await db.commit()
+
+
+@router.post("/conversations/{conv_id}/restore", response_model=ConversationOut)
+async def restore_conversation(conv_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    # need to fetch even if soft-deleted, so bypass get_conversation_or_404's deleted check
+    conv = await db.get(Conversation, conv_id)
+    if not conv or conv.user_id != user.id:
+        raise HTTPException(404, "Conversation not found")
+    if conv.deleted_at is None:
+        raise HTTPException(400, detail={"error": {"code": "not_deleted", "message": "Conversation is not deleted"}})
+    conv.deleted_at = None
+    # keep archived as is? Restore should unarchive as well? Per spec restore -> back to visible
+    conv.archived = False
+    conv.archived_at = None
+    conv.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(conv)
+    return await _conversation_to_out(conv, db)
 
 
 @router.post("/conversations/{conv_id}/messages")

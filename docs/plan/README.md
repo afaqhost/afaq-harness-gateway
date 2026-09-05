@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|
 | 01 | [phase-01-security-rate-limiting.md](phase-01-security-rate-limiting.md) | Security Hardening & Rate Limiting | 3h | — | ✅ Done (116 tests) |
 | 02 | [phase-02-cancel-process-lifecycle.md](phase-02-cancel-process-lifecycle.md) | Cancel & Process Lifecycle | 3h | S1 | ✅ Done (127 tests) |
-| 03 | [phase-03-usage-pagination-archive.md](phase-03-usage-pagination-archive.md) | Usage History, Pagination & Archive | 3h | — | ⬜ |
+| 03 | [phase-03-usage-pagination-archive.md](phase-03-usage-pagination-archive.md) | Usage History, Pagination & Archive | 3h | — | ✅ Done (141 tests) |
 | 04 | [phase-04-sse-completeness.md](phase-04-sse-completeness.md) | SSE Completeness (IDs, Heartbeats, Reconnect) | 3h | S2 | ⬜ |
 | 05 | [phase-05-harness-lifecycle-health.md](phase-05-harness-lifecycle-health.md) | Harness Lifecycle & Health | 3h | S1 | ⬜ |
 | 06 | [phase-06-credential-profiles.md](phase-06-credential-profiles.md) | Credential Profiles (wire `encrypt_secret`) | 3h | S5 | ⬜ |
@@ -32,7 +32,7 @@ Copy this to your PR description and check as you merge:
 ```markdown
 - [x] S1 Security & Rate Limit (`phase-01`)
 - [x] S2 Cancel & Lifecycle (`phase-02`)
-- [ ] S3 Usage/Pagination/Archive (`phase-03`)
+- [x] S3 Usage/Pagination/Archive (`phase-03`)
 - [ ] S4 SSE Completeness (`phase-04`)
 - [ ] S5 Harness Lifecycle & Health (`phase-05`)
 - [ ] S6 Credential Profiles (`phase-06`)
@@ -77,4 +77,4 @@ Each phase file's `## 7. Verification & Exit` lists its specific `curl` checks (
 
 ---
 
-*S2 done. Next: `phase-03-usage-pagination-archive.md:4.1`.*
+*S3 done. Next: `phase-04-sse-completeness.md:4.1`.*

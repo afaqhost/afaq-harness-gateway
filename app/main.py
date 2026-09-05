@@ -11,6 +11,7 @@ from app.api.openai import router as openai_router
 from app.api.auth import router as auth_router
 from app.api.admin import router as admin_router
 from app.api.chat import router as chat_router
+from app.api.usage import router as usage_router
 from app.harnesses.registry import refresh_models
 from app.middleware.rate_limit import RateLimitMiddleware
 
@@ -30,6 +31,7 @@ app.include_router(openai_router, prefix="/v1")
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
+app.include_router(usage_router, prefix="/api/chat", tags=["usage"])
 
 async def render_page(request: Request, page: str):
     return templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name, "page": page})

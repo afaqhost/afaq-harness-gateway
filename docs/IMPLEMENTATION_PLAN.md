@@ -249,7 +249,7 @@ This plan is designed to be resumed across sessions. Each session is self-contai
 
 - [x] S1 Security & Rate Limit — done (116 tests green, middleware + quota + allowed_models + sanitization)
 - [x] S2 Cancel & Lifecycle — done (127 tests green, process_registry + cancel endpoints + auto-disconnect)
-- [ ] S3 Usage/Pagination/Archive
+- [x] S3 Usage/Pagination/Archive — done (141 tests green, usage + pagination/search + archive/soft-delete)
 - [ ] S4 SSE Completeness
 - [ ] S5 Harness Lifecycle & Health
 - [ ] S6 Credential Profiles
@@ -292,4 +292,4 @@ New tests live in `tests/{unit,integration,e2e,security,performance,contract}/` 
 
 ---
 
-*Last updated: after S2 (feat/s2-cancel) — 127 tests green (96 + 31 S1+S2). Excludes file/image upload per request. Next: S3 Usage/Pagination/Archive.*
+*Last updated: after S3 (feat/s3-usage) — 141 tests green (96 + 45 S1+S2+S3). Excludes file/image upload per request. Next: S4 SSE Completeness.*
