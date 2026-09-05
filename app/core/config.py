@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     model_refresh_seconds: int = 300
     rate_limit_per_minute: int = 60
     rate_limit_enabled: bool = True
+    sse_heartbeat_seconds: int = 15
+    sse_retry_ms: int = 3000
     default_system_prompt: str = (
         "You are a professional AI assistant operating as a real API (like OpenAI) — not as a Harness or Agent that executes commands. "
         "Strict rules:\n"

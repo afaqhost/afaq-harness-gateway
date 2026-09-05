@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import time
@@ -337,6 +338,7 @@ async def stream_message(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
 ):
     conv = await _get_conversation_or_404(conv_id, user, db)
     content = payload.content.strip()
@@ -369,56 +371,117 @@ async def stream_message(
 
     # request_id for cancel tracking
     request_id = f"chat:{conv.id}:{uuid.uuid4().hex[:8]}"
+    history_key = f"conv:{conv.id}"
 
     async def event_stream():
         from app.db.database import SessionLocal
         from app.services.process_registry import process_registry
+        from app.shared.sse import sse_event
 
         collected: list[str] = []
         started = time.monotonic()
         cancelled = False
+        seq = 1
+
+        # helper to yield and store in history
+        def _store_and_yield(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
+            if retry is None:
+                retry = settings.sse_retry_ms
+            payload = sse_event(event, data, id=id_val, retry=retry)
+            # store for reconnect (per conv)
+            try:
+                process_registry.append_history(history_key, id_val if id_val is not None else seq, payload)
+            except Exception:
+                pass
+            return payload
+
+        # replay from Last-Event-ID if provided
+        if last_event_id is not None:
+            try:
+                last_id = int(last_event_id)
+                replay = process_registry.get_replay(history_key, last_id)
+                for rp in replay:
+                    yield rp
+                # set seq to max after replay
+                hist = process_registry.get_history(history_key)
+                if hist:
+                    seq = max(s for s, _ in hist) + 1
+                else:
+                    seq = last_id + 1
+            except ValueError:
+                pass
+
+        # lifecycle: start
+        start_data = {"id": str(conv.id), "model": model, "created": int(time.time()), "request_id": request_id}
+        yield _store_and_yield("start", start_data, id_val=seq, retry=settings.sse_retry_ms)
+        seq += 1
+
+        # heartbeat + token loop with configurable timeout (keep pending task alive)
+        stream_iter = adapter.stream(prompt, model_name, request_id=request_id).__aiter__()
+        pending = None
         try:
-            async for text, metadata in adapter.stream(prompt, model_name, request_id=request_id):
-                # auto-cancel on client disconnect
+            while True:
                 if await request.is_disconnected():
                     logger.info("client_disconnected cancelling request_id=%s", request_id)
                     await process_registry.cancel(request_id)
                     cancelled = True
-                    # yield cancel event for S2 (S4 will use proper event: cancel)
-                    yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled by client'}})}\n\n"
+                    if pending:
+                        pending.cancel()
+                    yield _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
                     break
+                if pending is None:
+                    pending = asyncio.create_task(stream_iter.__anext__())
+                done, _ = await asyncio.wait([pending], timeout=settings.sse_heartbeat_seconds)
+                if not done:
+                    yield ": keepalive\n\n"
+                    continue
+                try:
+                    text, metadata = pending.result()
+                except StopAsyncIteration:
+                    break
+                pending = None
+
+                if await request.is_disconnected():
+                    await process_registry.cancel(request_id)
+                    cancelled = True
+                    yield _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
+                    break
+
                 if not text:
                     continue
                 collected.append(text)
                 chunk = {
-                    "id": conv.id,
+                    "id": str(conv.id),
                     "object": "chat.completion.chunk",
                     "created": int(time.time()),
                     "model": model,
                     "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
                 }
-                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-                # also check disconnect after yield
-                if await request.is_disconnected():
-                    await process_registry.cancel(request_id)
-                    cancelled = True
-                    yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled by client'}})}\n\n"
-                    break
+                yield _store_and_yield("token", chunk, id_val=seq, retry=settings.sse_retry_ms)
+                seq += 1
+
             if cancelled:
-                # do not emit DONE, do not persist success record
                 return
             if not collected:
                 raise RuntimeError("Harness returned empty response — لا يوجد رد من الموديل. جرب موديل آخر مثل opencode/big-pickle")
-            final = {
-                "id": conv.id,
-                "object": "chat.completion.chunk",
-                "created": int(time.time()),
+
+            # usage before done
+            full_text = "".join(collected)
+            usage_data = {
+                "prompt_tokens": len(prompt.split()),
+                "completion_tokens": len(full_text.split()),
+                "total_tokens": len(prompt.split()) + len(full_text.split()),
+                "harness": harness_name,
                 "model": model,
-                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
             }
-            yield f"data: {json.dumps(final)}\n\ndata: [DONE]\n\n"
+            yield _store_and_yield("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
+            seq += 1
+
+            # also show token done as event: done with [DONE]
+            yield _store_and_yield("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
+            seq += 1
+
             async with SessionLocal() as session:
-                full_text = "".join(collected)
                 msg = Message(conversation_id=conv.id, role="assistant", content=full_text)
                 session.add(msg)
                 conv2 = await session.get(Conversation, conv.id)
@@ -438,13 +501,11 @@ async def stream_message(
                 )
                 await session.commit()
         except RuntimeError as exc:
-            # if we were cancelled, the process kill may surface as RuntimeError — treat as cancelled
-            # exit code -9 (SIGKILL) / -15 (SIGTERM) indicates killed via cancel
             msg_lower = str(exc).lower()
             is_killed = "exit code -9" in msg_lower or "exit code -15" in msg_lower or "killed" in msg_lower
             if cancelled or "cancel" in msg_lower or is_killed:
                 logger.info("stream_cancelled request_id=%s error=%s", request_id, str(exc))
-                yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled'}})}\n\n"
+                yield _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled"}, id_val=seq)
                 return
             logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
             sanitized = _sanitize_harness_error(exc)
@@ -458,10 +519,9 @@ async def stream_message(
                         conv2.updated_at = datetime.utcnow()
                     await session.commit()
             except Exception:
-                # best-effort persistence after harness failure — never mask original harness error
                 pass
-            err = {"error": {"code": "harness_error", "message": sanitized, "type": "harness_error"}}
-            yield f"data: {json.dumps(err, ensure_ascii=False)}\n\n"
+            err = {"code": "harness_error", "message": sanitized, "type": "harness_error"}
+            yield _store_and_yield("error", err, id_val=seq)
 
     return StreamingResponse(
         event_stream(),

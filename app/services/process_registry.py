@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 
 
@@ -27,6 +28,8 @@ class ProcessRegistry:
         self._map: dict[str, ProcessHandle] = {}
         self._lock = asyncio.Lock()
         self._pending_cancel: set[str] = set()
+        # event history for SSE reconnect (per key, max 100)
+        self._history: dict[str, deque[tuple[int, str]]] = defaultdict(lambda: deque(maxlen=100))
 
     async def register(self, request_id: str, handle: ProcessHandle) -> None:
         # if cancel was requested before register (race), kill immediately and don't store
@@ -87,6 +90,19 @@ class ProcessRegistry:
         # sync clear for tests (no lock needed in single-threaded test)
         self._map.clear()
         self._pending_cancel.clear()
+        self._history.clear()
+
+    def append_history(self, key: str, seq: int, payload: str) -> None:
+        self._history[key].append((seq, payload))
+
+    def get_replay(self, key: str, last_id: int) -> list[str]:
+        dq = self._history.get(key)
+        if not dq:
+            return []
+        return [payload for seq, payload in dq if seq > last_id]
+
+    def get_history(self, key: str) -> deque[tuple[int, str]]:
+        return self._history.get(key, deque())
 
     # for test introspection
     @property

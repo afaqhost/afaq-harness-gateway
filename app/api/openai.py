@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import time
@@ -91,7 +92,13 @@ async def models():
 
 
 @router.post("/chat/completions")
-async def chat_completions(request_payload: ChatRequest, request: Request, authorization: str | None = Header(default=None), db: AsyncSession = Depends(get_db)):
+async def chat_completions(
+    request_payload: ChatRequest,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+    db: AsyncSession = Depends(get_db),
+):
     user_id, key_id = await resolve_identity(authorization, db)
     if not user_id:
         raise HTTPException(401, "Authentication required. Please sign in or provide a valid API key.")
@@ -119,7 +126,7 @@ async def chat_completions(request_payload: ChatRequest, request: Request, autho
 
     if request_payload.stream:
         return StreamingResponse(
-            _stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request),
+            _stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request, last_event_id),
             media_type="text/event-stream",
             headers={"X-Request-ID": completion_id},
         )
@@ -136,22 +143,79 @@ def _sanitize_harness_error(exc: Exception) -> str:
     return "Harness error — please try again later"
 
 
-async def _stream_response(adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request):
+async def _stream_response(
+    adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request, last_event_id: str | None = None
+):
     started = time.monotonic()
     collected: list[str] = []
 
     async def event_stream():
         from app.services.process_registry import process_registry
+        from app.shared.sse import sse_event
+
+        history_key = f"openai:{user_id}"
+        seq = 1
+
+        def _store(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
+            if retry is None:
+                retry = settings.sse_retry_ms
+            payload = sse_event(event, data, id=id_val, retry=retry)
+            try:
+                process_registry.append_history(history_key, id_val if id_val is not None else seq, payload)
+            except Exception:
+                pass
+            return payload
+
+        # replay from Last-Event-ID
+        if last_event_id is not None:
+            try:
+                last_id = int(last_event_id)
+                for rp in process_registry.get_replay(history_key, last_id):
+                    yield rp
+                hist = process_registry.get_history(history_key)
+                if hist:
+                    seq = max(s for s, _ in hist) + 1
+                else:
+                    seq = last_id + 1
+            except ValueError:
+                pass
+
+        # start lifecycle
+        start_data = {"id": completion_id, "model": request_model, "created": int(time.time())}
+        yield _store("start", start_data, id_val=seq, retry=settings.sse_retry_ms)
+        seq += 1
 
         cancelled = False
+        stream_iter = adapter.stream(prompt, model, request_id=completion_id).__aiter__()
+        pending = None
         try:
-            async for text, metadata in adapter.stream(prompt, model, request_id=completion_id):
+            while True:
                 if await request.is_disconnected():
                     logger.info("client_disconnected cancelling completion_id=%s", completion_id)
                     await process_registry.cancel(completion_id)
                     cancelled = True
-                    yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled by client'}})}\n\n"
+                    if pending:
+                        pending.cancel()
+                    yield _store("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
                     break
+                if pending is None:
+                    pending = asyncio.create_task(stream_iter.__anext__())
+                done, _ = await asyncio.wait([pending], timeout=settings.sse_heartbeat_seconds)
+                if not done:
+                    yield ": keepalive\n\n"
+                    continue
+                try:
+                    text, metadata = pending.result()
+                except StopAsyncIteration:
+                    break
+                pending = None
+
+                if await request.is_disconnected():
+                    await process_registry.cancel(completion_id)
+                    cancelled = True
+                    yield _store("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
+                    break
+
                 collected.append(text)
                 chunk = {
                     "id": completion_id,
@@ -160,22 +224,26 @@ async def _stream_response(adapter, prompt: str, model: str, request_model: str,
                     "model": request_model,
                     "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
                 }
-                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-                if await request.is_disconnected():
-                    await process_registry.cancel(completion_id)
-                    cancelled = True
-                    yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled by client'}})}\n\n"
-                    break
+                yield _store("token", chunk, id_val=seq, retry=settings.sse_retry_ms)
+                seq += 1
+
             if cancelled:
                 return
-            final = {
-                "id": completion_id,
-                "object": "chat.completion.chunk",
-                "created": int(time.time()),
+            if not collected:
+                raise RuntimeError("Harness returned empty response — لا يوجد رد من الموديل. جرب موديل آخر مثل opencode/big-pickle")
+
+            usage_data = {
+                "prompt_tokens": len(prompt.split()),
+                "completion_tokens": len("".join(collected).split()),
+                "total_tokens": len(prompt.split()) + len("".join(collected).split()),
+                "harness": harness_name,
                 "model": request_model,
-                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
             }
-            yield f"data: {json.dumps(final)}\n\ndata: [DONE]\n\n"
+            yield _store("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
+            seq += 1
+
+            yield _store("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
+
             db.add(
                 UsageRecord(
                     user_id=user_id,
@@ -194,12 +262,12 @@ async def _stream_response(adapter, prompt: str, model: str, request_model: str,
             is_killed = "exit code -9" in msg_lower or "exit code -15" in msg_lower or "killed" in msg_lower
             if cancelled or "cancel" in msg_lower or is_killed:
                 logger.info("stream_cancelled completion_id=%s error=%s", completion_id, str(exc))
-                yield f"data: {json.dumps({'error': {'code': 'cancelled', 'message': 'cancelled'}})}\n\n"
+                yield _store("cancel", {"code": "cancelled", "message": "cancelled"}, id_val=seq)
                 return
             logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
             sanitized = _sanitize_harness_error(exc)
-            err = {"error": {"code": "harness_error", "message": sanitized, "type": "harness_error"}}
-            yield f"data: {json.dumps(err)}\n\n"
+            err = {"code": "harness_error", "message": sanitized, "type": "harness_error"}
+            yield _store("error", err, id_val=seq)
 
     async for chunk in event_stream():
         yield chunk
