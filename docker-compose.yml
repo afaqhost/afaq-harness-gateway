@@ -11,7 +11,7 @@ services:
       - afaq_data:/app/data
       - afaq_storage:/app/storage
       - afaq_harnesses:/root/.npm
-      - /var/run/docker.sock:/var/run/docker.sock
+      # DO NOT mount docker.sock in production — use Docker TCP+TLS or build-only image
     restart: unless-stopped
 volumes:
   afaq_data:

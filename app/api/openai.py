@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 import uuid
 
@@ -13,8 +14,12 @@ from app.core.config import settings
 from app.core.security import hash_api_key
 from app.db.database import APIKey, UsageRecord, User, get_db
 from app.harnesses.registry import all_adapters, cached_models, get_adapter
+from app.services import quota_service
+from app.services.model_service import is_model_allowed, validate_model_or_400
 from app.shared.model_utils import parse_model_identifier as split_model
 from app.shared.prompt_utils import build_harness_prompt, build_history_prompt
+
+logger = logging.getLogger("afaq")
 
 router = APIRouter()
 
@@ -91,7 +96,19 @@ async def chat_completions(request_payload: ChatRequest, authorization: str | No
     if not user_id:
         raise HTTPException(401, "Authentication required. Please sign in or provide a valid API key.")
 
-    harness_name, model = split_model(request_payload.model)
+    # Enforce per-key quota and allowed_models if using API key
+    if key_id is not None:
+        api_key = await db.get(APIKey, key_id)
+        if api_key:
+            await quota_service.enforce_quota(db, api_key)
+            if not is_model_allowed(request_payload.model, api_key.allowed_models):
+                raise HTTPException(
+                    status_code=403,
+                    detail={"error": {"code": "model_forbidden", "message": f"Model '{request_payload.model}' is not allowed for this API key."}},
+                )
+
+    # Validate model (harness existence, cache, codex block)
+    harness_name, model = validate_model_or_400(request_payload.model)
     try:
         adapter = get_adapter(harness_name)
     except KeyError:
@@ -107,6 +124,15 @@ async def chat_completions(request_payload: ChatRequest, authorization: str | No
         )
 
     return await _non_stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db)
+
+
+def _sanitize_harness_error(exc: Exception) -> str:
+    msg = str(exc).lower()
+    if "ollama" in msg or "model" in msg and "not found" in msg:
+        return "Harness failed — check model availability"
+    if "timed out" in msg or "timeout" in msg:
+        return "Harness timed out — try again or use a different model"
+    return "Harness error — please try again later"
 
 
 async def _stream_response(adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession):
@@ -147,7 +173,9 @@ async def _stream_response(adapter, prompt: str, model: str, request_model: str,
             )
             await db.commit()
         except RuntimeError as exc:
-            err = {"error": {"message": str(exc), "type": "harness_error"}}
+            logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
+            sanitized = _sanitize_harness_error(exc)
+            err = {"error": {"code": "harness_error", "message": sanitized, "type": "harness_error"}}
             yield f"data: {json.dumps(err)}\n\n"
 
     async for chunk in event_stream():
@@ -159,7 +187,10 @@ async def _non_stream_response(adapter, prompt: str, model: str, request_model: 
     try:
         result = await adapter.run(prompt, model)
     except RuntimeError as exc:
-        raise HTTPException(502, str(exc))
+        logger.error("harness_error harness=%s model=%s error=%s", harness_name, model, str(exc))
+        sanitized = _sanitize_harness_error(exc)
+        status = 504 if "timed out" in str(exc).lower() or "timeout" in str(exc).lower() else 502
+        raise HTTPException(status_code=status, detail={"error": {"code": "harness_error", "message": sanitized}})
     usage = {
         "prompt_tokens": result.prompt_tokens or len(prompt.split()),
         "completion_tokens": result.completion_tokens or len(result.text.split()),

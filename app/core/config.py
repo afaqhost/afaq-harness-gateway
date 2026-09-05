@@ -11,14 +11,16 @@ class Settings(BaseSettings):
     port: int = 3500
     debug: bool = False
     database_url: str = f"sqlite+aiosqlite:///{BASE_DIR / 'data' / 'afaq.db'}"
-    secret_key: str = "change-me-in-production"
-    credentials_key: str = "change-me-in-production-32-byte-key"
+    secret_key: str = ""
+    credentials_key: str = ""
     access_token_expire_minutes: int = 1440
     harness_timeout_seconds: int = 600
     harness_data_dir: Path = BASE_DIR / "storage" / "harnesses"
     uploads_dir: Path = BASE_DIR / "storage" / "uploads"
-    allowed_origins: str = "*"
+    allowed_origins: str = "http://127.0.0.1:3500,http://localhost:3500"
     model_refresh_seconds: int = 300
+    rate_limit_per_minute: int = 60
+    rate_limit_enabled: bool = True
     default_system_prompt: str = (
         "You are a professional AI assistant operating as a real API (like OpenAI) — not as a Harness or Agent that executes commands. "
         "Strict rules:\n"
@@ -41,10 +43,22 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    import os
+    import sys
+
     settings = Settings()
     (BASE_DIR / "data").mkdir(parents=True, exist_ok=True)
     settings.harness_data_dir.mkdir(parents=True, exist_ok=True)
     settings.uploads_dir.mkdir(parents=True, exist_ok=True)
+    # Fail fast if secrets are missing in production (debug==False)
+    # Skip check during tests (PYTEST_CURRENT_TEST env set) or when using in-memory DB or pytest imported
+    is_test = bool(os.getenv("PYTEST_CURRENT_TEST")) or ":memory:" in settings.database_url or "pytest" in sys.modules
+    if not settings.debug and not is_test:
+        insecure_secrets = {"", "change-me-in-production", "change-me-in-production-32-byte-key", "replace-with-a-long-random-secret", "replace-with-a-long-random-encryption-secret"}
+        if settings.secret_key in insecure_secrets or not settings.secret_key:
+            raise RuntimeError("SECRET_KEY must be set to a strong random value in production (debug=false)")
+        if settings.credentials_key in insecure_secrets or not settings.credentials_key:
+            raise RuntimeError("CREDENTIALS_KEY must be set to a strong random value in production (debug=false)")
     return settings
 
 settings = get_settings()

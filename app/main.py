@@ -12,6 +12,7 @@ from app.api.auth import router as auth_router
 from app.api.admin import router as admin_router
 from app.api.chat import router as chat_router
 from app.harnesses.registry import refresh_models
+from app.middleware.rate_limit import RateLimitMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,7 +21,9 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title=settings.app_name, version=settings.version, description="OpenAI-compatible gateway for terminal AI harnesses", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins.split(","), allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+# Rate limiting before CORS so CORS preflight is handled outermost (last added = outermost)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.allowed_origins.split(",") if o.strip()], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 app.include_router(openai_router, prefix="/v1")

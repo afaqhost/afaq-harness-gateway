@@ -1,8 +1,9 @@
 import json
+import logging
 import time
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import desc, select
@@ -10,12 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
 from app.core.config import settings
-from app.db.database import Conversation, Message, UsageRecord, User, get_db
+from app.core.security import hash_api_key
+from app.db.database import APIKey, Conversation, Message, UsageRecord, User, get_db
 from app.harnesses.registry import get_adapter
 from app.repositories.conversation_repository import (
     fetch_conversation_summary,
     get_conversation_or_404 as repo_get_conversation_or_404,
 )
+from app.services import quota_service
 from app.services.model_service import (
     select_model_for_conversation,
     select_model_for_new_conversation,
@@ -23,6 +26,27 @@ from app.services.model_service import (
 )
 from app.shared.model_utils import preview_text as _preview
 from app.shared.prompt_utils import build_harness_prompt, build_history_prompt
+
+logger = logging.getLogger("afaq")
+
+
+def _sanitize_harness_error(exc: Exception) -> str:
+    msg = str(exc).lower()
+    if "ollama" in msg or ("model" in msg and "not found" in msg):
+        return "Harness failed — check model availability"
+    if "timed out" in msg or "timeout" in msg:
+        return "Harness timed out — try again or use a different model"
+    return "Harness error — please try again later"
+
+
+async def _resolve_api_key(authorization: str | None, db: AsyncSession) -> APIKey | None:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    raw = authorization.split(" ", 1)[1].strip()
+    if not raw.startswith("afaq_"):
+        return None
+    digest = hash_api_key(raw)
+    return (await db.execute(select(APIKey).where(APIKey.key_hash == digest, APIKey.is_active == True))).scalar_one_or_none()
 
 router = APIRouter()
 
@@ -110,8 +134,17 @@ async def list_conversations(user: User = Depends(current_user), db: AsyncSessio
 
 
 @router.post("/conversations", response_model=ConversationOut)
-async def create_conversation(payload: ConversationCreate, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    model = select_model_for_new_conversation(payload.model)
+async def create_conversation(
+    payload: ConversationCreate,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+):
+    api_key = await _resolve_api_key(authorization, db)
+    allowed = api_key.allowed_models if api_key else None
+    if api_key:
+        await quota_service.enforce_quota(db, api_key)
+    model = select_model_for_new_conversation(payload.model, allowed_models=allowed)
     title = payload.title or "New chat"
     conv = Conversation(user_id=user.id, title=title, model=model)
     db.add(conv)
@@ -153,7 +186,13 @@ async def delete_conversation(conv_id: int, user: User = Depends(current_user), 
 
 
 @router.post("/conversations/{conv_id}/messages")
-async def send_message(conv_id: int, payload: MessageCreate, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def send_message(
+    conv_id: int,
+    payload: MessageCreate,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+):
     conv = await _get_conversation_or_404(conv_id, user, db)
     content = payload.content.strip()
     if not content:
@@ -161,7 +200,12 @@ async def send_message(conv_id: int, payload: MessageCreate, user: User = Depend
     if len(content) > 20000:
         raise HTTPException(400, "Message too long (max 20000 chars)")
 
-    model = select_model_for_conversation(payload.model, conv.model)
+    api_key = await _resolve_api_key(authorization, db)
+    allowed = api_key.allowed_models if api_key else None
+    if api_key:
+        await quota_service.enforce_quota(db, api_key)
+
+    model = select_model_for_conversation(payload.model, conv.model, allowed_models=allowed)
     if model != conv.model:
         conv.model = model
 
@@ -188,14 +232,15 @@ async def send_message(conv_id: int, payload: MessageCreate, user: User = Depend
     except HTTPException:
         raise
     except RuntimeError as exc:
-        msg = str(exc)
-        status = 504 if "timed out" in msg.lower() or "timeout" in msg.lower() else 502
-        err_text = f"⚠️ Harness error: {msg}"
+        logger.error("harness_error harness=%s model=%s error=%s", harness_name, model_name, str(exc))
+        sanitized = _sanitize_harness_error(exc)
+        status = 504 if "timed out" in str(exc).lower() or "timeout" in str(exc).lower() else 502
+        err_text = f"⚠️ {sanitized}"
         err_msg = Message(conversation_id=conv.id, role="assistant", content=err_text)
         db.add(err_msg)
         conv.updated_at = datetime.utcnow()
         await db.commit()
-        raise HTTPException(status, msg)
+        raise HTTPException(status_code=status, detail={"error": {"code": "harness_error", "message": sanitized}})
 
     assistant_msg = Message(conversation_id=conv.id, role="assistant", content=result_h.text or "(no response)")
     db.add(assistant_msg)
@@ -231,7 +276,13 @@ async def send_message(conv_id: int, payload: MessageCreate, user: User = Depend
 
 
 @router.post("/conversations/{conv_id}/messages/stream")
-async def stream_message(conv_id: int, payload: MessageCreate, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def stream_message(
+    conv_id: int,
+    payload: MessageCreate,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+):
     conv = await _get_conversation_or_404(conv_id, user, db)
     content = payload.content.strip()
     if not content:
@@ -239,7 +290,12 @@ async def stream_message(conv_id: int, payload: MessageCreate, user: User = Depe
     if len(content) > 20000:
         raise HTTPException(400, "Message too long")
 
-    model = select_model_for_conversation(payload.model, conv.model)
+    api_key = await _resolve_api_key(authorization, db)
+    allowed = api_key.allowed_models if api_key else None
+    if api_key:
+        await quota_service.enforce_quota(db, api_key)
+
+    model = select_model_for_conversation(payload.model, conv.model, allowed_models=allowed)
     harness_name, model_name = _validate_model_or_400(model)
     adapter = get_adapter(harness_name)
 
@@ -305,9 +361,11 @@ async def stream_message(conv_id: int, payload: MessageCreate, user: User = Depe
                 )
                 await session.commit()
         except RuntimeError as exc:
+            logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
+            sanitized = _sanitize_harness_error(exc)
             try:
                 async with SessionLocal() as session:
-                    err_text = f"⚠️ {str(exc)}"
+                    err_text = f"⚠️ {sanitized}"
                     msg = Message(conversation_id=conv.id, role="assistant", content=err_text)
                     session.add(msg)
                     conv2 = await session.get(Conversation, conv.id)
@@ -317,7 +375,7 @@ async def stream_message(conv_id: int, payload: MessageCreate, user: User = Depe
             except Exception:
                 # best-effort persistence after harness failure — never mask original harness error
                 pass
-            err = {"error": {"message": str(exc), "type": "harness_error"}}
+            err = {"error": {"code": "harness_error", "message": sanitized, "type": "harness_error"}}
             yield f"data: {json.dumps(err, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(

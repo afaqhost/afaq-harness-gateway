@@ -5,8 +5,8 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
-from app.core.security import create_access_token, hash_password, verify_password
-from app.db.database import User, get_db
+from app.core.security import create_access_token, hash_api_key, hash_password, verify_password
+from app.db.database import APIKey, User, get_db
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -25,11 +25,35 @@ class UserOut(BaseModel):
     class Config: from_attributes = True
 
 async def current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
-    try: payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"]); user_id = int(payload.get("sub"))
-    except (JWTError, TypeError, ValueError): raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    user = await db.get(User, user_id)
-    if not user or not user.is_active: raise HTTPException(status_code=401, detail="Inactive or missing user")
-    return user
+    # try JWT first
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+        user_id = int(payload.get("sub"))
+        user = await db.get(User, user_id)
+        if user and user.is_active:
+            return user
+        raise HTTPException(status_code=401, detail="Inactive or missing user")
+    except (JWTError, TypeError, ValueError):
+        pass
+    # fallback: try API key (allows chat/OpenAI via API key)
+    try:
+        digest = hash_api_key(token)
+        key = (await db.execute(select(APIKey).where(APIKey.key_hash == digest, APIKey.is_active == True))).scalar_one_or_none()
+        if key:
+            user = await db.get(User, key.user_id)
+            if user and user.is_active:
+                # update last_used_at best-effort
+                try:
+                    from datetime import datetime
+
+                    key.last_used_at = datetime.utcnow()
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
+                return user
+    except Exception:
+        pass
+    raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 async def admin_user(user: User = Depends(current_user)) -> User:
     if user.role != "admin": raise HTTPException(status_code=403, detail="Administrator permission required")
