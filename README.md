@@ -19,18 +19,26 @@ Afaq Harness Gateway is a local OpenAI-compatible gateway for command-line AI to
 ## Quick Start
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+make setup          # venv + deps + .env (auto-generates SECRET_KEY/CREDENTIALS_KEY) + data dirs
+make dev            # → http://127.0.0.1:3500/setup  (wizard on first run) or /login
+```
+
+First run opens the **Setup Wizard** at `/setup` — create the admin account (auto-login) and optionally install harnesses *inside the container* via `npm` with live SSE logs. Subsequent runs go to `/login`. Manual alternative:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
-# generate strong secrets (required when DEBUG=false)
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"  # -> SECRET_KEY
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"  # -> CREDENTIALS_KEY
-# edit .env and set both
+# secrets are auto-patched by make setup; or generate manually:
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"  # -> SECRET_KEY / CREDENTIALS_KEY
 python -m uvicorn app.main:app --host 0.0.0.0 --port 3500
 ```
 
-Open `http://127.0.0.1:3500/login`. On a new database, create the first administrator with the bootstrap endpoint described in [docs/installation.md](docs/installation.md).
+Or via CLI without the wizard:
+
+```bash
+make bootstrap EMAIL=admin@example.com PASS=StrongPass123 NAME=Admin
+```
 
 ## Documentation
 
@@ -55,21 +63,25 @@ The client sends only `Authorization: Bearer <api-key>` to `/v1/chat/completions
 ## Docker Compose
 
 ```bash
-cp .env.example .env
-# set SECRET_KEY / CREDENTIALS_KEY in .env first
+make setup          # generates .env with strong secrets if missing
 docker compose up --build
+# open http://127.0.0.1:3500/setup — wizard will let you create admin + install harnesses inside container
 ```
 
-The service listens on port `3500` with a `HEALTHCHECK` (`/health`). Compose runs `redis:7-alpine` (64 MB, `allkeys-lru`) for rate limiting / history / job mirroring — fallback is in-memory when `REDIS_URL` is empty. It persists `/app/data`, `/app/storage`, and the container's npm directory in named volumes and no longer mounts `docker.sock`. Harness CLIs still need to be installed and authenticated per [docs/harnesses.md](docs/harnesses.md).
+The service listens on port `3500` with a `HEALTHCHECK` (`/health`). Compose runs `redis:7-alpine` (64 MB, `allkeys-lru`) for rate limiting / history / job mirroring — fallback is in-memory when `REDIS_URL` is empty. It persists `/app/data`, `/app/storage`, and the container's npm directory (`/root/.npm`) in named volumes and no longer mounts `docker.sock`. Harness CLIs can be installed directly from the dashboard (*Harnesses → Install* or during the Setup Wizard) — `npm install -g <package>` runs inside the container with live SSE logs. On the host, run `npm install -g <package>` manually and press *Refresh*.
 
 ## Development Checks
 
 ```bash
+make check          # compileall + node --check + pytest -q (204 tests, ~55s)
+# or granular:
 python -m compileall -q app
 node --check app/static/app.js
-.venv/bin/python -m pytest -q          # 204 tests, ~55s, no external services required
+.venv/bin/python -m pytest -q          # no external services required
 # optional: Redis-backed mode
 # REDIS_URL=redis://localhost:6379/0 REDIS_ENABLED=true .venv/bin/python -m pytest -q
+make health         # curl /health
+make setup-status   # check if bootstrap needed
 ```
 
 ## Project Structure (layered)

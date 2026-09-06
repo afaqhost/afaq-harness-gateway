@@ -20,7 +20,7 @@ function applyTheme(t, persist = true) {
   const meta = document.getElementById('theme-color-meta');
   if (meta) meta.content = t === 'light' ? '#f8fafc' : '#0B1020';
   // brand lockup switch
-  document.querySelectorAll('.brand-lockup, .login-logo').forEach(img => {
+  document.querySelectorAll('.brand-lockup, .login-logo, .setup-logo').forEach(img => {
     if (img.src.includes('lockup-')) {
       img.src = t === 'light' ? '/static/brand/lockup-dark.png' : '/static/brand/lockup-white.png';
     }
@@ -29,8 +29,15 @@ function applyTheme(t, persist = true) {
   if (icon) icon.innerHTML = t === 'light'
     ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
     : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  // sync wizard toggle icon as well
+  const setupIcon = document.querySelector('#setup-theme-toggle svg');
+  if (setupIcon) setupIcon.innerHTML = t === 'light'
+    ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+    : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
   const btn = document.getElementById('theme-toggle');
   if (btn) btn.title = t === 'light' ? (language==='ar' ? 'الوضع الفاتح (اضغط للتحويل لداكن)' : 'Light (click for dark)') : (language==='ar' ? 'الوضع الداكن (اضغط للتحويل لفاتح)' : 'Dark (click for light)');
+  const setupBtn = document.getElementById('setup-theme-toggle');
+  if (setupBtn) setupBtn.title = t === 'light' ? (language==='ar' ? 'الوضع الفاتح' : 'Light') : (language==='ar' ? 'الوضع الداكن' : 'Dark');
   if (persist) try { localStorage.setItem('afaq_theme', t); } catch {}
 }
 function toggleTheme() {
@@ -52,12 +59,46 @@ const translations = {
   ar: {
     newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', usage: 'الاستهلاك', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', addUser: 'إضافة مستخدم', displayName: 'الاسم',
     docsTitle: 'توثيق API', docsIntro: 'AFAQ Gateway واجهة متوافقة مع OpenAI تتيح الوصول إلى نماذج الذكاء الاصطناعي من أي تطبيق. جميع النماذج المثبتة متاحة فورًا.', docsOverviewTitle: 'نظرة عامة', docsOverviewText: 'تدعم البوابة معايير OpenAI كاملة —authentication, list models, chat completions, streaming — مع إضافات خاصة بالبوابة.', docsBaseUrl: 'رابط القاعدة', docsBaseUrlText: 'الرابط الأساسي للبوابة هو عنوان الخادم متبوعًا بـ v1', docsQuickStartTitle: 'البداية السريعة', docsQuickStartText: 'أنشئ مفتاح API من لوحة التحكم، ثم أرسل أول طلب في خطوتين: المصادقة ثم الإرسال.', docsAuthTitle: 'المصادقة', docsAuthText: 'أنشئ مفتاح API من لوحة التحكم وأرسله في ترويسة Authorization مع كل طلب بهذا الشكل: Bearer afaq_YOUR_KEY', docsModelsTitle: 'الموديلات', docsModelsText: 'استخدم GET /v1/models لمعرفة قائمة كاملة بجميع الموديلات المتاحة من جميع الهارنسس المثبتة.', docsResponseTitle: 'الاستجابة', docsResponseText: 'الرد الكامل موجود في choices[0].message.content. تأكد من التحقق من ok === true.', docsModelsHeading: 'جلب الموديلات', docsModelsBody: 'يعيد هذا المسار قائمة بجميع الموديلات المتاحة. كل موديل له معرف فريد بصيغة harness/provider/model — مثل opencode//opencode/big-pickle.', docsChatHeading: 'إرسال رسالة', docsChatBody: 'أرسل طلب POST إلى /v1/chat/completions مع مفتاح API في الترويسة ورسائل المحادثة في الجسم.', docsModelIdTitle: 'صيغة معرف الموديل', docsModelIdText: 'كل معرف موديل يتكون من ثلاثة أجزاء مفصولة بـ //: اسم الهارنسس // المزود // اسم الموديل. مثال: opencode//opencode/big-pickle.', docsContextTitle: 'الذاكرة السياقية', docsContextText: 'البوابة تحفظ سياق المحادثة تلقائيًا لكل محادثة على حدة. أرسل نفس محادثة继续保持 نفس السياق دون إعادة إرسال السجل.', docsSystemPromptTitle: 'التعليمات النظامية', docsSystemPromptText: 'أضف role: system في مصفوفة الرسائل لتعيين سلوك الموديل. سيتم إرسالها مع كل طلب.', docsStreamHeading: 'البث المباشر (Streaming)', docsStreamText: 'فعّل stream: true للحصول على الرد تدريجيًا عبر SSE. كل جزء يحتوي delta.content يتم إلحاقه بالرد. الطلب الناجح ينتهي بـ data: [DONE].', docsStreamExampleHeading: 'مثال على البث', docsStreamExampleText: 'أضف stream: true في جسم الطلب، ثم اقرأ Server-Sent Events من الاستجابة.', docsErrorsTitle: 'أخطاء شائعة', docsErrorsText: '401 = مفتاح غير صالح أو انتهت الجلسة. 400 = اسم هارنس غير معروف. 502 = خطأ في أداة CLI. 504 = انتهت مهلة الاتصال.',
-    searchModels: 'ابحث عن موديل... (claude, gpt, gemini)', filterAll: 'الكل', modelFooterHint: '↑↓ للتنقل · Enter للاختيار · Esc للإغلاق', noModelsFound: 'لا توجد نتائج'
+    searchModels: 'ابحث عن موديل... (claude, gpt, gemini)', filterAll: 'الكل', modelFooterHint: '↑↓ للتنقل · Enter للاختيار · Esc للإغلاق', noModelsFound: 'لا توجد نتائج',
+    setupEyebrow: 'الإعداد الأولي — 3 خطوات', setupTitle: 'مرحباً بك في AFAQ', setupSubtitle: 'أنشئ حساب المدير ثم اختر الأدوات التي تريد تثبيتها — كل شيء داخل الكونتينر',
+    setupStep1: 'حساب المدير', setupStep2: 'الأدوات', setupStep3: 'جاهز',
+    setupCreateAdmin: 'إنشاء حساب المدير', setupCreateDesc: 'هذا الحساب سيكون المدير الأول — يمكنك إضافة مستخدمين لاحقاً من لوحة التحكم',
+    confirmPassword: 'تأكيد كلمة المرور', setupCreateBtn: 'إنشاء الحساب والدخول', setupHint: 'سيتم تسجيل دخولك تلقائياً بعد الإنشاء',
+    setupHarnessTitle: 'الأدوات المتاحة', setupHarnessDesc: 'اختر ما تريد تثبيته الآن — يمكنك تثبيت البقية لاحقاً من صفحة الهارنسس. التثبيت يتم داخل الكونتينر عبر npm.',
+    installLog: 'سجل التثبيت', close: 'إغلاق', setupSkip: 'تخطي — الذهاب للمحادثة', setupNext: 'متابعة',
+    setupDockerNote: 'على الخادم المضيف: يمكنك أيضاً تشغيل npm install -g <package> يدوياً ثم اضغط تحديث',
+    setupDoneTitle: 'كل شيء جاهز!', setupDoneDesc: 'تم إنشاء حسابك وتجهيز البوابة. يمكنك الآن بدء المحادثة أو إنشاء مفاتيح API.',
+    setupGoChat: 'الذهاب للمحادثة', installing: 'جارٍ التثبيت...', install: 'تثبيت', update: 'تحديث', installed: 'مثبّت', notInstalled: 'غير مثبّت',
+    setupPasswordMismatch: 'كلمتا المرور غير متطابقتين', setupPasswordShort: 'كلمة المرور قصيرة — 8 أحرف على الأقل',
+    setupEmailInvalid: 'البريد الإلكتروني غير صالح', setupCreating: 'جارٍ الإنشاء...',
+    viewLog: 'عرض السجل', cancel: 'إلغاء', confirm: 'تأكيد', prompt: 'إدخال',
+    copied: 'تم النسخ', copiedMsg: 'تم النسخ', copyMsg: 'نسخ', retry: 'إعادة', you: 'أنت', assistant: 'المساعد', typing: 'يكتب...', messages: 'رسائل', newChatTitle: 'محادثة جديدة', rename: 'إعادة تسمية', delete: 'حذف', active: 'نشط', disabled: 'معطّل', noKeys: 'لا توجد مفاتيح بعد', noChats: 'لا توجد محادثات بعد',
+    refreshError: 'فشل التحديث', keyError: 'خطأ المفتاح', toggleError: 'خطأ التبديل', deleteError: 'خطأ الحذف', deleteConfirm: 'هل أنت متأكد من حذف هذا المفتاح؟', confirmDelete: 'تأكيد الحذف',
+    chatError: 'خطأ المحادثة', sessionExpired: 'انتهت الجلسة — يرجى تسجيل الدخول مجدداً',
+    usageTotal: 'إجمالي', usage: 'الاستهلاك', usageHarness: 'الهارنس', usageModel: 'الموديل', usageTokens: 'الرموز', usageLatency: 'الزمن', usageDate: 'التاريخ', export: 'تصدير', prev: 'السابق', next: 'التالي', filters: 'الفلاتر', apply: 'تطبيق', clearFilters: 'مسح الفلاتر', usageChartTitle: 'الاستهلاك خلال 7 أيام', usageHistory: 'السجل التفصيلي', models: 'موديلات',
+    filterAllHarnesses: 'كل الهارنسس', usageModelPlaceholder: 'فلتر الموديل', dateRange: 'النطاق الزمني', last7Days: 'آخر 7 أيام', last30Days: 'آخر 30 يوم', last90Days: 'آخر 90 يوم', allTime: 'كل الوقت', usageChartEmpty: 'لا توجد بيانات كافية للرسم', usageEmpty: 'لا توجد بيانات بعد', usageStatTotal: 'إجمالي'
   },
   en: {
     newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', usage: 'Usage', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', addUser: 'Add user', displayName: 'Name',
     docsTitle: 'API Documentation', docsIntro: 'AFAQ Gateway is an OpenAI-compatible interface for AI models from any application. All installed models are immediately available.', docsOverviewTitle: 'Overview', docsOverviewText: 'The gateway supports the full OpenAI standard — authentication, list models, chat completions, streaming — plus gateway-specific extensions.', docsBaseUrl: 'Base URL', docsBaseUrlText: 'The base URL is your gateway server address followed by /v1', docsQuickStartTitle: 'Quick Start', docsQuickStartText: 'Create an API key from the dashboard, then send your first request in two steps: authenticate, then send.', docsAuthTitle: 'Authentication', docsAuthText: 'Create an API key from the dashboard and include it in the Authorization header with every request: Bearer afaq_YOUR_KEY', docsModelsTitle: 'Models', docsModelsText: 'Use GET /v1/models to get a full list of all available models from all installed harnesses.', docsResponseTitle: 'Response', docsResponseText: 'The full reply is at choices[0].message.content. Always check ok === true in the response.', docsModelsHeading: 'List models', docsModelsBody: 'This route returns all available models. Each model has a unique ID in the format harness/provider/model — e.g. opencode//opencode/big-pickle.', docsChatHeading: 'Send a message', docsChatBody: 'Send a POST request to /v1/chat/completions with your API key in the header and the conversation messages in the body.', docsModelIdTitle: 'Model ID Format', docsModelIdText: 'Every model ID has three parts separated by //: harness name // provider // model name. Example: opencode//opencode/big-pickle.', docsContextTitle: 'Context Memory', docsContextText: 'The gateway automatically maintains conversation context for each chat. Send to the same conversation to keep the context without resending the full history.', docsSystemPromptTitle: 'System Prompt', docsSystemPromptText: 'Add role: system in the messages array to set the model behavior. It will be sent with every request.', docsStreamHeading: 'Streaming', docsStreamText: 'Set stream: true to receive the reply incrementally via SSE. Each chunk contains delta.content that appends to the reply. Successful streams end with data: [DONE].', docsStreamExampleHeading: 'Streaming Example', docsStreamExampleText: 'Add stream: true in the request body, then read Server-Sent Events from the response.', docsErrorsTitle: 'Common errors', docsErrorsText: '401 = invalid or expired key. 400 = unknown harness name. 502 = CLI tool error. 504 = connection timed out.',
-    searchModels: 'Search models... (claude, gpt, gemini)', filterAll: 'All', modelFooterHint: '↑↓ Navigate · Enter Select · Esc Close', noModelsFound: 'No results'
+    searchModels: 'Search models... (claude, gpt, gemini)', filterAll: 'All', modelFooterHint: '↑↓ Navigate · Enter Select · Esc Close', noModelsFound: 'No results',
+    setupEyebrow: 'Initial setup — 3 steps', setupTitle: 'Welcome to AFAQ', setupSubtitle: 'Create the admin account then pick tools to install — everything inside the container',
+    setupStep1: 'Admin account', setupStep2: 'Harnesses', setupStep3: 'Ready',
+    setupCreateAdmin: 'Create admin account', setupCreateDesc: 'This will be the first admin — you can add users later from the dashboard',
+    confirmPassword: 'Confirm password', setupCreateBtn: 'Create & Enter', setupHint: 'You will be logged in automatically',
+    setupHarnessTitle: 'Available Harnesses', setupHarnessDesc: 'Pick what to install now — you can install the rest later from the Harnesses page. Installed inside the container via npm.',
+    installLog: 'Install log', close: 'Close', setupSkip: 'Skip — Go to chat', setupNext: 'Continue',
+    setupDockerNote: 'On the host: you can also run npm install -g <package> manually then hit refresh',
+    setupDoneTitle: 'All set!', setupDoneDesc: 'Account created and gateway ready. Start chatting or create API keys.',
+    setupGoChat: 'Go to chat', installing: 'Installing...', install: 'Install', update: 'Update',
+    setupPasswordMismatch: 'Passwords do not match', setupPasswordShort: 'Password too short — 8 chars minimum',
+    setupEmailInvalid: 'Invalid email', setupCreating: 'Creating...',
+    viewLog: 'View log', cancel: 'Cancel', confirm: 'Confirm', prompt: 'Input',
+    copied: 'Copied', copiedMsg: 'Copied', copyMsg: 'Copy', retry: 'Retry', you: 'You', assistant: 'Assistant', typing: 'typing...', messages: 'messages', newChatTitle: 'New chat', rename: 'Rename', delete: 'Delete', active: 'Active', disabled: 'Disabled', noKeys: 'No keys yet', noChats: 'No chats yet',
+    refreshError: 'Refresh failed', keyError: 'Key error', toggleError: 'Toggle failed', deleteError: 'Delete failed', deleteConfirm: 'Are you sure you want to delete this key?', confirmDelete: 'Confirm delete',
+    chatError: 'Chat error', sessionExpired: 'Session expired — please sign in again',
+    usageTotal: 'Total', usage: 'Usage', usageHarness: 'Harness', usageModel: 'Model', usageTokens: 'Tokens', usageLatency: 'Latency', usageDate: 'Date', export: 'Export', prev: 'Prev', next: 'Next', filters: 'Filters', apply: 'Apply', clearFilters: 'Clear filters', usageChartTitle: 'Usage last 7 days', usageHistory: 'History', models: 'models',
+    filterAllHarnesses: 'All harnesses', usageModelPlaceholder: 'model filter', dateRange: 'Date range', last7Days: 'Last 7 days', last30Days: 'Last 30 days', last90Days: 'Last 90 days', allTime: 'All time', usageChartEmpty: 'Not enough data', usageEmpty: 'No data yet', usageStatTotal: 'Total'
   }
 };
 
@@ -1482,21 +1523,440 @@ window.onpopstate = ()=> show(document.body.dataset.page||'chat', false);
   if(nextBtn) nextBtn.addEventListener('click', ()=>{ usageOffset+=usageLimit; loadUsage(); });
 })();
 
+// ---------- Harnesses with Install ----------
+const HARNESS_META = {
+  opencode: { pkg: 'opencode-ai', desc: { ar: 'محرك نماذج خفيف — big-pickle, claude-sonnet', en: 'Lightweight engine — big-pickle, claude-sonnet' } },
+  codex: { pkg: '@openai/codex', desc: { ar: 'واجهة OpenAI Codex', en: 'OpenAI Codex CLI' } },
+  claude: { pkg: '@anthropic-ai/claude-code', desc: { ar: 'أداة Claude الرسمية', en: 'Official Claude Code CLI' } },
+  commandcode: { pkg: 'command-code', desc: { ar: 'Command Code — دعم DeepSeek', en: 'Command Code — DeepSeek support' } },
+};
+
+let setupInstalling = null;
+
+async function checkSetupStatus() {
+  try {
+    const r = await fetch('/api/auth/setup-status');
+    if (!r.ok) return { needs_setup: false, has_users: true };
+    return await r.json();
+  } catch { return { needs_setup: false, has_users: true }; }
+}
+
+function showSetupPanel(n) {
+  document.querySelectorAll('.setup-panel').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById(`setup-panel-${n}`);
+  if (target) target.classList.add('active');
+  document.querySelectorAll('.stepper-step').forEach(s => {
+    const step = parseInt(s.dataset.step);
+    s.classList.toggle('active', step === n);
+    s.classList.toggle('done', step < n);
+  });
+  document.querySelectorAll('.stepper-line').forEach((line, idx) => {
+    line.classList.toggle('filled', idx < n - 1);
+  });
+  const stepper = document.getElementById('setup-stepper');
+  if (stepper) stepper.setAttribute('aria-valuenow', n);
+  // update brand logo theme
+  const img = document.querySelector('.setup-logo');
+  if (img) img.src = theme === 'light' ? '/static/brand/lockup-dark.png' : '/static/brand/lockup-white.png';
+}
+
+async function loadSetupHarnesses() {
+  const grid = document.getElementById('setup-harness-grid');
+  if (!grid) return;
+  grid.innerHTML = `<div class="muted" style="grid-column:1/-1; text-align:center; padding:18px">${text('loading')}</div>`;
+  try {
+    const hs = await api('/api/admin/harnesses');
+    if (!hs.length) {
+      grid.innerHTML = `<div class="muted" style="grid-column:1/-1; text-align:center">${text('noModelsFound')}</div>`;
+      return;
+    }
+    grid.innerHTML = hs.map(h => {
+      const meta = HARNESS_META[h.name] || { pkg: h.name, desc: { ar: '', en: '' } };
+      const desc = meta.desc[language] || meta.desc.en || '';
+      const isInstalled = !!h.installed;
+      const badge = isInstalled ? `<span class="badge ok">${text('installed')}</span>` : `<span class="badge">${text('notInstalled')}</span>`;
+      const countLine = h.models.length ? `<small>${h.models.length} ${text('models')} · ${h.models.slice(0,2).map(m=>escapeHtml(m.id.split('/').pop())).join(', ')}${h.models.length>2?'…':''}</small>` : `<small class="muted">${text('noModelsFound')}</small>`;
+      const actionBtn = isInstalled
+        ? `<button class="harness-btn success" disabled>✓ ${text('installed')}</button><button class="harness-btn" data-setup-action="update" data-harness="${escapeHtml(h.name)}">${text('update')}</button>`
+        : `<button class="harness-btn primary" data-setup-action="install" data-harness="${escapeHtml(h.name)}">${text('install')}</button>`;
+      return `<div class="setup-harness-card ${isInstalled?'installed':''}" data-harness-card="${escapeHtml(h.name)}">
+        <div class="harness-head"><h3>${escapeHtml(h.display_name)}</h3>${badge}</div>
+        <p>${escapeHtml(desc)}</p>
+        <small class="mono" style="color:var(--text-faint)">npm: ${escapeHtml(meta.pkg)}</small>
+        ${countLine}
+        <div class="setup-harness-actions">${actionBtn} <button class="harness-btn" data-setup-action="log" data-harness="${escapeHtml(h.name)}" style="display:none">${text('viewLog')}</button></div>
+      </div>`;
+    }).join('');
+    // update done stats
+    const stats = document.getElementById('setup-done-stats');
+    if (stats) {
+      const installed = hs.filter(h=>h.installed).length;
+      stats.innerHTML = `
+        <div class="setup-done-stat"><strong>${installed} / ${hs.length}</strong><span>${text('installed')}</span></div>
+        <div class="setup-done-stat"><strong>${hs.reduce((a,c)=>a+c.models.length,0)}</strong><span>${text('models')}</span></div>`;
+    }
+  } catch (e) {
+    grid.innerHTML = `<div class="muted" style="grid-column:1/-1; text-align:center; color:var(--status-error)">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function installHarness(name, btn, action='install') {
+  if (setupInstalling) { showToast(language==='ar' ? 'انتظر انتهاء التثبيت الحالي' : 'Wait for current install'); return; }
+  setupInstalling = name;
+  const act = action === 'update' ? 'update' : 'install';
+  const card = document.querySelector(`[data-harness-card="${name}"]`);
+  const logCard = document.getElementById('setup-log-card');
+  const logEl = document.getElementById('setup-log');
+  const statusEl = document.getElementById('setup-log-status');
+  const btnOrig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = text('installing'); }
+  if (logCard) logCard.classList.remove('hidden');
+  if (logEl) {
+    const cmd = act === 'update' ? `npm update -g ${HARNESS_META[name]?.pkg || name}` : `npm install -g ${HARNESS_META[name]?.pkg || name}`;
+    logEl.textContent = `→ ${cmd}\n— ${new Date().toLocaleTimeString()} —\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  if (statusEl) { statusEl.textContent = text('installing'); statusEl.className = 'badge'; }
+  try {
+    const res = await api(`/api/admin/harnesses/${name}/${act}`, { method: 'POST' });
+    const jobId = res.job_id;
+    if (statusEl) statusEl.textContent = `job ${jobId.slice(0,8)}…`;
+    // stream logs via SSE (token via query because EventSource can't send headers)
+    const _tok = token();
+    const esUrl = _tok ? `/api/admin/harnesses/${name}/jobs/${jobId}/stream?token=${encodeURIComponent(_tok)}` : `/api/admin/harnesses/${name}/jobs/${jobId}/stream`;
+    const es = new EventSource(esUrl);
+    // Fallback to polling if SSE fails due to auth (we try fetch streaming polyfill)
+    // Try to use fetch with EventSource-like polling as fallback
+    let gotEvent = false;
+    es.onmessage = (e) => {
+      gotEvent = true;
+      try {
+        const data = JSON.parse(e.data);
+        if (logEl) { logEl.textContent += (data.message || JSON.stringify(data)) + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+      } catch { if (logEl) logEl.textContent += e.data + '\n'; }
+    };
+    // custom event handling via addEventListener for 'log' and 'done'
+    const appendLog = (msg) => { if (logEl) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; } };
+    es.addEventListener('log', (e) => {
+      gotEvent = true;
+      try { const d = JSON.parse(e.data); appendLog(d.message || e.data); } catch { appendLog(e.data); }
+    });
+    es.addEventListener('done', (e) => {
+      gotEvent = true;
+      try {
+        const d = JSON.parse(e.data);
+        const ok = d.stage === 'completed' && (d.exit_code === 0 || d.exit_code == null);
+        if (statusEl) { statusEl.textContent = ok ? `✓ ${text('installed')}` : `✗ ${text('notInstalled')}`; statusEl.className = ok ? 'badge ok' : 'badge'; }
+        if (logEl) logEl.textContent += `\n— ${ok ? '✓ completed' : '✗ failed (code ' + (d.exit_code||1) + ')'} —\n`;
+      } catch { if (statusEl) statusEl.textContent = 'done'; }
+      es.close();
+      setupInstalling = null;
+      if (btn) { btn.disabled = false; btn.textContent = btnOrig || (act==='update' ? text('update') : text('install')); }
+      loadSetupHarnesses(); // refresh grid
+      if (document.getElementById('harness-grid')) loadHarnesses();
+    });
+    es.addEventListener('error', () => {
+      // fallback polling after 1.5s if no events
+      setTimeout(async () => {
+        if (gotEvent) return;
+        es.close();
+        // poll via fetch
+        for (let i=0;i<60;i++) {
+          try {
+            const j = await api(`/api/admin/harnesses/${name}/jobs/${jobId}`);
+            if (logEl) { logEl.textContent = (j.logs||[]).join('\n') + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+            if (j.stage === 'completed' || j.stage === 'failed') {
+              const ok = j.stage === 'completed';
+              if (statusEl) { statusEl.textContent = ok ? `✓ ${text('installed')}` : `✗ failed`; statusEl.className = ok ? 'badge ok' : 'badge'; }
+              setupInstalling = null;
+              if (btn) { btn.disabled = false; btn.textContent = btnOrig || (act==='update' ? text('update') : text('install')); }
+              loadSetupHarnesses();
+              if (document.getElementById('harness-grid')) loadHarnesses();
+              break;
+            }
+          } catch {}
+          await new Promise(r=>setTimeout(r,1500));
+        }
+      }, 1500);
+    });
+    // also start polling as backup regardless (covers auth issue with EventSource)
+    setTimeout(async () => {
+      if (gotEvent) return;
+      // if SSE never fired, fallback polling already started via error handler; duplicate safe
+    }, 1200);
+  } catch (e) {
+    if (logEl) logEl.textContent += `\n✗ ${escapeHtml(e.message)}\n`;
+    if (statusEl) { statusEl.textContent = '✗ failed'; statusEl.className = 'badge'; }
+    showToast(e.message);
+    setupInstalling = null;
+    if (btn) { btn.disabled = false; btn.textContent = btnOrig || (act==='update' ? text('update') : text('install')); }
+  }
+}
+
+// Enhanced harnesses page with install buttons
+const _originalLoadHarnesses = loadHarnesses;
+async function loadHarnessesEnhanced() {
+  try {
+    const hs = await api('/api/admin/harnesses');
+    const grid = document.getElementById('harness-grid');
+    if (!grid) return;
+    if (!hs.length) { grid.innerHTML = `<div class="muted">${text('noModelsFound')}</div>`; return; }
+    grid.innerHTML = hs.map(h => {
+      const meta = HARNESS_META[h.name] || { pkg: h.name, desc: { ar:'', en:'' } };
+      const isInstalled = !!h.installed;
+      const badge = isInstalled ? `<span class="badge ok">${text('installed')}</span>` : `<span class="badge">${text('notInstalled')}</span>`;
+      const models = h.models.slice(0,6).map(m=>`<span style="font:500 11px var(--font-mono);background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.18);color:var(--brand-primary);padding:3px 7px;border-radius:999px">${escapeHtml(m.id.split('/').pop())}</span>`).join('');
+      const more = h.models.length>6?`<span style="font:500 11px var(--font-mono);color:var(--text-faint)">+${h.models.length-6}</span>`:'';
+      const btn = isInstalled
+        ? `<button class="harness-btn success" disabled>✓ ${text('installed')}</button> <button class="harness-btn" data-harness-action="update" data-harness="${escapeHtml(h.name)}">${text('update')}</button>`
+        : `<button class="harness-btn primary" data-harness-action="install" data-harness="${escapeHtml(h.name)}">${text('install')}</button>`;
+      return `<div class="card ${isInstalled?'installed':''}"><div><h3>${escapeHtml(h.display_name)}</h3><p>${escapeHtml(meta.desc[language]||meta.desc.en||h.provider||'')}</p><small class="mono" style="color:var(--text-faint)">npm: ${escapeHtml(meta.pkg)}</small><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${models}${more}</div></div><small>${h.models.length} ${language==='ar'?'موديل':'models'} · <span class="mono">${escapeHtml(h.name)}</span></small><div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">${badge} ${btn}</div></div>`;
+    }).join('');
+  } catch(e){ const g=document.getElementById('harness-grid'); if(g) g.innerHTML = `<p class="error-message">${escapeHtml(e.message)}</p>`; }
+}
+// Override
+loadHarnesses = loadHarnessesEnhanced;
+
 // Init
 (async()=>{
   applyLanguage();
   applyTheme(theme, false);
   const page=document.body.dataset.page||'chat';
+  const needsSetup = await checkSetupStatus();
+
+  // If setup needed, force setup page regardless of requested page
+  if (needsSetup.needs_setup) {
+    document.body.classList.add('setup-mode');
+    document.body.dataset.page = 'setup';
+    document.querySelectorAll('.page').forEach(el=> el.classList.add('hidden'));
+    const setupSec = document.getElementById('setup');
+    if (setupSec) setupSec.classList.remove('hidden');
+    // hide login too
+    const loginSec = document.getElementById('login');
+    if (loginSec) loginSec.classList.add('hidden');
+    showSetupPanel(1);
+    bindSetupEvents();
+    // if already have token (edge), clear it
+    if (token()) { localStorage.removeItem('afaq_token'); }
+    return;
+  }
+
+  // If user hits /setup but already setup, redirect
+  if (page==='setup') {
+    if (!needsSetup.needs_setup) {
+      if (token()) location.href='/chat';
+      else location.href='/login';
+      return;
+    }
+  }
+
   if(page==='login'){
     document.body.classList.add('login-only');
     document.querySelectorAll('.page').forEach((el)=> el.classList.add('hidden'));
+    const loginSec = document.getElementById('login');
+    if (loginSec) loginSec.classList.remove('hidden');
     if(token()) location.href='/chat';
+    return;
+  }
+  if(page==='setup'){
+    document.body.classList.add('setup-mode');
+    showSetupPanel(1);
+    bindSetupEvents();
     return;
   }
   if(!token()){ location.href='/login'; return; }
   show(page,false);
+  bindMainHarnessGrid();
+  bindSetupEvents();
   await loadModels();
   await loadConversations();
   bindSuggestions();
   autoResize();
+  // if initial page is harnesses, ensure grid bound after render
+  if (page==='harnesses') setTimeout(bindMainHarnessGrid, 300);
 })();
+
+function bindSetupEvents() {
+  const form = document.getElementById('setup-form');
+  if (form && !form.dataset.bound) {
+    form.dataset.bound = '1';
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const email = document.getElementById('setup-email').value.trim();
+      const name = document.getElementById('setup-name').value.trim();
+      const p1 = document.getElementById('setup-password').value;
+      const p2 = document.getElementById('setup-password2').value;
+      const msg = document.getElementById('setup-message');
+      const btn = document.getElementById('setup-submit');
+      msg.textContent = ''; msg.className='setup-message';
+      if (!email || !email.includes('@')) { msg.textContent = text('setupEmailInvalid'); return; }
+      if (p1.length < 8) { msg.textContent = text('setupPasswordShort'); return; }
+      if (p1 !== p2) { msg.textContent = text('setupPasswordMismatch'); return; }
+      btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = text('setupCreating');
+      try {
+        const r = await fetch('/api/auth/bootstrap', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password: p1, display_name: name || email.split('@')[0] }) });
+        const data = await r.json().catch(()=>({}));
+        if (!r.ok) throw new Error(data.detail || data.error?.message || r.statusText);
+        // auto-login: save token
+        const tokenVal = data.access_token || data.token || (data.user && data.user.access_token);
+        const toStore = tokenVal || data.access_token;
+        if (toStore) {
+          localStorage.setItem('afaq_token', toStore);
+          if (data.user) localStorage.setItem('afaq_user', JSON.stringify(data.user));
+          else if (data.email) localStorage.setItem('afaq_user', JSON.stringify(data));
+        } else {
+          // fallback: login via credentials
+          const lr = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({username: email, password: p1}) });
+          const lj = await lr.json();
+          if (lr.ok && lj.access_token) localStorage.setItem('afaq_token', lj.access_token);
+        }
+        msg.textContent = language==='ar' ? '✓ تم إنشاء الحساب — جارٍ تحميل الأدوات...' : '✓ Account created — loading harnesses...';
+        msg.className='setup-message success';
+        showSetupPanel(2);
+        await loadSetupHarnesses();
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className='setup-message';
+      } finally { btn.disabled=false; btn.innerHTML = orig; }
+    });
+  }
+  const refreshBtn = document.getElementById('setup-refresh-harnesses');
+  if (refreshBtn && !refreshBtn.dataset.bound) {
+    refreshBtn.dataset.bound='1';
+    refreshBtn.addEventListener('click', async ()=>{
+      refreshBtn.disabled=true;
+      try { await api('/api/admin/harnesses/refresh', {method:'POST'}); await loadSetupHarnesses(); } catch(e){ showToast(e.message);} finally{ refreshBtn.disabled=false;}
+    });
+  }
+  const skipBtn = document.getElementById('setup-skip');
+  if (skipBtn && !skipBtn.dataset.bound) {
+    skipBtn.dataset.bound='1';
+    skipBtn.addEventListener('click', ()=> { location.href='/chat'; });
+  }
+  const nextBtn = document.getElementById('setup-next');
+  if (nextBtn && !nextBtn.dataset.bound) {
+    nextBtn.dataset.bound='1';
+    nextBtn.addEventListener('click', ()=> { showSetupPanel(3); });
+  }
+  const doneBtn = document.getElementById('setup-done');
+  if (doneBtn && !doneBtn.dataset.bound) {
+    doneBtn.dataset.bound='1';
+    doneBtn.addEventListener('click', ()=> { location.href='/chat'; });
+  }
+  const logClose = document.getElementById('setup-log-close');
+  if (logClose && !logClose.dataset.bound) {
+    logClose.dataset.bound='1';
+    logClose.addEventListener('click', ()=> { document.getElementById('setup-log-card')?.classList.add('hidden'); });
+  }
+  const grid = document.getElementById('setup-harness-grid');
+  if (grid && !grid.dataset.bound) {
+    grid.dataset.bound='1';
+    grid.addEventListener('click', (e)=>{
+      const btn = e.target.closest('[data-setup-action]');
+      if (!btn) return;
+      const action = btn.dataset.setupAction;
+      const harness = btn.dataset.harness;
+      if (action === 'install' || action === 'update') installHarness(harness, btn, action);
+      else if (action === 'log') document.getElementById('setup-log-card')?.classList.remove('hidden');
+    });
+  }
+  // setup log actions
+  const logCopy = document.getElementById('setup-log-copy');
+  if (logCopy && !logCopy.dataset.bound) {
+    logCopy.dataset.bound='1';
+    logCopy.addEventListener('click', async ()=>{
+      const logEl = document.getElementById('setup-log');
+      if (!logEl) return;
+      try { await navigator.clipboard.writeText(logEl.textContent); showToast(text('copied')); } catch { showToast(logEl.textContent.slice(0,120)); }
+    });
+  }
+  const logClear = document.getElementById('setup-log-clear');
+  if (logClear && !logClear.dataset.bound) {
+    logClear.dataset.bound='1';
+    logClear.addEventListener('click', ()=>{
+      const logEl = document.getElementById('setup-log');
+      if (logEl) logEl.textContent = '';
+      const statusEl = document.getElementById('setup-log-status');
+      if (statusEl) { statusEl.textContent=''; statusEl.className='badge'; }
+    });
+  }
+  // wizard theme / language toggles
+  const setupTheme = document.getElementById('setup-theme-toggle');
+  if (setupTheme && !setupTheme.dataset.bound) {
+    setupTheme.dataset.bound='1';
+    setupTheme.addEventListener('click', ()=>{
+      const cur = document.documentElement.getAttribute('data-theme');
+      applyTheme(cur === 'light' ? 'dark' : 'light');
+      // update wizard logo
+      const logo = document.querySelector('.setup-logo');
+      if (logo) logo.src = theme === 'light' ? '/static/brand/lockup-dark.png' : '/static/brand/lockup-white.png';
+    });
+  }
+  const setupLang = document.getElementById('setup-lang');
+  if (setupLang && !setupLang.dataset.bound) {
+    setupLang.dataset.bound='1';
+    setupLang.addEventListener('click', ()=>{
+      language = language==='ar'?'en':'ar';
+      try { localStorage.setItem('afaq_lang', language); } catch {}
+      applyLanguage();
+      applyTheme(theme, false);
+      // refresh wizard UI texts that are not data-i18n
+      loadSetupHarnesses();
+    });
+  }
+}
+
+function bindMainHarnessGrid(){
+  const mainGrid = document.getElementById('harness-grid');
+  if (!mainGrid || mainGrid.dataset.bound) return;
+  mainGrid.dataset.bound='1';
+  mainGrid.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('[data-harness-action]');
+    if (!btn) return;
+    const harness = btn.dataset.harness;
+    const action = btn.dataset.harnessAction;
+    if (action === 'install' || action === 'update') {
+      const orig = btn.textContent;
+      btn.disabled=true; btn.textContent=text('installing');
+      // ensure harnesses page has a log area? reuse setup log or show toast
+      try {
+        const res = await api(`/api/admin/harnesses/${harness}/${action}`, {method:'POST'});
+        showToast(`${harness}: ${res.status||'started'} (${res.job_id.slice(0,8)})`);
+        // show a temporary inline log under grid
+        let logBox = document.getElementById('harness-install-log');
+        if (!logBox) {
+          logBox = document.createElement('div');
+          logBox.id = 'harness-install-log';
+          logBox.className = 'setup-log-card';
+          logBox.style.marginTop='14px';
+          logBox.innerHTML = `<div class="setup-log-header"><span class="terminal-dots"><i></i><i></i><i></i></span><span>${text('installLog')}</span><span class="badge" id="harness-log-status"></span><div class="setup-log-actions"><button class="outline-button small" onclick="this.closest('.setup-log-card').remove()">${text('close')}</button></div></div><pre class="setup-log" id="harness-log" style="max-height:240px"></pre>`;
+          mainGrid.after(logBox);
+        }
+        const logEl = document.getElementById('harness-log');
+        const statusEl = document.getElementById('harness-log-status');
+        if (logEl) logEl.textContent = `→ ${action} ${harness} (${HARNESS_META[harness]?.pkg||harness}) — ${new Date().toLocaleTimeString()}\n`;
+        // poll with live update
+        let lastLen = 0;
+        for(let i=0;i<80;i++){
+          await new Promise(r=>setTimeout(r,1300));
+          try{
+            const j = await api(`/api/admin/harnesses/${harness}/jobs/${res.job_id}`);
+            if (logEl && j.logs) {
+              const newLogs = j.logs.slice(lastLen).join('\n');
+              if (newLogs) { logEl.textContent += (logEl.textContent.endsWith('\n')?'':'\n') + newLogs + '\n'; logEl.scrollTop = logEl.scrollHeight; lastLen = j.logs.length; }
+            }
+            if (statusEl) statusEl.textContent = j.stage;
+            if(j.stage==='completed' || j.stage==='failed'){
+              const ok = j.stage==='completed' && (j.exit_code===0 || j.exit_code==null);
+              if (statusEl) { statusEl.textContent = ok ? `✓ ${text('installed')}` : `✗ failed`; statusEl.className = ok ? 'badge ok' : 'badge'; }
+              showToast(ok ? `✓ ${harness} ${text('installed')}` : `✗ ${harness} failed`);
+              loadHarnesses();
+              break;
+            }
+          }catch(e){ if (logEl) logEl.textContent += `\n${e.message}\n`; }
+        }
+      } catch(err){ showToast(err.message);} finally{ btn.disabled=false; btn.textContent=orig; }
+    }
+  });
+}
+

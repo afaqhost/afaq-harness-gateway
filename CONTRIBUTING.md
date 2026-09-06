@@ -5,24 +5,34 @@ Thanks for considering a contribution. This document keeps the workflow short.
 ## Development Setup
 
 ```bash
+make setup   # venv + pip install + auto-generate .env secrets + mkdir data/storage
+make dev     # → http://127.0.0.1:3500/setup on first DB (wizard), else /login
+# check setup state:
+make setup-status
+# or create admin headlessly:
+make bootstrap EMAIL=admin@example.com PASS=StrongPass123
+```
+
+Manual alternative:
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
-# generate secrets for local dev (or keep DEBUG=true for relaxed check)
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"
-# edit .env to set SECRET_KEY and CREDENTIALS_KEY
 python -m uvicorn app.main:app --host 0.0.0.0 --port 3500
 ```
 
-Open `http://127.0.0.1:3500/login` and bootstrap the first admin via `docs/installation.md`.
+Open `http://127.0.0.1:3500/setup` on a fresh database — the wizard creates the first admin (auto-login) and lets you install harnesses inside the container. See `docs/installation.md`.
 
 ## Checks Before Sending a PR
 
 ```bash
+make check          # compileall + node --check + pytest -q (204 tests, ~55s)
+# or:
 python -m compileall -q app
 node --check app/static/app.js
-.venv/bin/python -m pytest -q   # 204 tests, ~55s
+.venv/bin/python -m pytest -q
 ```
 
 - Keep controllers thin (`app/api/*` → one service call), business logic in `app/services/*`,

@@ -89,6 +89,10 @@ async def render_page(request: Request, page: str):
 async def dashboard(request: Request):
     return await render_page(request, "chat")
 
+@app.get("/setup", response_class=HTMLResponse)
+async def setup_page(request: Request):
+    return await render_page(request, "setup")
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     return await render_page(request, "login")

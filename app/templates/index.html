@@ -59,6 +59,88 @@
 
       <section id="login" class="login-card{% if page != 'login' %} hidden{% endif %}"><img class="login-logo" src="/static/brand/lockup-white.png" alt="AFAQ Harness Gateway" width="163" height="40"><p class="eyebrow" data-i18n="secureAccess">وصول آمن</p><h2 data-i18n="loginTitle">تسجيل الدخول</h2><p data-i18n="loginDescription">أدخل بيانات حسابك للوصول إلى لوحة Afaq.</p><label for="email" data-i18n="email">البريد الإلكتروني</label><input id="email" type="email" autocomplete="email" placeholder="name@example.com"><label for="password" data-i18n="password">كلمة المرور</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••"><button id="login-btn" data-i18n="login">دخول</button><small id="login-message" role="alert"></small></section>
 
+      <!-- Setup Wizard — First Run -->
+      <section id="setup" class="setup-page{% if page != 'setup' %} hidden{% endif %}">
+        <div class="setup-wizard">
+          <div class="setup-wizard-toolbar">
+            <button class="language-switch" id="setup-lang" aria-label="Language">EN <span>/</span> AR</button>
+            <button class="theme-switch" id="setup-theme-toggle" aria-label="Toggle theme" title="Light / Dark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
+          </div>
+          <div class="setup-brand">
+            <img class="setup-logo" src="/static/brand/lockup-white.png" alt="AFAQ" width="163" height="40">
+            <p class="eyebrow" data-i18n="setupEyebrow">الإعداد الأولي — 3 خطوات</p>
+            <h1 data-i18n="setupTitle">مرحباً بك في AFAQ</h1>
+            <p class="subtitle" data-i18n="setupSubtitle">أنشئ حساب المدير ثم اختر الأدوات التي تريد تثبيتها — كل شيء داخل الكونتينر</p>
+          </div>
+
+          <div class="setup-stepper" role="progressbar" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1" id="setup-stepper">
+            <div class="stepper-step active" data-step="1"><span class="stepper-num">1</span><span class="stepper-label" data-i18n="setupStep1">حساب المدير</span></div>
+            <div class="stepper-line"></div>
+            <div class="stepper-step" data-step="2"><span class="stepper-num">2</span><span class="stepper-label" data-i18n="setupStep2">الأدوات</span></div>
+            <div class="stepper-line"></div>
+            <div class="stepper-step" data-step="3"><span class="stepper-num">3</span><span class="stepper-label" data-i18n="setupStep3">جاهز</span></div>
+          </div>
+
+          <!-- Step 1: Create Admin -->
+          <div class="setup-panel active" id="setup-panel-1">
+            <div class="setup-card">
+              <h2 data-i18n="setupCreateAdmin">إنشاء حساب المدير</h2>
+              <p class="muted" data-i18n="setupCreateDesc">هذا الحساب سيكون المدير الأول — يمكنك إضافة مستخدمين لاحقاً من لوحة التحكم</p>
+              <form id="setup-form" novalidate>
+                <label for="setup-email" data-i18n="email">البريد الإلكتروني</label>
+                <input id="setup-email" type="email" required autocomplete="email" placeholder="admin@example.com">
+                <label for="setup-name" data-i18n="displayName">الاسم</label>
+                <input id="setup-name" type="text" autocomplete="name" placeholder="Admin" maxlength="60">
+                <label for="setup-password" data-i18n="password">كلمة المرور</label>
+                <input id="setup-password" type="password" required autocomplete="new-password" placeholder="••••••••" minlength="8">
+                <label for="setup-password2" data-i18n="confirmPassword">تأكيد كلمة المرور</label>
+                <input id="setup-password2" type="password" required autocomplete="new-password" placeholder="••••••••" minlength="8">
+                <small id="setup-message" role="alert" class="setup-message"></small>
+                <button type="submit" id="setup-submit" class="setup-primary-btn"><span data-i18n="setupCreateBtn">إنشاء الحساب والدخول</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                <p class="setup-hint muted" data-i18n="setupHint">سيتم تسجيل دخولك تلقائياً بعد الإنشاء</p>
+              </form>
+            </div>
+          </div>
+
+          <!-- Step 2: Harnesses -->
+          <div class="setup-panel" id="setup-panel-2">
+            <div class="setup-card wide">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
+                <div>
+                  <h2 data-i18n="setupHarnessTitle">الأدوات المتاحة</h2>
+                  <p class="muted" data-i18n="setupHarnessDesc">اختر ما تريد تثبيته الآن — يمكنك تثبيت البقية لاحقاً من صفحة الهارنسس. التثبيت يتم داخل الكونتينر عبر npm.</p>
+                </div>
+                <button class="outline-button small" id="setup-refresh-harnesses"><span class="refresh-symbol">↻</span> <span data-i18n="refresh">تحديث</span></button>
+              </div>
+              <div id="setup-harness-grid" class="harness-grid setup-grid"></div>
+              <div id="setup-log-card" class="setup-log-card hidden">
+                <div class="setup-log-header"><span class="terminal-dots"><i></i><i></i><i></i></span><span data-i18n="installLog">سجل التثبيت</span><span id="setup-log-status" class="badge"></span><div class="setup-log-actions"><button class="outline-button small" id="setup-log-copy" data-i18n="copy">نسخ</button><button class="outline-button small" id="setup-log-clear" data-i18n="clear">مسح</button><button class="outline-button small" id="setup-log-close" data-i18n="close">إغلاق</button></div></div>
+                <pre id="setup-log" class="setup-log"></pre>
+              </div>
+              <div class="setup-actions">
+                <button class="outline-button" id="setup-skip" data-i18n="setupSkip">تخطي — الذهاب للمحادثة</button>
+                <button class="setup-primary-btn" id="setup-next" data-i18n="setupNext">متابعة</button>
+              </div>
+              <small class="muted" style="display:block; margin-top:10px" data-i18n="setupDockerNote">على الخادم المضيف: يمكنك أيضاً تشغيل npm install -g &lt;package&gt; يدوياً ثم اضغط تحديث</small>
+            </div>
+          </div>
+
+          <!-- Step 3: Done -->
+          <div class="setup-panel" id="setup-panel-3">
+            <div class="setup-card setup-done-card">
+              <div class="setup-done-icon">✓</div>
+              <h2 data-i18n="setupDoneTitle">كل شيء جاهز!</h2>
+              <p class="muted" data-i18n="setupDoneDesc">تم إنشاء حسابك وتجهيز البوابة. يمكنك الآن بدء المحادثة أو إنشاء مفاتيح API.</p>
+              <div class="setup-done-stats" id="setup-done-stats"></div>
+              <button class="setup-primary-btn large" id="setup-done" data-i18n="setupGoChat">الذهاب للمحادثة</button>
+              <div class="setup-done-links">
+                <a href="/harnesses" data-i18n="harnesses">الهارنسس</a> · <a href="/keys" data-i18n="apiKeys">مفاتيح API</a> · <a href="/documentation" data-i18n="docs">التوثيق</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ChatGPT-like chat -->
       <section id="chat" class="page">
         <div class="chatgpt-layout">

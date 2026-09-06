@@ -11,34 +11,60 @@ The gateway itself can start without an installed harness, but `/v1/models` will
 
 ## Local Installation
 
+### One-command setup (recommended)
+
 From the repository root:
+
+```bash
+make setup   # creates .venv, installs deps, generates .env with strong SECRET_KEY/CREDENTIALS_KEY, mkdir data/storage, init DB
+make dev     # → http://127.0.0.1:3500/setup on first run, /login afterwards
+```
+
+On first run, open `http://127.0.0.1:3500/setup` — the **Setup Wizard** walks you through 3 steps:
+
+1. **Create admin account** — email + display name + password (≥8 chars) → auto-login.
+2. **Harnesses** — shows `opencode`, `codex`, `claude`, `commandcode` with installed flag and model counts; install any harness directly from the dashboard (*Install* runs `npm install -g <package>` **inside the container** with live SSE logs). On the host, run `npm install -g <package>` manually and press *Refresh*.
+3. **Ready** — go to chat or create API keys.
+
+Check whether setup is needed without opening the browser:
+
+```bash
+make setup-status   # GET /api/auth/setup-status → {"needs_setup": true/false}
+```
+
+### Manual installation (alternative)
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
-```
-
-Start the service:
-
-```bash
+# secrets are auto-patched by make setup; or generate manually:
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 python -m uvicorn app.main:app --host 0.0.0.0 --port 3500
 ```
 
-The dashboard is available at `http://127.0.0.1:3500/login`. FastAPI's generated API documentation is available at `/docs` and `/redoc`.
+The dashboard is available at `http://127.0.0.1:3500/login` (or `/setup` on first run). FastAPI docs at `/docs` and `/redoc`.
 
 ## Create the First Administrator
 
-Bootstrap is available only while the database has no users. Run this in a second terminal:
+You have two ways:
+
+**A) Wizard (recommended, no curl):** Open `/setup` and fill the form — you are logged in automatically and redirected to the harnesses step.
+
+**B) API / CLI (headless, CI):**
 
 ```bash
 curl -X POST http://127.0.0.1:3500/api/auth/bootstrap \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","password":"REPLACE_WITH_A_STRONG_PASSWORD","display_name":"Admin"}'
+# also available as:
+make bootstrap EMAIL=admin@example.com PASS=StrongPass123 NAME=Admin
 ```
 
-A successful request creates an administrator. A later request returns `409 Bootstrap already completed`. Sign in at `/login` with the same email and password.
+On success, `POST /api/auth/bootstrap` now returns `{"id", "email", "display_name", "role", "access_token", "token_type": "bearer", "user": {...}}` for auto-login (backward compatible: top-level `email`/`role` still present). A later request returns `409 Bootstrap already completed`. Check status with `GET /api/auth/setup-status`.
+
+Sign in at `/login` with the same email and password, or use the token directly.
 
 ## Verify the Installation
 
@@ -57,12 +83,14 @@ After logging in, create an API key in the dashboard and use [api.md](api.md) to
 ## Docker Compose
 
 ```bash
-cp .env.example .env
-# edit .env — set SECRET_KEY and CREDENTIALS_KEY (see docs/configuration.md)
+make setup   # generates .env with strong secrets if missing
 docker compose up --build
+# then open http://127.0.0.1:3500/setup — wizard will let you create admin + install harnesses inside container
 ```
 
-The service is published as `http://127.0.0.1:3500` with a `HEALTHCHECK` (`curl /health`). A companion `redis:7-alpine` (64 MB, `allkeys-lru`) is included for optional multi-replica rate limiting / history / job mirroring — leave `REDIS_URL` empty to use the in-memory fallback. Named volumes persist the database, application storage, and `/root/.npm`. The compose file no longer mounts `docker.sock` (do not re-add it in production).
+The service is published as `http://127.0.0.1:3500` with a `HEALTHCHECK` (`/health`). A companion `redis:7-alpine` (64 MB, `allkeys-lru`) is included for optional multi-replica rate limiting / history / job mirroring — leave `REDIS_URL` empty to use the in-memory fallback. Named volumes persist the database, application storage, and `/root/.npm` (so `npm install -g` inside the container survives restarts). The compose file no longer mounts `docker.sock` (do not re-add it in production).
+
+Installing harnesses from the dashboard runs `npm install -g <package>` **inside the `afaq-gateway` container** via `app/clients/*` adapters (`opencode-ai`, `@openai/codex`, `@anthropic-ai/claude-code`, `command-code`) and streams logs via `GET /api/admin/harnesses/{name}/jobs/{id}/stream` (SSE, `event: log|done`). You can also `docker exec afaq-harness-gateway npm install -g <package>` and press *Refresh*.
 
 ## Stop and Restart
 
