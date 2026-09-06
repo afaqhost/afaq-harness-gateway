@@ -9,4 +9,5 @@ COPY docs ./docs
 COPY LICENSE README.md .env.example ./
 RUN mkdir -p data storage/harnesses storage/uploads
 EXPOSE 3500
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD curl -fsS http://127.0.0.1:3500/health || exit 1
 CMD ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "3500"]

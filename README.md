@@ -2,14 +2,19 @@
 
 Afaq Harness Gateway is a local OpenAI-compatible gateway for command-line AI tools. It exposes a single HTTP API for chat completions and model discovery, while keeping each CLI integration behind a dedicated harness adapter.
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Tests: 204 passing](https://img.shields.io/badge/tests-204%20passing-brightgreen)](#development-checks)
+[![Python: 3.12](https://img.shields.io/badge/python-3.12-blue)](requirements.txt)
+
 ## What It Provides
 
-- OpenAI-compatible `GET /v1/models` and `POST /v1/chat/completions` endpoints.
-- A bilingual Arabic/English dashboard at `/login` and the authenticated routes `/chat`, `/harnesses`, `/keys`, `/users`, and `/documentation`.
-- JWT authentication for the dashboard and hashed, one-time-display API keys for external clients.
-- Model discovery for installed harnesses, cached at server startup and refreshable from the Harnesses page.
-- SQLite persistence for users, API keys, conversations, messages, harnesses, and usage records.
-- Adapters for Codex CLI, OpenCode, Command Code, and Claude Code when the corresponding executable is installed.
+- **OpenAI-compatible** `GET /v1/models` and `POST /v1/chat/completions` (stream and non-stream, `tools`/`tool_choice`, `response_format` with one retry on `malformed_output`).
+- **Dashboard** at `/login` and authenticated routes `/chat`, `/harnesses`, `/keys`, `/users`, `/usage`, `/documentation` — bilingual Arabic/English, searchable models, markdown rendering.
+- **Auth:** JWT for dashboard + hashed, one-time-display API keys (`afaq_…`) for external clients; key rotation (`POST /keys/{id}/rotate`) with immediate revocation.
+- **Persistence:** SQLite with WAL (`journal_mode=WAL`, 64 MB cache, 5 s busy timeout) — users, API keys, conversations (soft-delete + archive + restore), messages, harness state, credential profiles (Fernet-encrypted), usage records.
+- **Harnesses:** adapters for Codex, OpenCode, Command Code, Claude (and generic fallback) — `is_installed`, `list_models`, queued `run`/`stream` with cancel, install/update jobs with SSE log streaming.
+- **Realtime:** SSE with `event: start|token|usage|tool_call|tool_result|done|error|cancel|log`, `id:` + `retry:`, `Last-Event-ID` replay via `transport/history`, `: keepalive` heartbeats.
+- **Production hardening:** per-bucket global rate limiting (in-memory or Redis), per-key `daily_limit`/`monthly_limit` + `allowed_models` enforcement, harness concurrency queue (`5` + 30 s wait → `429`), request IDs (`X-Request-ID`), structured JSON logs with redacted auth, sanitized harness errors, Prometheus `/metrics`, health checks.
 
 ## Quick Start
 
@@ -18,6 +23,10 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
+# generate strong secrets (required when DEBUG=false)
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"  # -> SECRET_KEY
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"  # -> CREDENTIALS_KEY
+# edit .env and set both
 python -m uvicorn app.main:app --host 0.0.0.0 --port 3500
 ```
 
@@ -47,27 +56,47 @@ The client sends only `Authorization: Bearer <api-key>` to `/v1/chat/completions
 
 ```bash
 cp .env.example .env
+# set SECRET_KEY / CREDENTIALS_KEY in .env first
 docker compose up --build
 ```
 
-The service listens on port `3500`. Compose persists `/app/data`, `/app/storage`, and the container's npm directory in named volumes. Harness CLIs still need to be installed and authenticated according to their official documentation; see [docs/harnesses.md](docs/harnesses.md).
+The service listens on port `3500` with a `HEALTHCHECK` (`/health`). Compose runs `redis:7-alpine` (64 MB, `allkeys-lru`) for rate limiting / history / job mirroring — fallback is in-memory when `REDIS_URL` is empty. It persists `/app/data`, `/app/storage`, and the container's npm directory in named volumes and no longer mounts `docker.sock`. Harness CLIs still need to be installed and authenticated per [docs/harnesses.md](docs/harnesses.md).
 
 ## Development Checks
 
 ```bash
 python -m compileall -q app
 node --check app/static/app.js
-AFAQ_EMAIL=admin@example.com AFAQ_PASSWORD='your-password' python test_api.py --skip-chat
+.venv/bin/python -m pytest -q          # 204 tests, ~55s, no external services required
+# optional: Redis-backed mode
+# REDIS_URL=redis://localhost:6379/0 REDIS_ENABLED=true .venv/bin/python -m pytest -q
 ```
 
-The repository currently has no configured test runner. `test_api.py` is a smoke-test client, not a unit-test suite.
+## Project Structure (layered)
+
+```
+app/
+  api/            # controllers — thin: parse request → call one service → shape response
+  services/       # business logic (quota, harness jobs, queue, process registry)
+  repositories/   # data access — only place that knows DB/SQL
+  clients/        # outbound adapters — hide harness CLIs behind HarnessAdapter
+  models/         # serializable data shapes (HarnessModel/HarnessResult)
+  transport/      # SSE/history streaming mechanics
+  config/         # composition root & settings (app/core/config.py facade)
+  middleware/     # rate limiting, request IDs, structured logging
+  shared/         # leaf utilities (no app imports)
+```
+
+`DESIGN.md` is the visual brand source of truth; `docs/architecture.md` is the code layer map.
 
 ## Security Notes
 
-- Never commit `.env`, API keys, the SQLite database, or local harness storage.
-- API keys are hashed in the database and the raw value is returned only when the key is created.
-- Change `SECRET_KEY` and `CREDENTIALS_KEY` before exposing the service beyond a trusted local network.
-- Put a TLS-terminating reverse proxy in front of the service and restrict `ALLOWED_ORIGINS` for non-local deployments.
+- Never commit `.env`, API keys, the SQLite database, or local harness storage (all ignored via `.gitignore`).
+- API keys are SHA-256 hashed; the raw value is shown once at creation and on rotation. Use `POST /api/admin/keys/{id}/rotate`.
+- `SECRET_KEY` / `CREDENTIALS_KEY` fail fast when weak and `DEBUG=false` (`app/core/config.py:63`). Generate with `secrets.token_urlsafe(48)`.
+- All harness subprocess errors are sanitized (`app/shared/errors.py`) — raw `stderr` never leaks to clients.
+- Put a TLS-terminating reverse proxy in front and restrict `ALLOWED_ORIGINS` for non-local deployments.
+- See [SECURITY.md](SECURITY.md) for reporting and hardening, and [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow.
 
 ## License
 

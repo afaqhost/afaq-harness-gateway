@@ -58,10 +58,11 @@ After logging in, create an API key in the dashboard and use [api.md](api.md) to
 
 ```bash
 cp .env.example .env
+# edit .env — set SECRET_KEY and CREDENTIALS_KEY (see docs/configuration.md)
 docker compose up --build
 ```
 
-The service is published as `http://127.0.0.1:3500`. Named volumes persist the database, application storage, and `/root/.npm`. The compose file also mounts `/var/run/docker.sock`; review that privilege carefully before using the provided file on a shared or production host.
+The service is published as `http://127.0.0.1:3500` with a `HEALTHCHECK` (`curl /health`). A companion `redis:7-alpine` (64 MB, `allkeys-lru`) is included for optional multi-replica rate limiting / history / job mirroring — leave `REDIS_URL` empty to use the in-memory fallback. Named volumes persist the database, application storage, and `/root/.npm`. The compose file no longer mounts `docker.sock` (do not re-add it in production).
 
 ## Stop and Restart
 

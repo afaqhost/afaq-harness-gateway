@@ -17,11 +17,15 @@ Configuration is loaded from `.env` through `pydantic-settings`. Start from `.en
 | `HARNESS_DATA_DIR` | `storage/harnesses` | Local harness data directory |
 | `UPLOADS_DIR` | `storage/uploads` | Local upload directory |
 | `ALLOWED_ORIGINS` | `http://127.0.0.1:3500,http://localhost:3500` | Comma-separated CORS origins (tightened from `*` in S1) |
-| `MODEL_REFRESH_SECONDS` | `300` | Reserved setting; refresh is currently startup/button driven |
+| `MODEL_REFRESH_SECONDS` | `300` | Reserved; refresh is startup + `POST /api/admin/harnesses/refresh` |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Global per-bucket rate limit (requests/minute) |
 | `RATE_LIMIT_ENABLED` | `true` | Set `false` to disable rate limiting (e.g., for load tests) |
-| `SSE_HEARTBEAT_SECONDS` | `15` | SSE keepalive interval (seconds) |
+| `HARNESS_CONCURRENCY` | `5` | Max concurrent harness subprocesses per replica (backpressure via `app/services/harness_queue.py`) |
+| `HARNESS_QUEUE_MAX_WAIT` | `30` | Seconds to wait for a concurrency slot before `429` |
+| `SSE_HEARTBEAT_SECONDS` | `15` | SSE keepalive interval (`: keepalive` every N seconds) |
 | `SSE_RETRY_MS` | `3000` | SSE `retry:` field (milliseconds) |
+| `REDIS_URL` | `""` | `redis://host:6379/0` for multi-replica rate limit/history/jobs; empty → in-memory fallback |
+| `REDIS_ENABLED` | `false` | Auto-enabled when `REDIS_URL` is set; set explicitly if needed |
 
 ## Secret Generation
 
