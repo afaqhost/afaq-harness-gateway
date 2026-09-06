@@ -1,4 +1,4 @@
-.PHONY: setup install dev test check lint docker docker-down clean bootstrap health help
+.PHONY: setup install dev start run restart test check lint docker docker-down clean bootstrap health setup-status help
 
 PY := .venv/bin/python
 PIP := .venv/bin/pip
@@ -12,17 +12,26 @@ PYTHON ?= python3
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-setup: ## One-command setup: venv + deps + .env + data dirs
-	@bash scripts/setup.sh
+setup: ## One-command setup: venv + deps + .env + data dirs (add --run/--restart)
+	@bash scripts/setup.sh $(ARGS)
 
 install: ## Install dependencies into .venv (requires .venv exists)
 	$(PIP) install -r requirements.txt
 
-dev: ## Run dev server with auto-reload
+dev: ## Run dev server with auto-reload (foreground)
 	$(UVICORN) app.main:app --host $(HOST) --port $(PORT) --reload
 
 start: ## Run production server (no reload)
 	$(UVICORN) app.main:app --host $(HOST) --port $(PORT)
+
+run: ## Setup + run server (foreground) — same as: bash scripts/setup.sh --run
+	@bash scripts/setup.sh --run --port=$(PORT)
+
+restart: ## Restart server (background, kills old on PORT) — same as: bash scripts/setup.sh --restart
+	@bash scripts/setup.sh --restart --port=$(PORT)
+
+stop: ## Stop server on PORT
+	@PORT=$(PORT) bash -c 'if command -v lsof &>/dev/null; then pids=$$(lsof -i :$$PORT -sTCP:LISTEN -t 2>/dev/null || true); [ -n "$$pids" ] && echo "$$pids" | xargs -r kill 2>/dev/null; sleep 1; echo "$$pids" | xargs -r kill -9 2>/dev/null || true; echo "stopped"; else pkill -f "uvicorn.*$$PORT" 2>/dev/null || true; echo "stopped"; fi'
 
 test: ## Run compile + JS check + pytest (204 tests)
 	$(PY) -m compileall -q app

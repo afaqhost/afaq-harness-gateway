@@ -1,7 +1,38 @@
 #!/usr/bin/env bash
 # Afaq Harness Gateway — Setup Script (idempotent)
-# Usage: bash scripts/setup.sh  OR  make setup
+# Usage: bash scripts/setup.sh [OPTIONS]  OR  make setup
+# Options:
+#   --run           Start server after setup (make dev)
+#   --restart       Kill existing server on $PORT and restart
+#   --port 3500     Override port (default from .env or 3500)
+#   --no-prompt     Don't ask interactive prompt at end
+#   -h, --help      Show help
 set -e
+
+# Parse args
+RUN_SERVER=false
+RESTART_SERVER=false
+NO_PROMPT=false
+PORT_OVERRIDE=""
+for arg in "$@"; do
+  case "$arg" in
+    --run) RUN_SERVER=true ;;
+    --restart) RESTART_SERVER=true; RUN_SERVER=true ;;
+    --no-prompt) NO_PROMPT=true ;;
+    --port) echo "Usage: --port 3500 (use --port=3500)"; exit 1 ;;
+    --port=*) PORT_OVERRIDE="${arg#*=}" ;;
+    -h|--help)
+      echo "Usage: bash scripts/setup.sh [OPTIONS]"
+      echo "  --run           Start server after setup"
+      echo "  --restart       Kill existing server and restart"
+      echo "  --port=3500     Port to use (default 3500)"
+      echo "  --no-prompt     Don't ask interactive prompt"
+      exit 0
+      ;;
+  esac
+done
+# handle --port <value> form
+for i in "${!@}"; do if [ "${!i}" = "--port" ]; then j=$((i+1)); PORT_OVERRIDE="${!j}"; fi; done
 
 # Colors
 GREEN='\033[0;32m'
@@ -210,3 +241,80 @@ echo ""
 echo -e "Health check:"
 echo -e "  ${CYAN}make health${NC}   or   ${CYAN}curl http://127.0.0.1:3500/health${NC}"
 echo ""
+
+# ---------- Optional: Run / Restart server ----------
+# Determine port
+PORT_TO_USE="${PORT_OVERRIDE:-}"
+if [ -z "$PORT_TO_USE" ]; then
+  # try from .env, fallback 3500
+  PORT_TO_USE=$(grep -E "^PORT=" .env 2>/dev/null | cut -d= -f2 | tr -d ' "' || echo "3500")
+  [ -z "$PORT_TO_USE" ] && PORT_TO_USE="3500"
+fi
+
+is_port_in_use() {
+  local p="$1"
+  if command -v lsof &>/dev/null; then lsof -i :"$p" -sTCP:LISTEN -t &>/dev/null && return 0 || return 1
+  elif command -v ss &>/dev/null; then ss -ltn "sport = :$p" 2>/dev/null | grep -q ":$p" && return 0 || return 1
+  else return 1; fi
+}
+
+kill_port() {
+  local p="$1"
+  echo -e "${YELLOW}Stopping existing server on port $p...${NC}"
+  if command -v lsof &>/dev/null; then
+    local pids=$(lsof -i :"$p" -sTCP:LISTEN -t 2>/dev/null || true)
+    if [ -n "$pids" ]; then echo "$pids" | xargs -r kill 2>/dev/null || true; sleep 1; echo "$pids" | xargs -r kill -9 2>/dev/null || true; echo -e "${GREEN}  ✓ Stopped${NC}"; else echo "  (none)"; fi
+  elif command -v fuser &>/dev/null; then fuser -k "${p}/tcp" 2>/dev/null || true; sleep 1; echo -e "${GREEN}  ✓ Stopped${NC}"
+  else
+    pkill -f "uvicorn.*$p" 2>/dev/null || true; sleep 1; echo -e "${GREEN}  ✓ Stopped (pkill)${NC}"
+  fi
+}
+
+start_server() {
+  local p="$1"
+  echo -e "${CYAN}Starting server on http://127.0.0.1:$p ...${NC}"
+  # prefer make dev if available
+  if [ -f "Makefile" ]; then
+    # run in background with nohup if --restart, otherwise foreground
+    if [ "$RESTART_SERVER" = true ]; then
+      nohup .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port "$p" --reload > /tmp/afaq-gateway.log 2>&1 &
+      echo -e "${GREEN}  ✓ Server started (PID $!) — log: /tmp/afaq-gateway.log${NC}"
+      echo -e "  ${CYAN}curl http://127.0.0.1:$p/health${NC}  or  ${CYAN}http://127.0.0.1:$p/setup${NC}"
+    else
+      echo -e "${YELLOW}Running foreground (Ctrl+C to stop) — or use --restart for background${NC}"
+      .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port "$p" --reload
+    fi
+  else
+    .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port "$p" --reload
+  fi
+}
+
+if [ "$RESTART_SERVER" = true ]; then
+  kill_port "$PORT_TO_USE"
+  start_server "$PORT_TO_USE"
+  exit 0
+fi
+
+if [ "$RUN_SERVER" = true ]; then
+  if is_port_in_use "$PORT_TO_USE"; then
+    echo -e "${YELLOW}Port $PORT_TO_USE is already in use. Use --restart to restart.${NC}"
+    exit 0
+  fi
+  start_server "$PORT_TO_USE"
+  exit 0
+fi
+
+# Interactive prompt if TTY and not --no-prompt
+if [ "$NO_PROMPT" = false ] && [ -t 0 ]; then
+  echo ""
+  echo -e "${CYAN}Quick start?${NC}"
+  echo -e "  [1] Run server (foreground, --run)"
+  echo -e "  [2] Restart server (background, --restart) — kills old on $PORT_TO_USE"
+  echo -e "  [N] Do nothing (default)"
+  read -r -p "Choice [1/2/N]: " choice
+  case "$choice" in
+    1) RUN_SERVER=true; start_server "$PORT_TO_USE" ;;
+    2) RESTART_SERVER=true; kill_port "$PORT_TO_USE"; start_server "$PORT_TO_USE" ;;
+    *) echo -e "${GREEN}Done. Run manually: make dev or bash scripts/setup.sh --run${NC}" ;;
+  esac
+fi
