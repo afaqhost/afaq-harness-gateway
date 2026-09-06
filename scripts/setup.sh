@@ -14,25 +14,31 @@ RUN_SERVER=false
 RESTART_SERVER=false
 NO_PROMPT=false
 PORT_OVERRIDE=""
-for arg in "$@"; do
-  case "$arg" in
-    --run) RUN_SERVER=true ;;
-    --restart) RESTART_SERVER=true; RUN_SERVER=true ;;
-    --no-prompt) NO_PROMPT=true ;;
-    --port) echo "Usage: --port 3500 (use --port=3500)"; exit 1 ;;
-    --port=*) PORT_OVERRIDE="${arg#*=}" ;;
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --run) RUN_SERVER=true; shift ;;
+    --restart) RESTART_SERVER=true; RUN_SERVER=true; shift ;;
+    --no-prompt) NO_PROMPT=true; shift ;;
+    --port=*) PORT_OVERRIDE="${1#*=}"; shift ;;
+    --port)
+      if [[ -n "${2:-}" && "${2}" != --* ]]; then
+        PORT_OVERRIDE="$2"; shift 2
+      else
+        echo "Usage: --port 3500 (use --port=3500)"; exit 1
+      fi
+      ;;
     -h|--help)
       echo "Usage: bash scripts/setup.sh [OPTIONS]"
       echo "  --run           Start server after setup"
       echo "  --restart       Kill existing server and restart"
       echo "  --port=3500     Port to use (default 3500)"
+      echo "  --port 3500     Port to use (space form)"
       echo "  --no-prompt     Don't ask interactive prompt"
       exit 0
       ;;
+    *) shift ;;
   esac
 done
-# handle --port <value> form
-for i in "${!@}"; do if [ "${!i}" = "--port" ]; then j=$((i+1)); PORT_OVERRIDE="${!j}"; fi; done
 
 # Colors
 GREEN='\033[0;32m'
