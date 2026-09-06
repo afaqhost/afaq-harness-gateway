@@ -6,6 +6,7 @@ for prod Redis swap.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import defaultdict, deque
 from typing import Protocol
@@ -16,6 +17,8 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core.config import settings
+
+logger = logging.getLogger("afaq")
 
 
 class RateLimiter(Protocol):
@@ -65,7 +68,8 @@ class RedisRateLimiter:
 
             self._client = redis.from_url(redis_url, decode_responses=True)
             self._available = True
-        except Exception:
+        except (ImportError, OSError, RuntimeError) as exc:
+            logger.warning("redis_import_failed error=%s", exc)
             self._client = None
             self._available = False
 
@@ -89,7 +93,8 @@ class RedisRateLimiter:
                 retry = int(ttl) if ttl and ttl > 0 else window_s
                 return False, retry
             return True, 0
-        except Exception:
+        except (OSError, RuntimeError) as exc:
+            logger.warning("redis_fallback error=%s", exc)
             # fallback to in-memory on Redis error
             return self._fallback.allow(key, limit, window_s)
 
@@ -101,8 +106,8 @@ class RedisRateLimiter:
                 import asyncio
 
                 asyncio.create_task(self._client.flushdb())
-            except Exception:
-                pass
+            except (OSError, RuntimeError) as exc:
+                logger.warning("rate_limit_best_effort error=%s", exc)
 
     def _size(self, key: str) -> int:
         return self._fallback._size(key)
@@ -116,15 +121,16 @@ def _choose_limiter() -> RateLimiter:
         s = get_settings()
         if s.redis_enabled and s.redis_url:
             return RedisRateLimiter(s.redis_url)  # type: ignore
-    except Exception:
-        pass
+    except (OSError, RuntimeError) as exc:
+        logger.warning("rate_limit_chooser_failed error=%s", exc)
     return InMemoryRateLimiter()
 
 
 # global singleton for tests to reset — auto-chooses based on settings
 try:
     _global_limiter = _choose_limiter()
-except Exception:
+except (OSError, RuntimeError) as exc:
+    logger.warning("global_limiter_init_failed error=%s", exc)
     _global_limiter = InMemoryRateLimiter()
 # public alias
 global_rate_limiter = _global_limiter

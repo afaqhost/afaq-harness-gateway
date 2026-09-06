@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.security import create_access_token, hash_api_key, hash_password, verify_password
 from app.db.database import APIKey, User, get_db
+from app.shared.time import utcnow
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -44,15 +45,13 @@ async def current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = D
             if user and user.is_active:
                 # update last_used_at best-effort
                 try:
-                    from datetime import datetime
-
-                    key.last_used_at = datetime.utcnow()
+                    key.last_used_at = utcnow()
                     await db.commit()
-                except Exception:
+                except (OSError, RuntimeError):
                     await db.rollback()
                 return user
-    except Exception:
-        pass
+    except (OSError, RuntimeError) as exc:
+        import logging; logging.getLogger("afaq").warning("api_key_lookup_failed error=%s", exc)
     raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 async def admin_user(user: User = Depends(current_user)) -> User:

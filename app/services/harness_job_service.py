@@ -7,12 +7,15 @@ when `REDIS_URL` is configured so `GET /jobs/{id}` works cross-pod.
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import time
 import uuid
 from dataclasses import dataclass, field
 
 from app.clients.base import HarnessAdapter
+
+logger = logging.getLogger("afaq")
 
 
 @dataclass
@@ -49,7 +52,8 @@ def _get_redis():
         client = sync_redis.from_url(s.redis_url, decode_responses=True)
         client.ping()
         return client
-    except Exception:
+    except (ImportError, OSError, RuntimeError) as exc:
+        logger.warning("redis_unavailable_fallback error=%s", exc)
         return None
 
 
@@ -73,7 +77,8 @@ def _json_to_job(data: str) -> HarnessJob | None:
             created_at=float(d.get("created_at", time.monotonic())),
             updated_at=float(d.get("updated_at", time.monotonic())),
         )
-    except Exception:
+    except (ImportError, OSError, RuntimeError) as exc:
+        logger.warning("redis_unavailable_fallback error=%s", exc)
         return None
 
 
@@ -89,16 +94,16 @@ class HarnessJobService:
             rc = _get_redis()
             if rc:
                 rc.set(_job_key(job.id), _job_to_json(job), ex=self._ttl)
-        except Exception:
-            pass
+        except (OSError, RuntimeError) as exc:
+            logger.warning("job_sync_best_effort_failed error=%s", exc)
 
     def _redis_delete(self, job_id: str) -> None:
         try:
             rc = _get_redis()
             if rc:
                 rc.delete(_job_key(job_id))
-        except Exception:
-            pass
+        except (OSError, RuntimeError) as exc:
+            logger.warning("job_sync_best_effort_failed error=%s", exc)
 
     async def _run_adapter(self, job: HarnessJob, adapter: HarnessAdapter, mode: str):
         # mode: install or update
@@ -129,7 +134,7 @@ class HarnessJobService:
                 job.stage = "completed" if job.exit_code in (None, 0) else "failed"
             job.updated_at = time.monotonic()
             self._redis_sync(job)
-        except Exception as e:
+        except (OSError, RuntimeError, asyncio.TimeoutError) as e:
             job.stage = "failed"
             job.exit_code = 1
             if len(job.logs) < self._max_logs:
@@ -174,8 +179,8 @@ class HarnessJobService:
                 raw = rc.get(_job_key(job_id))
                 if raw:
                     return _json_to_job(raw)
-        except Exception:
-            pass
+        except (OSError, RuntimeError) as exc:
+            logger.warning("job_sync_best_effort_failed error=%s", exc)
         return None
 
     def list_for_harness(self, harness: str) -> list[HarnessJob]:

@@ -203,8 +203,8 @@ async def _stream_response(
             payload = sse_event(event, data, id=id_val, retry=retry)
             try:
                 process_registry.append_history(history_key, id_val if id_val is not None else seq, payload)
-            except Exception:
-                pass
+            except (OSError, RuntimeError) as exc:
+                import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
             return payload
 
         # replay from Last-Event-ID
@@ -315,8 +315,8 @@ async def _stream_response(
                     HARNESS_CALLS.labels(harness=harness_name, model=request_model).inc()
                     if HARNESS_LATENCY:
                         HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
-                except Exception:
-                    pass
+                except (OSError, RuntimeError) as exc:
+                    import logging; logging.getLogger("afaq").warning("metrics_best_effort error=%s", exc)
             yield _store("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
             seq += 1
 
@@ -378,8 +378,8 @@ async def _non_stream_response(adapter, prompt: str, model: str, request_model: 
                 HARNESS_CALLS.labels(harness=harness_name, model=request_model).inc()
                 if HARNESS_LATENCY:
                     HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
-            except Exception:
-                pass
+            except (OSError, RuntimeError) as exc:
+                import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
         # structured output validation with one retry
         if fmt is not None:
             from app.shared.structured_output import validate_json_response
@@ -396,7 +396,8 @@ async def _non_stream_response(adapter, prompt: str, model: str, request_model: 
                     result = result_retry
                 except HTTPException:
                     raise
-                except Exception:
+                except (OSError, RuntimeError, ValueError) as exc:
+                    import logging; logging.getLogger("afaq").warning("retry_failed error=%s", exc)
                     raise HTTPException(status_code=502, detail={"error": {"code": "malformed_output", "message": "Model did not return valid JSON for response_format"}})
             else:
                 # if validated, keep result but ensure text is JSON dump of validated
@@ -446,8 +447,8 @@ async def _non_stream_response(adapter, prompt: str, model: str, request_model: 
                         tool_calls = [{"id": str(tc_id), "type": "function", "function": {"name": func.get("name", "unknown"), "arguments": func.get("arguments", "") if isinstance(func.get("arguments"), str) else json.dumps(func.get("arguments", ""))}}]
                     elif "name" in tc_raw:
                         tool_calls = [{"id": tc_raw.get("id", "call_1"), "type": "function", "function": {"name": tc_raw["name"], "arguments": tc_raw.get("arguments", "") if isinstance(tc_raw.get("arguments"), str) else json.dumps(tc_raw.get("arguments", ""))}}]
-        except Exception:
-            pass
+        except (ValueError, TypeError, KeyError) as exc:
+            import logging; logging.getLogger("afaq").warning("tool_parse_failed error=%s", exc)
         if tool_calls is None and isinstance(result.raw, dict) and "tool_call" in result.raw:
             tc = result.raw["tool_call"]
             tool_calls = [{"id": tc.get("id", "call_1"), "type": "function", "function": tc.get("function", {"name": "unknown", "arguments": ""})}]

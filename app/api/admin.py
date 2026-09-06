@@ -13,6 +13,7 @@ from app.db.database import APIKey, Harness, User, get_db
 from app.harnesses.registry import all_adapters, cached_models, get_adapter, refresh_models
 from app.services.harness_job_service import harness_job_service
 from app.shared.sse import sse_event
+from app.shared.time import utcnow
 
 router = APIRouter()
 
@@ -64,21 +65,25 @@ async def harness_health(name: str, _: User = Depends(current_user), db: AsyncSe
         except asyncio.TimeoutError:
             latency_ms = int((time.monotonic() - start) * 1000)
             models = []
-        except Exception:
+        except (OSError, RuntimeError) as exc:
+            import logging
+
+            logging.getLogger("afaq").warning("harness_list_models_failed harness=%s error=%s", name, exc)
             latency_ms = int((time.monotonic() - start) * 1000)
             models = []
     # update Harness.last_checked_at in DB
     try:
         row = (await db.execute(select(Harness).where(Harness.name == name))).scalar_one_or_none()
         if not row:
-            row = Harness(name=name, display_name=adapter.display_name, executable=adapter.executable, provider=adapter.provider or "", installed=installed, last_checked_at=datetime.utcnow())
+            row = Harness(name=name, display_name=adapter.display_name, executable=adapter.executable, provider=adapter.provider or "", installed=installed, last_checked_at=utcnow())
             db.add(row)
         else:
             row.installed = installed
-            row.last_checked_at = datetime.utcnow()
+            row.last_checked_at = utcnow()
             row.display_name = adapter.display_name
         await db.commit()
-    except Exception:
+    except Exception as exc:
+        import logging; logging.getLogger("afaq").warning("admin_db_best_effort error=%s", exc)
         await db.rollback()
     return {"name": name, "installed": installed, "models": len(models), "latency_ms": latency_ms, "authenticated": False}
 

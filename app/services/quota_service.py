@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import APIKey, UsageRecord
+from app.shared.time import utcnow
 
 
 async def _count_since(db: AsyncSession, api_key_id: int, since: datetime) -> int:
@@ -22,7 +23,7 @@ async def _count_since(db: AsyncSession, api_key_id: int, since: datetime) -> in
 
 async def is_quota_exceeded(db: AsyncSession, api_key: APIKey, now: datetime | None = None) -> tuple[bool, str]:
     """Return (True, 'daily'|'monthly') if quota is exceeded."""
-    now = now or datetime.utcnow()
+    now = now or utcnow()
     # daily
     if api_key.daily_limit is not None:
         today_start = datetime(now.year, now.month, now.day)

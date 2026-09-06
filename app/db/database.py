@@ -1,9 +1,12 @@
 from datetime import datetime
 from typing import AsyncGenerator
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, JSON, UniqueConstraint
+
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
 from app.core.config import settings
+from app.shared.time import utcnow
 
 engine = create_async_engine(settings.database_url, connect_args={"check_same_thread": False})
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
@@ -24,10 +27,10 @@ try:
                 cursor.execute("PRAGMA busy_timeout=5000;")  # 5s
                 cursor.execute("PRAGMA foreign_keys=ON;")
                 cursor.close()
-            except Exception:
-                pass
-except Exception:
-    pass
+            except (OSError, RuntimeError) as exc:
+                import logging; logging.getLogger("afaq").warning("pragma_failed error=%s", exc)
+except (OSError, RuntimeError) as exc:
+    import logging; logging.getLogger("afaq").warning("db_init_fallback error=%s", exc)
 
 class Base(DeclarativeBase):
     pass
@@ -40,7 +43,7 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(120), default="")
     role: Mapped[str] = mapped_column(String(50), default="user")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     api_keys: Mapped[list["APIKey"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 class APIKey(Base):
@@ -55,7 +58,7 @@ class APIKey(Base):
     monthly_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     allowed_models: Mapped[list | None] = mapped_column(JSON, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     user: Mapped[User] = relationship(back_populates="api_keys")
 
 class Harness(Base):
@@ -83,7 +86,7 @@ class CredentialProfile(Base):
     encrypted_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="unknown")  # unknown|authenticated|failed|manual_required
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     user: Mapped[User] = relationship()
 
 class Conversation(Base):
@@ -95,8 +98,8 @@ class Conversation(Base):
     archived: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
     messages: Mapped[list["Message"]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
 
 class Message(Base):
@@ -105,7 +108,7 @@ class Message(Base):
     conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id"), index=True)
     role: Mapped[str] = mapped_column(String(30))
     content: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
 
 class UsageRecord(Base):
@@ -122,7 +125,7 @@ class UsageRecord(Base):
     cost: Mapped[float] = mapped_column(Float, default=0.0)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(30), default="success")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:

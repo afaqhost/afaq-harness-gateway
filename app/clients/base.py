@@ -10,12 +10,15 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import logging
 import time
 from abc import ABC, abstractmethod
 from typing import AsyncIterator
 
 from app.core.config import settings
 from app.models.harness import HarnessModel, HarnessResult
+
+logger = logging.getLogger("afaq")
 
 
 class HarnessAdapter(ABC):
@@ -107,8 +110,8 @@ class HarnessAdapter(ABC):
                             request_id=request_id,
                         ),
                     )
-                except Exception:
-                    pass
+                except (OSError, RuntimeError) as exc:
+                    logger.warning("harness_registry_best_effort_failed error=%s", exc)
             run_timeout = min(settings.harness_timeout_seconds, 90)
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=run_timeout)
@@ -128,8 +131,8 @@ class HarnessAdapter(ABC):
                         from app.services.process_registry import process_registry
 
                         await process_registry.cleanup(request_id)
-                    except Exception:
-                        pass
+                    except (OSError, RuntimeError) as exc:
+                        logger.warning("harness_registry_best_effort_failed error=%s", exc)
             if process.returncode != 0:
                 error = stderr.decode(errors="replace").strip() or stdout.decode(errors="replace").strip()
                 if "ollama" in error.lower() or "model" in error.lower() and "not found" in error.lower():
@@ -177,8 +180,8 @@ class HarnessAdapter(ABC):
                             request_id=request_id,
                         ),
                     )
-                except Exception:
-                    pass
+                except (OSError, RuntimeError) as exc:
+                    logger.warning("harness_registry_best_effort_failed error=%s", exc)
             try:
                 while True:
                     try:
@@ -225,8 +228,8 @@ class HarnessAdapter(ABC):
                         from app.services.process_registry import process_registry
 
                         await process_registry.cleanup(request_id)
-                    except Exception:
-                        pass
+                    except (OSError, RuntimeError) as exc:
+                        logger.warning("harness_registry_best_effort_failed error=%s", exc)
                 if process.returncode is None:
                     try:
                         process.kill()

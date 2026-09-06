@@ -46,7 +46,8 @@ def validate_json_response(text: str, fmt) -> dict | Any | None:
             except ImportError:
                 # if jsonschema not installed, just return data (or raise)
                 pass
-            except Exception:
+            except (ValueError, TypeError, KeyError) as exc:
+                import logging; logging.getLogger("afaq").warning("jsonschema_validation_failed error=%s", exc)
                 return None
         return data
     return None

@@ -126,7 +126,15 @@ async def health(db = Depends(get_db)):
 
     try:
         rows = {h.name: h for h in (await db.execute(select(Harness))).scalars().all()}
-    except Exception:
+    except (OSError, RuntimeError) as exc:
+        import logging
+
+        logging.getLogger("afaq").warning("health_db_fallback error=%s", exc)
+        rows = {}
+    except Exception as exc:  # SQLAlchemyError etc — intentional broad for health best-effort
+        import logging
+
+        logging.getLogger("afaq").warning("health_unexpected error=%s", exc)
         rows = {}
     harnesses = []
     for adapter in all_adapters():

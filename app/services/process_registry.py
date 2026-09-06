@@ -8,9 +8,12 @@ disconnect. Keeps {request_id -> ProcessHandle} with async lock.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
+
+logger = logging.getLogger("afaq")
 
 
 @dataclass
@@ -34,7 +37,8 @@ class ProcessRegistry:
             from app.transport.history import get_history_store  # type: ignore
 
             self._history = get_history_store()  # type: ignore
-        except Exception:
+        except (ImportError, OSError, RuntimeError) as exc:
+            logger.warning("history_store_init_fallback error=%s", exc)
             self._history: dict[str, deque[tuple[int, str]]] = defaultdict(lambda: deque(maxlen=100))  # type: ignore
 
     async def register(self, request_id: str, handle: ProcessHandle) -> None:
@@ -76,9 +80,8 @@ class ProcessRegistry:
                 pass
         except ProcessLookupError:
             pass
-        except Exception:
-            # best-effort, never raise
-            pass
+        except (OSError, RuntimeError) as exc:
+            logger.warning("process_cancel_best_effort_failed request_id=%s error=%s", request_id, exc)
         return True
 
     async def cleanup(self, request_id: str) -> None:
@@ -118,8 +121,8 @@ class ProcessRegistry:
         self._pending_cancel.clear()
         try:
             self._history.clear()  # type: ignore
-        except Exception:
-            pass
+        except (AttributeError, OSError, RuntimeError) as exc:
+            logger.warning("history_clear_failed error=%s", exc)
 
     def append_history(self, key: str, seq: int, payload: str) -> None:
         try:

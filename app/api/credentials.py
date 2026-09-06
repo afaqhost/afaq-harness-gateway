@@ -9,6 +9,7 @@ from app.api.auth import current_user
 from app.db.database import CredentialProfile, User, get_db
 from app.harnesses.registry import get_adapter
 from app.services import credential_service
+from app.shared.time import utcnow
 
 router = APIRouter()
 
@@ -94,21 +95,28 @@ async def check_credential(cred_id: int, user: User = Depends(current_user), db:
     try:
         result = await adapter.authenticate(mode=profile.auth_type)
         status = result.get("status", "unknown")
-    except Exception:
+    except (OSError, RuntimeError) as exc:
         status = "failed"
+        import logging
+
+        logging.getLogger("afaq").warning("credential_check_failed harness=%s error=%s", profile.harness, exc)
     profile.status = status
-    profile.last_checked_at = datetime.utcnow()
+    profile.last_checked_at = utcnow()
     await db.commit()
     await db.refresh(profile)
     # also update Harness.authenticated flag if status is authenticated
     try:
         from app.db.database import Harness
+        from sqlalchemy.exc import SQLAlchemyError
 
         row = (await db.execute(select(Harness).where(Harness.name == profile.harness))).scalar_one_or_none()
         if row:
             row.authenticated = status == "authenticated"
             await db.commit()
-    except Exception:
+    except SQLAlchemyError as exc:
+        import logging
+
+        logging.getLogger("afaq").warning("harness_auth_flag_update_failed error=%s", exc)
         await db.rollback()
     return _to_out(profile)
 

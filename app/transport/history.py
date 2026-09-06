@@ -60,7 +60,8 @@ class RedisHistoryStore:
             # probe
             self._client.ping()
             self._available = True
-        except Exception:
+        except (ImportError, OSError, RuntimeError) as exc:
+            import logging; logging.getLogger("afaq").warning("redis_fallback_init error=%s", exc)
             self._client = None
             self._available = False
 
@@ -76,7 +77,8 @@ class RedisHistoryStore:
             self._client.lpush(rk, f"{seq}|{payload}")
             self._client.ltrim(rk, 0, self._maxlen - 1)
             self._client.expire(rk, 3600)
-        except Exception:
+        except (OSError, RuntimeError) as exc:
+            import logging; logging.getLogger("afaq").warning("redis_append_fallback error=%s", exc)
             self._fallback.append(key, seq, payload)
 
     def replay(self, key: str, last_id: int) -> list[str]:
@@ -95,7 +97,8 @@ class RedisHistoryStore:
                 except ValueError:
                     continue
             return result
-        except Exception:
+        except (OSError, RuntimeError) as exc:
+            import logging; logging.getLogger("afaq").warning("redis_history_fallback error=%s", exc)
             return self._fallback.replay(key, last_id)
 
     def get_history(self, key: str) -> deque[tuple[int, str]]:
@@ -112,7 +115,8 @@ class RedisHistoryStore:
                 except ValueError:
                     continue
             return dq
-        except Exception:
+        except (OSError, RuntimeError) as exc:
+            import logging; logging.getLogger("afaq").warning("redis_history_fallback error=%s", exc)
             return self._fallback.get_history(key)
 
     def clear(self) -> None:
@@ -122,8 +126,8 @@ class RedisHistoryStore:
                 # best-effort flush history keys
                 for k in list(self._client.scan_iter("history:*")):
                     self._client.delete(k)
-            except Exception:
-                pass
+            except (OSError, RuntimeError) as exc:
+                import logging; logging.getLogger("afaq").warning("history_best_effort error=%s", exc)
 
     def size(self, key: str | None = None) -> int:
         if key is not None:
@@ -139,7 +143,8 @@ def get_history_store() -> HistoryStore | RedisHistoryStore:
         s = get_settings()
         if s.redis_enabled and s.redis_url:
             return RedisHistoryStore(s.redis_url)
-    except Exception:
+    except (OSError, RuntimeError) as exc:
+        import logging; logging.getLogger("afaq").warning("history_store_best_effort error=%s", exc)
         pass
     return HistoryStore()
 

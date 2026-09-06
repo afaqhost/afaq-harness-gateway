@@ -26,14 +26,17 @@ from app.services.model_service import (
     select_model_for_new_conversation,
     validate_model_or_400,
 )
+
 try:
     from app.api.metrics import HARNESS_CALLS, HARNESS_LATENCY
 except ImportError:
     HARNESS_CALLS = None
     HARNESS_LATENCY = None
+
 from app.shared.errors import sanitize_harness_error
 from app.shared.model_utils import preview_text as _preview
 from app.shared.prompt_utils import build_harness_prompt, build_history_prompt
+from app.shared.time import utcnow
 
 logger = logging.getLogger("afaq")
 
@@ -199,8 +202,8 @@ async def update_conversation(conv_id: int, payload: ConversationUpdate, user: U
         conv.model = payload.model
     if payload.archived is not None:
         conv.archived = payload.archived
-        conv.archived_at = datetime.utcnow() if payload.archived else None
-    conv.updated_at = datetime.utcnow()
+        conv.archived_at = utcnow() if payload.archived else None
+    conv.updated_at = utcnow()
     await db.commit()
     await db.refresh(conv)
     return await _conversation_to_out(conv, db)
@@ -210,9 +213,9 @@ async def update_conversation(conv_id: int, payload: ConversationUpdate, user: U
 async def delete_conversation(conv_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     conv = await _get_conversation_or_404(conv_id, user, db)
     # soft delete
-    conv.deleted_at = datetime.utcnow()
+    conv.deleted_at = utcnow()
     conv.archived = True
-    conv.archived_at = conv.archived_at or datetime.utcnow()
+    conv.archived_at = conv.archived_at or utcnow()
     await db.commit()
 
 
@@ -228,7 +231,7 @@ async def restore_conversation(conv_id: int, user: User = Depends(current_user),
     # keep archived as is? Restore should unarchive as well? Per spec restore -> back to visible
     conv.archived = False
     conv.archived_at = None
-    conv.updated_at = datetime.utcnow()
+    conv.updated_at = utcnow()
     await db.commit()
     await db.refresh(conv)
     return await _conversation_to_out(conv, db)
@@ -261,7 +264,7 @@ async def send_message(
 
     is_first = (await db.execute(select(Message).where(Message.conversation_id == conv.id).limit(1))).scalar_one_or_none() is None
     _maybe_update_title(conv, content, is_first)
-    conv.updated_at = datetime.utcnow()
+    conv.updated_at = utcnow()
 
     user_msg = Message(conversation_id=conv.id, role="user", content=content)
     db.add(user_msg)
@@ -289,8 +292,8 @@ async def send_message(
                 HARNESS_CALLS.labels(harness=harness_name, model=model).inc()
                 if HARNESS_LATENCY:
                     HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
-            except Exception:
-                pass
+            except (OSError, RuntimeError) as exc:
+                import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
     except HTTPException:
         raise
     except RuntimeError as exc:
@@ -300,13 +303,13 @@ async def send_message(
         err_text = f"⚠️ {sanitized}"
         err_msg = Message(conversation_id=conv.id, role="assistant", content=err_text)
         db.add(err_msg)
-        conv.updated_at = datetime.utcnow()
+        conv.updated_at = utcnow()
         await db.commit()
         raise HTTPException(status_code=status, detail={"error": {"code": "harness_error", "message": sanitized}})
 
     assistant_msg = Message(conversation_id=conv.id, role="assistant", content=result_h.text or "(no response)")
     db.add(assistant_msg)
-    conv.updated_at = datetime.utcnow()
+    conv.updated_at = utcnow()
 
     usage = {
         "prompt_tokens": result_h.prompt_tokens or len(prompt.split()),
@@ -367,7 +370,7 @@ async def stream_message(
         conv.model = model
     is_first = (await db.execute(select(Message).where(Message.conversation_id == conv.id).limit(1))).scalar_one_or_none() is None
     _maybe_update_title(conv, content, is_first)
-    conv.updated_at = datetime.utcnow()
+    conv.updated_at = utcnow()
     user_msg = Message(conversation_id=conv.id, role="user", content=content)
     db.add(user_msg)
     await db.flush()
@@ -400,8 +403,8 @@ async def stream_message(
             # store for reconnect (per conv)
             try:
                 process_registry.append_history(history_key, id_val if id_val is not None else seq, payload)
-            except Exception:
-                pass
+            except (OSError, RuntimeError) as exc:
+                import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
             return payload
 
         # replay from Last-Event-ID if provided
@@ -489,8 +492,8 @@ async def stream_message(
                     HARNESS_CALLS.labels(harness=harness_name, model=model).inc()
                     if HARNESS_LATENCY:
                         HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
-                except Exception:
-                    pass
+                except (OSError, RuntimeError) as exc:
+                    import logging; logging.getLogger("afaq").warning("metrics_best_effort error=%s", exc)
             yield _store_and_yield("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
             seq += 1
 
@@ -503,7 +506,7 @@ async def stream_message(
                 session.add(msg)
                 conv2 = await session.get(Conversation, conv.id)
                 if conv2:
-                    conv2.updated_at = datetime.utcnow()
+                    conv2.updated_at = utcnow()
                 session.add(
                     UsageRecord(
                         user_id=user.id,
@@ -533,10 +536,10 @@ async def stream_message(
                     session.add(msg)
                     conv2 = await session.get(Conversation, conv.id)
                     if conv2:
-                        conv2.updated_at = datetime.utcnow()
+                        conv2.updated_at = utcnow()
                     await session.commit()
-            except Exception:
-                pass
+            except (OSError, RuntimeError) as exc:
+                import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
             err = {"code": "harness_error", "message": sanitized, "type": "harness_error"}
             yield _store_and_yield("error", err, id_val=seq)
 

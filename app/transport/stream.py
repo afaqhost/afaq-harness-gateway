@@ -51,8 +51,8 @@ async def heartbeat_stream(
         payload = sse_event(event, data, id=id_val, retry=retry)
         try:
             history_store.append(history_key, id_val if id_val is not None else seq, payload)
-        except Exception:
-            pass
+        except (OSError, RuntimeError, AttributeError) as exc:
+            import logging; logging.getLogger("afaq").warning("history_append_failed error=%s", exc)
         return payload
 
     # replay
@@ -127,5 +127,6 @@ async def heartbeat_stream(
             raise RuntimeError("Harness returned empty response")
         # usage/done are emitted by caller to keep metrics/DB ownership in service layer
         # this helper yields only token/start/cancel/keepalive
-    except Exception:
+    except (OSError, RuntimeError, asyncio.TimeoutError) as exc:
+        import logging; logging.getLogger("afaq").warning("stream_helper_failed error=%s", exc)
         raise

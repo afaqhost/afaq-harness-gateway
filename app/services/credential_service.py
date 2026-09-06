@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decrypt_secret, encrypt_secret
 from app.db.database import CredentialProfile
+from app.shared.time import utcnow
 
 logger = logging.getLogger("afaq")
 
@@ -86,7 +86,10 @@ async def get_env_for_harness(db: AsyncSession, user_id: int, harness: str) -> d
         return {}
     try:
         raw = decrypt_secret(chosen.encrypted_token)
-    except Exception:
+    except Exception as exc:  # cryptography.fernet.InvalidToken + others — best-effort fallback to empty env
+        import logging
+
+        logging.getLogger("afaq").warning("decrypt_failed error=%s", exc)
         return {}
     env_key = HARNESS_ENV_MAP.get(harness, HARNESS_ENV_MAP.get("generic", "API_TOKEN"))
     # also support harness-specific overrides: e.g., if harness is "claude" we use ANTHROPIC, etc.
@@ -96,7 +99,7 @@ async def get_env_for_harness(db: AsyncSession, user_id: int, harness: str) -> d
 
 async def update_status(db: AsyncSession, profile: CredentialProfile, status: str):
     profile.status = status
-    profile.last_checked_at = datetime.utcnow()
+    profile.last_checked_at = utcnow()
     await db.commit()
     await db.refresh(profile)
     return profile
@@ -121,7 +124,7 @@ async def _create_default_profile_if_missing(session: AsyncSession, admin_id: in
         return False
     try:
         encrypted = encrypt_secret(raw_token)
-    except Exception as exc:
+    except (ValueError, RuntimeError, OSError) as exc:
         logger.warning("credential_harvest_encrypt_failed harness=%s error=%s", harness, str(exc))
         return False
     session.add(
@@ -174,6 +177,6 @@ async def harvest_env_credentials() -> int:
     except SQLAlchemyError as exc:
         logger.warning("credential_harvest_db_failed error=%s", str(exc))
         return 0
-    except Exception as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         logger.warning("credential_harvest_unexpected_failed error=%s", str(exc))
         return 0

@@ -29,5 +29,5 @@ async def metrics():
     try:
         data = generate_latest()
         return Response(content=data, media_type=CONTENT_TYPE_LATEST)
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         raise HTTPException(status_code=500, detail={"error": {"code": "harness_error", "message": str(e)}})
