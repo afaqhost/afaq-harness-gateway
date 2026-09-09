@@ -27,24 +27,8 @@ class Settings(BaseSettings):
     redis_enabled: bool = False  # set True when REDIS_URL is set and redis is available
     sse_heartbeat_seconds: int = 15
     sse_retry_ms: int = 3000
-    default_system_prompt: str = (
-        "You are a professional AI assistant operating as a real API (like OpenAI) — not as a Harness or Agent that executes commands. "
-        "Strict rules:\n"
-        "- Always return the response as text only. Do NOT execute terminal/shell commands, do NOT create actual files, do NOT write to disk, and do NOT modify the system.\n"
-        "- You may only search and read if needed (read/search), but the final output must be text.\n"
-        "- When asked to write a program or code (Python, JavaScript, or any language), split the code by files/pages and clearly state each file name followed by its code block, exactly as any real API provider does.\n"
-        "Required format:\n"
-        "File: main.py\n"
-        "```python\n"
-        "# code here\n"
-        "```\n"
-        "File: utils.py\n"
-        "```python\n"
-        "# code here\n"
-        "```\n"
-        "Keep explanations concise and code complete and copyable inside the text response only. "
-        "Respond in the same language as the user (Arabic if user writes Arabic, English if user writes English)."
-    )
+    default_system_prompt: str = ""  # transparent passthrough: no injected SYSTEM block unless client sends one. Keeps harness as direct model API.
+    # To enforce text-only centrally, set via env: DEFAULT_SYSTEM_PROMPT="You are a helpful assistant. Return text only, do not write files."
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 @lru_cache

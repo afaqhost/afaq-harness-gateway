@@ -89,11 +89,14 @@ class HarnessAdapter(ABC):
         from app.services.harness_queue import harness_queue
 
         async with harness_queue.slot():
+            cwd = settings.harness_data_dir / (request_id or "default")
+            cwd.mkdir(parents=True, exist_ok=True)
             process = await asyncio.create_subprocess_exec(
                 *command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env={**os.environ, **(env or {})},
+                cwd=cwd,
             )
             # register for cancel if request_id provided
             if request_id:
@@ -157,11 +160,14 @@ class HarnessAdapter(ABC):
         from app.services.harness_queue import harness_queue
 
         async with harness_queue.slot():
+            cwd = settings.harness_data_dir / (request_id or "default")
+            cwd.mkdir(parents=True, exist_ok=True)
             process = await asyncio.create_subprocess_exec(
                 *command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env={**os.environ, **(env or {})},
+                cwd=cwd,
             )
             assert process.stdout
             assert process.stderr

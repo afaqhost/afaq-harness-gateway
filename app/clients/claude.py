@@ -10,7 +10,7 @@ class ClaudeAdapter(HarnessAdapter):
     update_command = ["npm", "update", "-g", "@anthropic-ai/claude-code"]
 
     def build_command(self, prompt, model=None, session_id=None):
-        command = [self.executable, "-p", prompt, "--output-format", "stream-json"]
+        command = [self.executable, "-p", prompt, "--output-format", "stream-json", "--permission-mode", "plan"]
         if model and model != "default":
             command += ["--model", model]
         if session_id:

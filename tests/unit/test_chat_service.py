@@ -66,7 +66,7 @@ async def test_chat_service_execute_builds_prompt_and_calls_adapter():
     assert out.text == "hello world"
     assert out.model == "my-model"
     assert stub.last_prompt is not None
-    assert "SYSTEM:" in stub.last_prompt
+    # transparent passthrough: no SYSTEM injected when default is empty
     assert "user: hi" in stub.last_prompt
 
 
