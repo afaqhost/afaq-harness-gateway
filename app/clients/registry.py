@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import asyncio
 
+from app.clients.agy import AgyAdapter
 from app.clients.base import HarnessAdapter
 from app.clients.claude import ClaudeAdapter
 from app.clients.codex import CodexAdapter
 from app.clients.commandcode import CommandCodeAdapter
+from app.clients.generic import GenericAdapter
 from app.clients.opencode import OpenCodeAdapter
+from app.clients.pi import PiAdapter
 from app.models.harness import HarnessModel
 from app.shared.time import utcnow
 
@@ -22,6 +25,103 @@ ADAPTERS: dict[str, HarnessAdapter] = {
     "codex": CodexAdapter(),
     "opencode": OpenCodeAdapter(),
     "commandcode": CommandCodeAdapter(),
+    "agy": AgyAdapter(),
+    "pi": PiAdapter(),
+    # Generic bulk — text-only until proven Custom (P02)
+    "minimax": GenericAdapter(
+        name="minimax",
+        executable="minimax",
+        provider="minimax",
+        display_name="Minimax",
+        command_template=["minimax", "--print", "{prompt}", "--model", "{model}"],
+        install_command=["npm", "install", "-g", "minimax-cli"],
+        update_command=["npm", "update", "-g", "minimax-cli"],
+    ),
+    "aider": GenericAdapter(
+        name="aider",
+        executable="aider",
+        provider="aider",
+        display_name="Aider",
+        command_template=["aider", "--message", "{prompt}", "--model", "{model}", "--no-auto-commits", "--no-dirty-commits"],
+    ),
+    "cline": GenericAdapter(
+        name="cline",
+        executable="cline",
+        provider="cline",
+        display_name="Cline",
+        command_template=["cline", "--print", "{prompt}", "--model", "{model}"],
+        install_command=["npm", "install", "-g", "@cline/cli"],
+        update_command=["npm", "update", "-g", "@cline/cli"],
+    ),
+    "cursor": GenericAdapter(
+        name="cursor",
+        executable="cursor-agent",
+        provider="cursor",
+        display_name="Cursor",
+        command_template=["cursor-agent", "--print", "{prompt}", "--model", "{model}"],
+    ),
+    "grok": GenericAdapter(
+        name="grok",
+        executable="grok",
+        provider="grok",
+        display_name="Grok",
+        command_template=["grok", "--print", "{prompt}", "--model", "{model}"],
+        install_command=["npm", "install", "-g", "@xai-official/grok"],
+        update_command=["npm", "update", "-g", "@xai-official/grok"],
+    ),
+    "kimi": GenericAdapter(
+        name="kimi",
+        executable="kimi",
+        provider="kimi",
+        display_name="Kimi",
+        command_template=["kimi", "-m", "{model}", "--prompt={prompt}", "--output-format", "stream-json"],
+        install_command=["npm", "install", "-g", "@moonshot/kimi-code"],
+        update_command=["npm", "update", "-g", "@moonshot/kimi-code"],
+    ),
+    "omp": GenericAdapter(
+        name="omp",
+        executable="omp",
+        provider="omp",
+        display_name="OMP",
+        command_template=["omp", "--print", "{prompt}", "--model", "{model}"],
+    ),
+    "qoder": GenericAdapter(
+        name="qoder",
+        executable="qodercli",
+        provider="qoder",
+        display_name="Qoder",
+        command_template=["qodercli", "--print", "{prompt}", "--model", "{model}"],
+    ),
+    "vibe": GenericAdapter(
+        name="vibe",
+        executable="vibe",
+        provider="vibe",
+        display_name="Vibe",
+        command_template=["vibe", "--print", "{prompt}", "--model", "{model}"],
+    ),
+    "copilot": GenericAdapter(
+        name="copilot",
+        executable="copilot",
+        provider="copilot",
+        display_name="Muse",
+        command_template=["copilot", "--print", "{prompt}", "--model", "{model}"],
+        install_command=["npm", "install", "-g", "@github/copilot"],
+        update_command=["npm", "update", "-g", "@github/copilot"],
+    ),
+    "warp": GenericAdapter(
+        name="warp",
+        executable="oz",
+        provider="warp",
+        display_name="Warp",
+        command_template=["oz", "--print", "{prompt}", "--model", "{model}"],
+    ),
+    "zcode": GenericAdapter(
+        name="zcode",
+        executable="zcode",
+        provider="zcode",
+        display_name="Zcode",
+        command_template=["zcode", "--print", "{prompt}", "--mode", "plan", "--model", "{model}"],
+    ),
 }
 
 MODEL_CACHE: dict[str, list[HarnessModel]] = {}

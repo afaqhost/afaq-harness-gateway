@@ -14,11 +14,15 @@ async def test_health_returns_ok_and_harnesses(client):
     assert data["status"] == "ok"
     assert "service" in data
     assert "harnesses" in data
-    # should have 4 harnesses (claude, codex, opencode, commandcode)
-    assert len(data["harnesses"]) == 4
+    # should have 18 harnesses after expansion (4 original + agy/pi + 12 generic)
+    from app.harnesses.registry import all_adapters
+
+    assert len(data["harnesses"]) == len(all_adapters())
     names = {h["name"] for h in data["harnesses"]}
     assert "opencode" in names
     assert "claude" in names
+    assert "agy" in names
+    assert "pi" in names
     # each should have installed flag
     for h in data["harnesses"]:
         assert "installed" in h
