@@ -90,6 +90,23 @@ class AgyAdapter(HarnessAdapter):
         joined = "".join(parts).strip()
         return joined or decoded
 
+    _FALLBACK_MODELS = [
+        "gemini-3.8-flash-high",
+        "gemini-3.8-flash-medium",
+        "gemini-3.8-flash-low",
+        "gemini-3.7-flash-high",
+        "gemini-3.7-flash-medium",
+        "gemini-3.7-flash-low",
+        "gemini-3.6-flash-high",
+        "gemini-3.6-flash-medium",
+        "gemini-3.6-flash-low",
+        "gemini-3.1-pro-high",
+        "gemini-3.1-pro-low",
+        "claude-sonnet-4-6",
+        "claude-opus-4-6-thinking",
+        "gpt-oss-120b-medium",
+    ]
+
     async def list_models(self):
         if not self.is_installed():
             return []
@@ -97,25 +114,26 @@ class AgyAdapter(HarnessAdapter):
             proc = await asyncio.create_subprocess_exec(
                 self.executable, "models", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=4)
             if proc.returncode != 0:
-                return []
+                raise RuntimeError(f"agy models exit {proc.returncode}")
             models = []
             for line in stdout.decode(errors="replace").splitlines():
                 line = line.strip()
                 if not line or line.lower().startswith("fetching"):
                     continue
-                # format: "gemini-3.8-flash-high\tGemini 3.8 Flash (High)"
                 first = line.split()[0].split("\t")[0].strip()
                 if first:
                     models.append(first)
-            # deduplicate
             seen = set()
             uniq = []
             for m in models:
                 if m not in seen:
                     seen.add(m)
                     uniq.append(m)
-            return [HarnessModel(f"{self.name}//{m}", self.name, m.split("/")[0] if "/" in m else None, m) for m in uniq]
-        except (OSError, asyncio.TimeoutError):
-            return []
+            if uniq:
+                return [HarnessModel(f"{self.name}//{m}", self.name, m.split("/")[0] if "/" in m else None, m) for m in uniq]
+        except (OSError, asyncio.TimeoutError, RuntimeError):
+            pass
+        # fallback static list ensures health/model discovery never blocks on network
+        return [HarnessModel(f"{self.name}//{m}", self.name, None, m) for m in self._FALLBACK_MODELS]
