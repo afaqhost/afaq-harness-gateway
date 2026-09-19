@@ -2488,13 +2488,13 @@
       "norm_label": "code:bash (python3 -m venv .venv)"
     },
     {
-      "label": "code:bash (python -m uvicorn app.main:app --host 0.0.0.0 --port 3500)",
+      "label": "code:bash (python -m uvicorn app.main:app --host localhost --port 3500)",
       "file_type": "document",
       "source_file": "docs/installation.md",
       "source_location": "L25",
       "id": "docs_installation_codeblock_2",
       "community": 5,
-      "norm_label": "code:bash (python -m uvicorn app.main:app --host 0.0.0.0 --port 3500)"
+      "norm_label": "code:bash (python -m uvicorn app.main:app --host localhost --port 3500)"
     },
     {
       "label": "Create the First Administrator",

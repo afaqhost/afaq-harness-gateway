@@ -6,7 +6,7 @@ Configuration is loaded from `.env` through `pydantic-settings`. Start from `.en
 | --- | --- | --- |
 | `APP_NAME` | `Afaq Harness Gateway` | Application display name |
 | `VERSION` | `0.1.0` | Application version returned by `/health` |
-| `HOST` | `0.0.0.0` | Default host setting |
+| `HOST` | `localhost` | Default host setting |
 | `PORT` | `3500` | Default application port |
 | `DEBUG` | `false` | Debug setting exposed to application configuration |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./data/afaq.db` | Async SQLAlchemy database URL |

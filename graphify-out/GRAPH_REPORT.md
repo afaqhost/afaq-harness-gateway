@@ -101,7 +101,7 @@ Nodes (13): Afaq Harness Gateway, code:bash (python3 -m venv .venv), code:bash (
 
 ### Community 5 - "Community 5"
 Cohesion: 0.14
-Nodes (13): code:bash (python3 -m venv .venv), code:bash (python -m uvicorn app.main:app --host 0.0.0.0 --port 3500), code:bash (curl -X POST http://127.0.0.1:3500/api/auth/bootstrap \), code:bash (curl http://127.0.0.1:3500/health), code:json ({"status":"ok","service":"Afaq Harness Gateway","version":"0), code:bash (cp .env.example .env), Create the First Administrator, Docker Compose (+5 more)
+Nodes (13): code:bash (python3 -m venv .venv), code:bash (python -m uvicorn app.main:app --host localhost --port 3500), code:bash (curl -X POST http://127.0.0.1:3500/api/auth/bootstrap \), code:bash (curl http://127.0.0.1:3500/health), code:json ({"status":"ok","service":"Afaq Harness Gateway","version":"0), code:bash (cp .env.example .env), Create the First Administrator, Docker Compose (+5 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.15

@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     app_name: str = "Afaq Harness Gateway"
     version: str = "0.1.0"
-    host: str = "0.0.0.0"
+    host: str = "localhost"
     port: int = 3500
     debug: bool = False
     database_url: str = f"sqlite+aiosqlite:///{BASE_DIR / 'data' / 'afaq.db'}"

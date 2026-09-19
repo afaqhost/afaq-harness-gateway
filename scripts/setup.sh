@@ -235,7 +235,7 @@ echo -e "${GREEN}✓ Setup complete!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo -e "Next steps:"
-echo -e "  ${CYAN}make dev${NC}  or  ${CYAN}.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 3500 --reload${NC}"
+echo -e "  ${CYAN}make dev${NC}  or  ${CYAN}.venv/bin/python -m uvicorn app.main:app --host localhost --port 3500 --reload${NC}"
 echo -e "  Open ${CYAN}http://127.0.0.1:3500/setup${NC}  (first run) or ${CYAN}http://127.0.0.1:3500/login${NC}"
 echo ""
 echo -e "Docker:"
@@ -283,15 +283,15 @@ start_server() {
   if [ -f "Makefile" ]; then
     # run in background with nohup if --restart, otherwise foreground
     if [ "$RESTART_SERVER" = true ]; then
-      nohup .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port "$p" --reload > /tmp/afaq-gateway.log 2>&1 &
+      nohup .venv/bin/python -m uvicorn app.main:app --host localhost --port "$p" --reload > /tmp/afaq-gateway.log 2>&1 &
       echo -e "${GREEN}  ✓ Server started (PID $!) — log: /tmp/afaq-gateway.log${NC}"
       echo -e "  ${CYAN}curl http://127.0.0.1:$p/health${NC}  or  ${CYAN}http://127.0.0.1:$p/setup${NC}"
     else
       echo -e "${YELLOW}Running foreground (Ctrl+C to stop) — or use --restart for background${NC}"
-      .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port "$p" --reload
+      .venv/bin/python -m uvicorn app.main:app --host localhost --port "$p" --reload
     fi
   else
-    .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port "$p" --reload
+    .venv/bin/python -m uvicorn app.main:app --host localhost --port "$p" --reload
   fi
 }
 

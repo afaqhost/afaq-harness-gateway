@@ -20,7 +20,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
-python -m uvicorn app.main:app --host 0.0.0.0 --port 3500
+python -m uvicorn app.main:app --host localhost --port 3500
 ```
 
 Open `http://127.0.0.1:3500/setup` on a fresh database — the wizard creates the first admin (auto-login) and lets you install harnesses inside the container. See `docs/installation.md`.

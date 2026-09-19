@@ -41,7 +41,7 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 # secrets are auto-patched by make setup; or generate manually:
 python3 -c "import secrets; print(secrets.token_urlsafe(48))"
-python -m uvicorn app.main:app --host 0.0.0.0 --port 3500
+python -m uvicorn app.main:app --host localhost --port 3500
 ```
 
 The dashboard is available at `http://127.0.0.1:3500/login` (or `/setup` on first run). FastAPI docs at `/docs` and `/redoc`.

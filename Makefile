@@ -4,7 +4,7 @@ PY := .venv/bin/python
 PIP := .venv/bin/pip
 UVICORN := .venv/bin/python -m uvicorn
 PORT ?= 3500
-HOST ?= 0.0.0.0
+HOST ?= localhost
 
 # Detect python for setup
 PYTHON ?= python3
