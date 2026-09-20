@@ -35,7 +35,7 @@
 
 - [ ] **P02.2 Add install/update recipes (optional)** — If `GenericAdapter` needs `install_command`, set per harness:
   ```python
-  GenericAdapter(name="agy", executable="agy", install_command=["npm","install","-g","@google/agy"])
+  GenericAdapter(name="agy", executable="agy", install_command=["bash","-c","curl -fsSL https://antigravity.google/cli/install.sh | bash"])  # agy is a Go binary, not npm
   ```
   Or leave empty (manual install) and document in `docs/harnesses.md`.
 

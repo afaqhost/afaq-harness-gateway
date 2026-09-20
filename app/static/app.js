@@ -64,9 +64,9 @@ const translations = {
     setupStep1: 'حساب المدير', setupStep2: 'الأدوات', setupStep3: 'جاهز',
     setupCreateAdmin: 'إنشاء حساب المدير', setupCreateDesc: 'هذا الحساب سيكون المدير الأول — يمكنك إضافة مستخدمين لاحقاً من لوحة التحكم',
     confirmPassword: 'تأكيد كلمة المرور', setupCreateBtn: 'إنشاء الحساب والدخول', setupHint: 'سيتم تسجيل دخولك تلقائياً بعد الإنشاء',
-    setupHarnessTitle: 'الأدوات المتاحة', setupHarnessDesc: 'اختر ما تريد تثبيته الآن — يمكنك تثبيت البقية لاحقاً من صفحة الهارنسس. التثبيت يتم داخل الكونتينر عبر npm.',
+    setupHarnessTitle: 'الأدوات المتاحة', setupHarnessDesc: 'اختر ما تريد تثبيته الآن — يمكنك تثبيت البقية لاحقاً من صفحة الهارنسس. التثبيت يتم داخل الكونتينر بالأمر الرسمي لكل أداة.',
     installLog: 'سجل التثبيت', close: 'إغلاق', setupSkip: 'تخطي — الذهاب للمحادثة', setupNext: 'متابعة',
-    setupDockerNote: 'على الخادم المضيف: يمكنك أيضاً تشغيل npm install -g <package> يدوياً ثم اضغط تحديث',
+    setupDockerNote: 'على الخادم المضيف: يمكنك أيضاً تثبيت الأداة يدوياً بالأمر الموضّح على البطاقة ثم اضغط تحديث',
     setupDoneTitle: 'كل شيء جاهز!', setupDoneDesc: 'تم إنشاء حسابك وتجهيز البوابة. يمكنك الآن بدء المحادثة أو إنشاء مفاتيح API.',
     setupGoChat: 'الذهاب للمحادثة', installing: 'جارٍ التثبيت...', install: 'تثبيت', update: 'تحديث', installed: 'مثبّت', notInstalled: 'غير مثبّت',
     setupPasswordMismatch: 'كلمتا المرور غير متطابقتين', setupPasswordShort: 'كلمة المرور قصيرة — 8 أحرف على الأقل',
@@ -86,9 +86,9 @@ const translations = {
     setupStep1: 'Admin account', setupStep2: 'Harnesses', setupStep3: 'Ready',
     setupCreateAdmin: 'Create admin account', setupCreateDesc: 'This will be the first admin — you can add users later from the dashboard',
     confirmPassword: 'Confirm password', setupCreateBtn: 'Create & Enter', setupHint: 'You will be logged in automatically',
-    setupHarnessTitle: 'Available Harnesses', setupHarnessDesc: 'Pick what to install now — you can install the rest later from the Harnesses page. Installed inside the container via npm.',
+    setupHarnessTitle: 'Available Harnesses', setupHarnessDesc: 'Pick what to install now — you can install the rest later from the Harnesses page. Each tool installs inside the container via its official command.',
     installLog: 'Install log', close: 'Close', setupSkip: 'Skip — Go to chat', setupNext: 'Continue',
-    setupDockerNote: 'On the host: you can also run npm install -g <package> manually then hit refresh',
+    setupDockerNote: 'On the host: you can also install the tool manually with the command shown on the card, then hit refresh',
     setupDoneTitle: 'All set!', setupDoneDesc: 'Account created and gateway ready. Start chatting or create API keys.',
     setupGoChat: 'Go to chat', installing: 'Installing...', install: 'Install', update: 'Update',
     setupPasswordMismatch: 'Passwords do not match', setupPasswordShort: 'Password too short — 8 chars minimum',
@@ -1525,10 +1525,11 @@ window.onpopstate = ()=> show(document.body.dataset.page||'chat', false);
 
 // ---------- Harnesses with Install ----------
 const HARNESS_META = {
-  opencode: { pkg: 'opencode-ai', desc: { ar: 'محرك نماذج خفيف — big-pickle, claude-sonnet', en: 'Lightweight engine — big-pickle, claude-sonnet' } },
-  codex: { pkg: '@openai/codex', desc: { ar: 'واجهة OpenAI Codex', en: 'OpenAI Codex CLI' } },
-  claude: { pkg: '@anthropic-ai/claude-code', desc: { ar: 'أداة Claude الرسمية', en: 'Official Claude Code CLI' } },
-  commandcode: { pkg: 'command-code', desc: { ar: 'Command Code — دعم DeepSeek', en: 'Command Code — DeepSeek support' } },
+  opencode: { desc: { ar: 'محرك نماذج خفيف — big-pickle, claude-sonnet', en: 'Lightweight engine — big-pickle, claude-sonnet' } },
+  codex: { desc: { ar: 'واجهة OpenAI Codex', en: 'OpenAI Codex CLI' } },
+  claude: { desc: { ar: 'أداة Claude الرسمية', en: 'Official Claude Code CLI' } },
+  commandcode: { desc: { ar: 'Command Code — دعم DeepSeek', en: 'Command Code — DeepSeek support' } },
+  agy: { desc: { ar: 'Google Antigravity — ثنائي رسمي (سكربت التثبيت)', en: 'Google Antigravity — official standalone binary' } },
 };
 
 let setupInstalling = null;
@@ -1571,7 +1572,7 @@ async function loadSetupHarnesses() {
       return;
     }
     grid.innerHTML = hs.map(h => {
-      const meta = HARNESS_META[h.name] || { pkg: h.name, desc: { ar: '', en: '' } };
+      const meta = HARNESS_META[h.name] || { desc: { ar: '', en: '' } };
       const desc = meta.desc[language] || meta.desc.en || '';
       const isInstalled = !!h.installed;
       const badge = isInstalled ? `<span class="badge ok">${text('installed')}</span>` : `<span class="badge">${text('notInstalled')}</span>`;
@@ -1579,10 +1580,10 @@ async function loadSetupHarnesses() {
       const actionBtn = isInstalled
         ? `<button class="harness-btn success" disabled>✓ ${text('installed')}</button><button class="harness-btn" data-setup-action="update" data-harness="${escapeHtml(h.name)}">${text('update')}</button>`
         : `<button class="harness-btn primary" data-setup-action="install" data-harness="${escapeHtml(h.name)}">${text('install')}</button>`;
-      return `<div class="setup-harness-card ${isInstalled?'installed':''}" data-harness-card="${escapeHtml(h.name)}">
+      return `<div class="setup-harness-card ${isInstalled?'installed':''}" data-harness-card="${escapeHtml(h.name)}" data-install-recipe="${escapeHtml(h.install_recipe||'')}" data-update-recipe="${escapeHtml(h.update_recipe||'')}">
         <div class="harness-head"><h3>${escapeHtml(h.display_name)}</h3>${badge}</div>
         <p>${escapeHtml(desc)}</p>
-        <small class="mono" style="color:var(--text-faint)">npm: ${escapeHtml(meta.pkg)}</small>
+        <small class="mono" style="color:var(--text-faint)">${escapeHtml(h.install_recipe||'')}</small>
         ${countLine}
         <div class="setup-harness-actions">${actionBtn} <button class="harness-btn" data-setup-action="log" data-harness="${escapeHtml(h.name)}" style="display:none">${text('viewLog')}</button></div>
       </div>`;
@@ -1612,7 +1613,8 @@ async function installHarness(name, btn, action='install') {
   if (btn) { btn.disabled = true; btn.textContent = text('installing'); }
   if (logCard) logCard.classList.remove('hidden');
   if (logEl) {
-    const cmd = act === 'update' ? `npm update -g ${HARNESS_META[name]?.pkg || name}` : `npm install -g ${HARNESS_META[name]?.pkg || name}`;
+    const recipe = act === 'update' ? card?.dataset.updateRecipe : card?.dataset.installRecipe;
+    const cmd = recipe || `${act === 'update' ? 'update' : 'install'} ${name}`;
     logEl.textContent = `→ ${cmd}\n— ${new Date().toLocaleTimeString()} —\n`;
     logEl.scrollTop = logEl.scrollHeight;
   }
@@ -1702,7 +1704,7 @@ async function loadHarnessesEnhanced() {
     if (!grid) return;
     if (!hs.length) { grid.innerHTML = `<div class="muted">${text('noModelsFound')}</div>`; return; }
     grid.innerHTML = hs.map(h => {
-      const meta = HARNESS_META[h.name] || { pkg: h.name, desc: { ar:'', en:'' } };
+      const meta = HARNESS_META[h.name] || { desc: { ar:'', en:'' } };
       const isInstalled = !!h.installed;
       const badge = isInstalled ? `<span class="badge ok">${text('installed')}</span>` : `<span class="badge">${text('notInstalled')}</span>`;
       const models = h.models.slice(0,6).map(m=>`<span style="font:500 11px var(--font-mono);background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.18);color:var(--brand-primary);padding:3px 7px;border-radius:999px">${escapeHtml(m.id.split('/').pop())}</span>`).join('');
@@ -1710,7 +1712,7 @@ async function loadHarnessesEnhanced() {
       const btn = isInstalled
         ? `<button class="harness-btn success" disabled>✓ ${text('installed')}</button> <button class="harness-btn" data-harness-action="update" data-harness="${escapeHtml(h.name)}">${text('update')}</button>`
         : `<button class="harness-btn primary" data-harness-action="install" data-harness="${escapeHtml(h.name)}">${text('install')}</button>`;
-      return `<div class="card ${isInstalled?'installed':''}"><div><h3>${escapeHtml(h.display_name)}</h3><p>${escapeHtml(meta.desc[language]||meta.desc.en||h.provider||'')}</p><small class="mono" style="color:var(--text-faint)">npm: ${escapeHtml(meta.pkg)}</small><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${models}${more}</div></div><small>${h.models.length} ${language==='ar'?'موديل':'models'} · <span class="mono">${escapeHtml(h.name)}</span></small><div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">${badge} ${btn}</div></div>`;
+      return `<div class="card ${isInstalled?'installed':''}" data-harness-card="${escapeHtml(h.name)}" data-install-recipe="${escapeHtml(h.install_recipe||'')}" data-update-recipe="${escapeHtml(h.update_recipe||'')}"><div><h3>${escapeHtml(h.display_name)}</h3><p>${escapeHtml(meta.desc[language]||meta.desc.en||h.provider||'')}</p><small class="mono" style="color:var(--text-faint)">${escapeHtml(h.install_recipe||'')}</small><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${models}${more}</div></div><small>${h.models.length} ${language==='ar'?'موديل':'models'} · <span class="mono">${escapeHtml(h.name)}</span></small><div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">${badge} ${btn}</div></div>`;
     }).join('');
   } catch(e){ const g=document.getElementById('harness-grid'); if(g) g.innerHTML = `<p class="error-message">${escapeHtml(e.message)}</p>`; }
 }
@@ -1934,7 +1936,8 @@ function bindMainHarnessGrid(){
         }
         const logEl = document.getElementById('harness-log');
         const statusEl = document.getElementById('harness-log-status');
-        if (logEl) logEl.textContent = `→ ${action} ${harness} (${HARNESS_META[harness]?.pkg||harness}) — ${new Date().toLocaleTimeString()}\n`;
+        const recipe = action === 'update' ? btn.closest('[data-harness-card]')?.dataset.updateRecipe : btn.closest('[data-harness-card]')?.dataset.installRecipe;
+        if (logEl) logEl.textContent = `→ ${recipe || `${action} ${harness}`} — ${new Date().toLocaleTimeString()}\n`;
         // poll with live update
         let lastLen = 0;
         for(let i=0;i<80;i++){

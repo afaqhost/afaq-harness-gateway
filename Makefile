@@ -1,4 +1,4 @@
-.PHONY: setup install dev start run restart test check lint docker docker-down clean bootstrap health setup-status help
+.PHONY: setup install dev start run restart test check lint docker docker-down clean bootstrap health setup-status install-agy update-agy help
 
 PY := .venv/bin/python
 PIP := .venv/bin/pip
@@ -67,6 +67,13 @@ bootstrap: ## Create first admin: make bootstrap EMAIL=admin@example.com PASS=se
 
 health: ## Check gateway health: make health [URL=http://127.0.0.1:3500]
 	@URL=$${URL:-http://127.0.0.1:$(PORT)}; curl -fsS $$URL/health | python3 -m json.tool; echo ""
+
+install-agy: ## Install Google Antigravity CLI (official installer → ~/.local/bin/agy)
+	curl -fsSL https://antigravity.google/cli/install.sh | bash
+	@echo "agy installed to $$HOME/.local/bin — run 'agy' once to sign in, then 'make restart'"
+
+update-agy: ## Update Google Antigravity CLI in place
+	agy update
 
 setup-status: ## Check if bootstrap needed (first-run detection)
 	@URL=$${URL:-http://127.0.0.1:$(PORT)}; curl -fsS $$URL/api/auth/setup-status | python3 -m json.tool; echo ""

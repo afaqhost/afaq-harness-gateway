@@ -4,11 +4,15 @@ import json
 from app.clients.base import HarnessAdapter
 from app.models.harness import HarnessModel
 
+# Antigravity CLI ships as a standalone Go binary, not an npm package — there is no
+# `@google/agy` on the registry. The official installer drops `agy` into ~/.local/bin.
+INSTALL_SCRIPT_COMMAND = "curl -fsSL https://antigravity.google/cli/install.sh | bash"
+
 
 class AgyAdapter(HarnessAdapter):
     name, display_name, executable, provider = "agy", "Google Antigravity", "agy", "google"
-    install_command = ["npm", "install", "-g", "@google/agy"]
-    update_command = ["npm", "update", "-g", "@google/agy"]
+    install_command = ["bash", "-c", INSTALL_SCRIPT_COMMAND]
+    update_command = ["agy", "update"]
 
     def build_command(self, prompt, model=None, session_id=None):
         # agy uses --print=<prompt> (equals form avoids --help confusion) and --output-format json/stream-json.
