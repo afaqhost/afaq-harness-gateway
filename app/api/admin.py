@@ -165,6 +165,21 @@ async def stream_harness_job(name: str, job_id: str, _: User = Depends(current_u
     return StreamingResponse(event_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
 
+@router.post("/harnesses/{name}/jobs/{job_id}/cancel")
+async def cancel_harness_job(name: str, job_id: str, _: User = Depends(admin_user)):
+    try:
+        get_adapter(name)
+    except KeyError:
+        raise HTTPException(404, "Harness not found")
+    job = await harness_job_service.get(job_id)
+    if not job or job.harness != name:
+        raise HTTPException(404, detail={"error": {"code": "not_found", "message": "Job not found"}})
+    if job.stage in ("completed", "failed"):
+        raise HTTPException(409, detail={"error": {"code": "already_finished", "message": f"Job already {job.stage}"}})
+    killed = await harness_job_service.cancel(job_id)
+    return {"status": "cancelling", "killed": killed, "job_id": job_id, "harness": name}
+
+
 @router.post("/harnesses/{name}/update")
 async def update_harness(name: str, _: User = Depends(admin_user)):
     try:
