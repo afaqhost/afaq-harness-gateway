@@ -19,11 +19,32 @@ Afaq Harness Gateway is a local OpenAI-compatible gateway for command-line AI to
 ## Quick Start
 
 ```bash
-make setup          # venv + deps + .env (auto-generates SECRET_KEY/CREDENTIALS_KEY) + data dirs
+make setup          # interactive install wizard — detects missing tools, picks native or docker
 make dev            # → http://127.0.0.1:3500/setup  (wizard on first run) or /login
 ```
 
-First run opens the **Setup Wizard** at `/setup` — create the admin account (auto-login) and optionally install harnesses *inside the container* via `npm` with live SSE logs. Subsequent runs go to `/login`. Manual alternative:
+The `make setup` install wizard detects missing prerequisites (Python, pip,
+venv, node/npm, docker, redis, build tools) and lets you choose between a
+**native install** (gateway runs on the host) or a **Docker** install
+(gateway runs in a container). It installs whatever is missing for the
+chosen path, then drops you at the dashboard.
+
+For non-interactive / CI use:
+
+```bash
+make setup-fast                                 # native, no OS installs (assumes Python+git+curl)
+make setup ARGS="--path=native --no-redis"      # native, skip redis install
+make setup ARGS="--path=docker"                 # install docker if missing, run compose
+make setup ARGS="--path=native --harness agy"   # also install the agy CLI
+make setup-legacy                               # legacy scripts/setup.sh (no OS installs)
+```
+
+Run `bash scripts/install.sh --help` for the full flag list.
+
+First dashboard run opens the **Setup Wizard** at `/setup` — create the admin
+account (auto-login) and optionally install harnesses *inside the container*
+via `npm` with live SSE logs. Subsequent runs go to `/login`. Manual
+alternative:
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate

@@ -11,7 +11,7 @@ from app.api.auth import admin_user, current_user
 from app.clients.agy import INSTALL_SCRIPT_COMMAND
 from app.core.security import generate_api_key, hash_password
 from app.db.database import APIKey, Harness, User, get_db
-from app.harnesses.registry import all_adapters, cached_models, get_adapter, refresh_models
+from app.harnesses.registry import all_adapters, cached_models, cached_models_clear, get_adapter, refresh_models
 from app.services.harness_job_service import harness_job_service
 from app.shared.sse import sse_event
 from app.shared.time import utcnow
@@ -53,14 +53,37 @@ async def harnesses(user: User = Depends(current_user), db: AsyncSession = Depen
 
     cred_rows = (await db.execute(select(CredentialProfile).where(CredentialProfile.user_id == user.id, CredentialProfile.status == "authenticated"))).scalars().all()
     authenticated_harnesses = {c.harness for c in cred_rows}
+    # Authoritative truth is the binary on disk, not the DB row. The DB row is a
+    # cache of the last known state and can lag when the user uninstalls a CLI
+    # externally (e.g. `npm uninstall -g opencode` from a shell). We reconcile
+    # here so the UI never shows "installed" with an empty model list.
     result = []
+    any_changed = False
     for adapter in all_adapters():
         installed = adapter.is_installed()
         row = rows.get(adapter.name)
         models = cached_models(adapter.name)
-        # authenticated is true if either Harness table says so or credential profile is authenticated
         is_auth = bool(row.authenticated) if row and row.authenticated else (adapter.name in authenticated_harnesses)
+        if row is None:
+            row = Harness(name=adapter.name, display_name=adapter.display_name, executable=adapter.executable, provider=adapter.provider or "", installed=installed, last_checked_at=utcnow())
+            db.add(row)
+            any_changed = True
+        elif row.installed != installed or (not installed and models):
+            row.installed = installed
+            row.last_checked_at = utcnow()
+            if not installed and models:
+                cached_models_clear(adapter.name)
+                models = []
+            any_changed = True
         result.append({"name": adapter.name, "display_name": adapter.display_name, "provider": adapter.provider or None, "installed": installed, "authenticated": is_auth, "models": [m.__dict__ for m in models], "install_recipe": adapter.install_recipe, "update_recipe": adapter.update_recipe, "last_checked_at": row.last_checked_at.isoformat() if row and row.last_checked_at else None})
+    if any_changed:
+        try:
+            await db.commit()
+        except Exception as exc:
+            import logging
+
+            logging.getLogger("afaq").warning("harnesses_reconcile_best_effort error=%s", exc)
+            await db.rollback()
     return result
 
 
@@ -191,6 +214,36 @@ async def update_harness(name: str, _: User = Depends(admin_user)):
         raise HTTPException(400, detail={"error": {"code": "no_recipe", "message": "No update recipe"}})
     job = await harness_job_service.start_update(adapter)
     return {"job_id": job.id, "status": job.stage, "harness": name}
+
+
+@router.post("/harnesses/{name}/uninstall")
+async def uninstall_harness(name: str, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
+    """Reconcile gateway state after the user has uninstalled a CLI externally.
+
+    The gateway cannot delete the binary itself (no admin permission on the
+    user's shell, and we won't touch npm/system directories). Instead, this
+    endpoint clears the in-memory + Redis model cache and flips the DB row's
+    `installed` flag to False so the dashboard and `/v1/models` reflect the
+    current state immediately, without waiting for `/harnesses/{name}/health`
+    or a full `refresh_models()`.
+
+    Idempotent. Returns 200 even if the harness was never installed.
+    """
+    try:
+        get_adapter(name)
+    except KeyError:
+        raise HTTPException(404, detail={"error": {"code": "not_found", "message": "Harness not found"}})
+    cached_models_clear(name)
+    try:
+        row = (await db.execute(select(Harness).where(Harness.name == name))).scalar_one_or_none()
+        if row is not None:
+            row.installed = False
+            row.last_checked_at = utcnow()
+            await db.commit()
+    except Exception as exc:
+        import logging; logging.getLogger("afaq").warning("uninstall_db_best_effort error=%s", exc)
+        await db.rollback()
+    return {"harness": name, "installed": False, "models_cleared": True}
 
 @router.post("/users", response_model=dict)
 async def create_user(user_payload: UserCreate, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):

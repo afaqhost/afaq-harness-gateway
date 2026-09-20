@@ -1710,7 +1710,7 @@ async function loadHarnessesEnhanced() {
       const models = h.models.slice(0,6).map(m=>`<span style="font:500 11px var(--font-mono);background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.18);color:var(--brand-primary);padding:3px 7px;border-radius:999px">${escapeHtml(m.id.split('/').pop())}</span>`).join('');
       const more = h.models.length>6?`<span style="font:500 11px var(--font-mono);color:var(--text-faint)">+${h.models.length-6}</span>`:'';
       const btn = isInstalled
-        ? `<button class="harness-btn success" disabled>✓ ${text('installed')}</button> <button class="harness-btn" data-harness-action="update" data-harness="${escapeHtml(h.name)}">${text('update')}</button>`
+        ? `<button class="harness-btn success" disabled>✓ ${text('installed')}</button> <button class="harness-btn" data-harness-action="update" data-harness="${escapeHtml(h.name)}">${text('update')}</button> <button class="harness-btn danger" data-harness-action="uninstall" data-harness="${escapeHtml(h.name)}" title="${language==='ar'?'بعد حذف الـ CLI خارجياً، اضغط هنا لتحديث حالة البوابة':'After deleting the CLI externally, click to sync gateway state'}">${language==='ar'?'إزالة من البوابة':'Sync uninstall'}</button>`
         : `<button class="harness-btn primary" data-harness-action="install" data-harness="${escapeHtml(h.name)}">${text('install')}</button>`;
       return `<div class="card ${isInstalled?'installed':''}" data-harness-card="${escapeHtml(h.name)}" data-install-recipe="${escapeHtml(h.install_recipe||'')}" data-update-recipe="${escapeHtml(h.update_recipe||'')}"><div><h3>${escapeHtml(h.display_name)}</h3><p>${escapeHtml(meta.desc[language]||meta.desc.en||h.provider||'')}</p><small class="mono" style="color:var(--text-faint)">${escapeHtml(h.install_recipe||'')}</small><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${models}${more}</div></div><small>${h.models.length} ${language==='ar'?'موديل':'models'} · <span class="mono">${escapeHtml(h.name)}</span></small><div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">${badge} ${btn}</div></div>`;
     }).join('');
@@ -1917,6 +1917,30 @@ function bindMainHarnessGrid(){
     if (!btn) return;
     const harness = btn.dataset.harness;
     const action = btn.dataset.harnessAction;
+    if (action === 'uninstall') {
+      // Tell the gateway to forget this harness's state after the user has
+      // removed the CLI externally. We do NOT delete the binary here.
+      const ok = await showConfirmBox({
+        title: language==='ar' ? `إزالة ${harness}` : `Forget ${harness}?`,
+        message: language==='ar' ? 'إزالة من حالة البوابة — لن يحذف البرنامج المثبت على النظام' : 'Forget this harness from gateway state — will not delete the installed program on disk',
+        confirmText: text('confirm'),
+        cancelText: text('cancel'),
+      });
+      if (!ok) return;
+      const orig = btn.textContent;
+      btn.disabled = true;
+      try {
+        await api(`/api/admin/harnesses/${harness}/uninstall`, { method: 'POST' });
+        showToast(language==='ar' ? `تم: ${harness} غير مثبت الآن` : `Synced: ${harness} now uninstalled`);
+        await loadHarnesses();
+      } catch (err) {
+        showToast(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+      return;
+    }
     if (action === 'install' || action === 'update') {
       const orig = btn.textContent;
       btn.disabled=true; btn.textContent=text('installing');

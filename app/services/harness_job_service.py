@@ -83,7 +83,7 @@ def _json_to_job(data: str) -> HarnessJob | None:
 
 
 class HarnessJobService:
-    def __init__(self, max_logs: int = 500, ttl_seconds: int = 3600):
+    def __init__(self, max_logs: int = 500, ttl_seconds: int = 3600, on_success=None):
         self._jobs: dict[str, HarnessJob] = {}
         # live subprocess handles for in-flight install/update jobs; keyed by job_id.
         # Lets an admin cancel a hanging installer script without container restart.
@@ -92,6 +92,19 @@ class HarnessJobService:
         self._lock = asyncio.Lock()
         self._max_logs = max_logs
         self._ttl = ttl_seconds
+        # Optional async callable invoked once after a job settles in `completed`.
+        # Used by the wiring in app/main.py to call refresh_models() so /v1/models
+        # and the chat dropdown pick up the newly installed harness without the
+        # user having to click the dashboard Refresh button.
+        self._on_success = on_success
+
+    def set_on_success(self, callback) -> None:
+        """Install an async callback that fires after every successful install/update.
+
+        Idempotent: setting twice replaces the previous callback. Pass `None` to
+        disable (used by tests that want to assert against a clean harness state).
+        """
+        self._on_success = callback
 
     async def _register_process(self, job_id: str, proc: asyncio.subprocess.Process) -> None:
         async with self._lock:
@@ -197,6 +210,16 @@ class HarnessJobService:
                 job.stage = "completed" if job.exit_code in (None, 0) else "failed"
             job.updated_at = time.monotonic()
             self._redis_sync(job)
+            # Successful install/update: notify the wiring so it can refresh the
+            # in-memory model cache in the same process. We do this here (inside
+            # the same try block as the streaming generator) instead of after the
+            # `finally` so a successful run is always followed by a refresh attempt;
+            # any refresh error stays out of the job state.
+            if job.stage == "completed" and self._on_success is not None:
+                try:
+                    await self._on_success(adapter)
+                except (OSError, RuntimeError, asyncio.TimeoutError, ValueError, TypeError) as exc:
+                    logger.warning("job_on_success_best_effort_failed job_id=%s harness=%s error=%s", job.id, adapter.name, exc)
         except (OSError, RuntimeError, asyncio.TimeoutError) as e:
             job.stage = "failed"
             job.exit_code = 1

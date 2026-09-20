@@ -23,12 +23,20 @@ from app.harnesses.registry import refresh_models
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIdMiddleware
+from app.services.harness_job_service import harness_job_service
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     await credential_service.harvest_env_credentials()
     await refresh_models()
+    # After a successful install/update job, repopulate the in-memory model
+    # cache for the just-installed harness so /v1/models and the chat dropdown
+    # pick it up without a manual Refresh click. Idempotent — setting twice
+    # just replaces the callback.
+    async def _refresh_after_install(adapter):
+        await refresh_models()
+    harness_job_service.set_on_success(_refresh_after_install)
     yield
 
 app = FastAPI(title=settings.app_name, version=settings.version, description="OpenAI-compatible gateway for terminal AI harnesses", lifespan=lifespan)

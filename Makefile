@@ -1,4 +1,4 @@
-.PHONY: setup install dev start run restart test check lint docker docker-down clean bootstrap health setup-status install-agy update-agy help
+.PHONY: setup setup-fast install-wizard install dev start run restart test check lint docker docker-down clean bootstrap health setup-status install-agy update-agy help
 
 PY := .venv/bin/python
 PIP := .venv/bin/pip
@@ -12,8 +12,23 @@ PYTHON ?= python3
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-setup: ## One-command setup: venv + deps + .env + data dirs (add --run/--restart)
+# Default `make setup` runs the interactive install wizard (recommended for
+# fresh hosts). Pass ARGS to forward flags, e.g.
+#   make setup ARGS="--path=native --no-redis"
+#   make setup ARGS="--path=docker --harness agy"
+setup: ## Interactive install wizard: detects missing tools, native vs docker (Recommended)
+	@bash scripts/install.sh $(ARGS)
+
+# CI / scripted installs: same wizard but non-interactive and with no OS-level
+# package installs (assumes Python 3.10+, pip, venv, curl, git already present).
+setup-fast: ## Non-interactive wizard for CI (assumes Python+git+curl already present, no OS installs)
+	@bash scripts/install.sh --no-prompt --path=native --no-system $(ARGS)
+
+# Lower-level alias kept for compatibility with the legacy setup.sh flow.
+setup-legacy: ## Legacy scripts/setup.sh (no OS installs, no detection)
 	@bash scripts/setup.sh $(ARGS)
+
+install-wizard: setup ## Alias for `make setup`
 
 install: ## Install dependencies into .venv (requires .venv exists)
 	$(PIP) install -r requirements.txt

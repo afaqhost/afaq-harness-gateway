@@ -247,6 +247,23 @@ def cached_models(adapter_name: str) -> list[HarnessModel]:
     return MODEL_CACHE.get(adapter_name, [])
 
 
+def cached_models_clear(adapter_name: str) -> None:
+    """Drop the cached model list for a single harness.
+
+    Called when the binary is no longer on disk so /v1/models and
+    `validate_model_or_400()` stop accepting model IDs the gateway can no
+    longer serve. Also clears the Redis mirror so multi-replica deployments
+    converge on the same empty state.
+    """
+    MODEL_CACHE.pop(adapter_name, None)
+    try:
+        rc = _get_redis()
+        if rc:
+            rc.delete(_redis_key(adapter_name))
+    except (OSError, RuntimeError) as exc:
+        import logging; logging.getLogger("afaq").warning("cache_clear_best_effort error=%s", exc)
+
+
 def get_adapter(name: str) -> HarnessAdapter:
     if name not in ADAPTERS:
         raise KeyError(f"Unknown harness: {name}")

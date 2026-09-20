@@ -13,12 +13,44 @@ import shutil
 import logging
 import time
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import AsyncIterator, Awaitable, Callable
 
 from app.core.config import settings
 from app.models.harness import HarnessModel, HarnessResult
 
 logger = logging.getLogger("afaq")
+
+
+def _resolve_install_dir(explicit: str | os.PathLike[str] | None) -> Path | None:
+    """Resolve an optional install-dir override (env var or adapter-declared path)."""
+    if not explicit:
+        return None
+    p = Path(os.path.expandvars(os.path.expanduser(str(explicit))))
+    return p if p.is_dir() else None
+
+
+def _executable_on_disk(executable: str, extra_paths: list[str | os.PathLike[str]]) -> str | None:
+    """Find `executable` on PATH or in any of `extra_paths`. Returns absolute path or None.
+
+    Many CLI installers (Antigravity, npm globals with a custom prefix, pipx, etc.)
+    drop their binary into a directory that is NOT on the long-running gateway
+    process's `PATH` (e.g. `~/.local/bin` for Antigravity, `/opt/homebrew/bin` for
+    Homebrew on Apple Silicon when uvicorn was launched from /usr/bin). Trusting
+    `shutil.which(executable)` alone makes the harness show as "not installed"
+    even when the binary is sitting right there.
+    """
+    found = shutil.which(executable)
+    if found:
+        return found
+    for raw in extra_paths:
+        directory = _resolve_install_dir(raw)
+        if directory is None:
+            continue
+        candidate = directory / executable
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
 
 
 async def _drain_subprocess(
@@ -112,6 +144,11 @@ class HarnessAdapter(ABC):
     provider: str = ""
     install_command: list[str] = []
     update_command: list[str] = []
+    # Extra directories to scan for `executable` after `shutil.which` returns None.
+    # Required when an installer drops its binary somewhere not on the gateway
+    # process's PATH (e.g. Antigravity's official installer writes to ~/.local/bin).
+    # Each entry supports `~` and `$VAR` expansion; non-existent paths are skipped.
+    install_search_paths: list[str] = []
 
     @staticmethod
     def _recipe_text(command: list[str] | None) -> str | None:
@@ -131,7 +168,36 @@ class HarnessAdapter(ABC):
         return self._recipe_text(self.update_command)
 
     def is_installed(self) -> bool:
-        return shutil.which(self.executable) is not None
+        return _executable_on_disk(self.executable, self.install_search_paths) is not None
+
+    def resolve_executable(self) -> str:
+        """Return an absolute path to `executable`, falling back to the bare name.
+
+        If `shutil.which` doesn't find it (because the installer dropped the
+        binary somewhere off-PATH), we still want `asyncio.create_subprocess_exec`
+        to be able to launch it. This returns the absolute path we already located
+        via `install_search_paths`.
+        """
+        return _executable_on_disk(self.executable, self.install_search_paths) or self.executable
+
+    def resolve_command(self, command: list[str]) -> list[str]:
+        """Rewrite `command[0]` to the absolute executable path ONLY when it equals self.executable.
+
+        Many adapters build commands where the leading element is *not* the
+        adapter's executable (e.g. `["bash", "-c", "echo hi"]` for a shell loop
+        test fixture, or `["node", "script.js"]` for a harness that wraps a
+        Node entrypoint). In those cases `command[0]` is whatever the adapter
+        declared in `build_command()` and we must NOT touch it — replacing `bash`
+        with the harness executable would break the invocation.
+        """
+        if not command or not self.executable:
+            return command
+        if command[0] != self.executable:
+            return command
+        resolved = self.resolve_executable()
+        if resolved == command[0]:
+            return command
+        return [resolved, *command[1:]]
 
     async def install(self, on_process: Callable[[asyncio.subprocess.Process], Awaitable[None]] | None = None) -> AsyncIterator[dict]:
         if not self.install_command:
@@ -220,20 +286,30 @@ class HarnessAdapter(ABC):
         self, prompt: str, model: str | None = None, session_id: str | None = None, env: dict | None = None, request_id: str | None = None
     ) -> HarnessResult:
         model = model or "default"
-        command = self.build_command(prompt, model, session_id)
+        command = self.resolve_command(self.build_command(prompt, model, session_id))
         started = time.monotonic()
         from app.services.harness_queue import harness_queue
 
         async with harness_queue.slot():
             cwd = settings.harness_data_dir / (request_id or "default")
             cwd.mkdir(parents=True, exist_ok=True)
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env={**os.environ, **(env or {})},
-                cwd=cwd,
-            )
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env={**os.environ, **(env or {})},
+                    cwd=cwd,
+                )
+            except FileNotFoundError as exc:
+                # Binary was uninstalled after the model was validated. Surface
+                # a clear, recoverable error so the caller can sync state instead
+                # of bubbling a raw FileNotFoundError up the stack.
+                raise RuntimeError(
+                    f"{self.name} CLI is not installed (binary not found: {exc.filename or command[0]}). "
+                    "Reinstall the harness from the dashboard, or call POST /api/admin/harnesses/"
+                    f"{self.name}/uninstall to clear stale state."
+                ) from exc
             # register for cancel if request_id provided
             if request_id:
                 try:
@@ -292,19 +368,26 @@ class HarnessAdapter(ABC):
         self, prompt: str, model: str | None = None, session_id: str | None = None, env: dict | None = None, request_id: str | None = None
     ) -> AsyncIterator[tuple[str, dict]]:
         model = model or "default"
-        command = self.build_command(prompt, model, session_id)
+        command = self.resolve_command(self.build_command(prompt, model, session_id))
         from app.services.harness_queue import harness_queue
 
         async with harness_queue.slot():
             cwd = settings.harness_data_dir / (request_id or "default")
             cwd.mkdir(parents=True, exist_ok=True)
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env={**os.environ, **(env or {})},
-                cwd=cwd,
-            )
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env={**os.environ, **(env or {})},
+                    cwd=cwd,
+                )
+            except FileNotFoundError as exc:
+                raise RuntimeError(
+                    f"{self.name} CLI is not installed (binary not found: {exc.filename or command[0]}). "
+                    "Reinstall the harness from the dashboard, or call POST /api/admin/harnesses/"
+                    f"{self.name}/uninstall to clear stale state."
+                ) from exc
             assert process.stdout
             assert process.stderr
             cur_timeout = min(settings.harness_timeout_seconds, 90)

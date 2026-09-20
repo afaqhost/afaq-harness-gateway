@@ -8,11 +8,19 @@ from app.models.harness import HarnessModel
 # `@google/agy` on the registry. The official installer drops `agy` into ~/.local/bin.
 INSTALL_SCRIPT_COMMAND = "curl -fsSL https://antigravity.google/cli/install.sh | bash"
 
+# Search paths the gateway uses to locate the `agy` binary after install.
+# `~` and `$HOME` are expanded at lookup time; missing dirs are skipped silently.
+_ANTIGRAVITY_SEARCH_PATHS = [
+    "$HOME/.local/bin",  # official installer target (Linux/macOS/WSL)
+    "$HOME/.antigravity/bin",  # legacy/alt install location
+]
+
 
 class AgyAdapter(HarnessAdapter):
     name, display_name, executable, provider = "agy", "Google Antigravity", "agy", "google"
     install_command = ["bash", "-c", INSTALL_SCRIPT_COMMAND]
     update_command = ["agy", "update"]
+    install_search_paths = _ANTIGRAVITY_SEARCH_PATHS
 
     def build_command(self, prompt, model=None, session_id=None):
         # agy uses --print=<prompt> (equals form avoids --help confusion) and --output-format json/stream-json.

@@ -16,9 +16,39 @@ The gateway itself can start without an installed harness, but `/v1/models` will
 From the repository root:
 
 ```bash
-make setup   # creates .venv, installs deps, generates .env with strong SECRET_KEY/CREDENTIALS_KEY, mkdir data/storage, init DB
+make setup   # interactive install wizard: detects missing tools, picks native vs docker
 make dev     # → http://127.0.0.1:3500/setup on first run, /login afterwards
 ```
+
+The `make setup` install wizard detects missing prerequisites on the host
+(Python 3.10+, pip, venv, node/npm, docker, redis, build tools) and asks
+once whether to install the gateway natively (run directly on the host) or
+inside Docker. It installs whatever is missing for the chosen path, including:
+
+- **Native path**: OS packages via `apt`/`dnf`/`apk`/`brew` (Debian, RHEL,
+  Fedora, Alpine, Arch, macOS); Node.js 22.x via NodeSource if missing;
+  optional `redis-server`; build toolchain (`gcc`, `make`, `libffi-dev`,
+  `libssl-dev`, `python3-dev`) **only** if `pip` cannot fetch a prebuilt wheel
+  for a dependency.
+- **Docker path**: `get.docker.com` convenience script on Linux, or Homebrew
+  cask on macOS. Hands off to `docker compose up -d --build` which uses the
+  project's existing `Dockerfile` and `docker-compose.yml`.
+
+The wizard is **idempotent**: re-running it is a no-op when everything is
+already installed. It also accepts `--harness <name>` to install a harness
+CLI in the same pass (e.g. `--harness agy --harness opencode`).
+
+For non-interactive / CI usage:
+
+```bash
+make setup-fast                                  # native, no OS installs, assumes Python+git+curl
+make setup ARGS="--path=native --no-redis"       # skip redis install
+make setup ARGS="--path=docker"                  # install docker if missing, then compose up
+make setup ARGS="--path=native --harness agy"    # also install the agy CLI
+make setup-legacy                                # legacy scripts/setup.sh (no detection)
+```
+
+Run `bash scripts/install.sh --help` for the full flag list.
 
 On first run, open `http://127.0.0.1:3500/setup` — the **Setup Wizard** walks you through 3 steps:
 
