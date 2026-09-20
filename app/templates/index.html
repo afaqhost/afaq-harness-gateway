@@ -35,10 +35,12 @@
       <nav class="sidebar-nav" aria-label="Main navigation">
         <a class="nav-link" href="/chat" data-page="chat"><span class="nav-icon">01</span><span data-i18n="chat">المحادثة</span></a>
         <a class="nav-link" href="/harnesses" data-page="harnesses"><span class="nav-icon">02</span><span data-i18n="harnesses">الهارنسس</span></a>
-        <a class="nav-link" href="/keys" data-page="keys"><span class="nav-icon">03</span><span data-i18n="apiKeys">مفاتيح API</span></a>
-        <a class="nav-link" href="/usage" data-page="usage"><span class="nav-icon">04</span><span data-i18n="usage">الاستهلاك</span></a>
-        <a class="nav-link" href="/users" data-page="users"><span class="nav-icon">05</span><span data-i18n="users">المستخدمون</span></a>
-        <a class="nav-link" href="/documentation" data-page="documentation"><span class="nav-icon">06</span><span data-i18n="docs">التوثيق</span></a>
+        <a class="nav-link" href="/credentials" data-page="credentials"><span class="nav-icon">03</span><span data-i18n="credentials">بيانات الدخول</span></a>
+        <a class="nav-link" href="/keys" data-page="keys"><span class="nav-icon">04</span><span data-i18n="apiKeys">مفاتيح API</span></a>
+        <a class="nav-link" href="/usage" data-page="usage"><span class="nav-icon">05</span><span data-i18n="usage">الاستهلاك</span></a>
+        <a class="nav-link" href="/users" data-page="users"><span class="nav-icon">06</span><span data-i18n="users">المستخدمون</span></a>
+        <a class="nav-link" href="/terminal" data-page="terminal"><span class="nav-icon">07</span><span data-i18n="terminal">الترمنال</span></a>
+        <a class="nav-link" href="/documentation" data-page="documentation"><span class="nav-icon">08</span><span data-i18n="docs">التوثيق</span></a>
       </nav>
 
       <div class="sidebar-footer">
@@ -228,7 +230,49 @@
       </section>
 
       <section id="harnesses" class="page hidden"><div class="section-heading"><div><p class="eyebrow">02 / <span data-i18n="harnesses">الهارنسس</span></p><h2 data-i18n="harnessTitle">الأدوات المتصلة</h2></div><button class="outline-button" id="refresh-harnesses"><span class="refresh-symbol">↻</span><span data-i18n="refresh">تحديث الموديلات</span></button></div><div id="harness-grid" class="harness-grid"></div></section>
-      <section id="keys" class="page hidden"><div class="section-heading"><div><p class="eyebrow">03 / API KEYS</p><h2 data-i18n="keyTitle">مفاتيح الوصول</h2></div><button id="new-key"><span>+</span><span data-i18n="createKey">إنشاء مفتاح</span></button></div><div id="keys-list" class="table-card"></div></section>
+      <section id="credentials" class="page hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">03 / <span data-i18n="credentials">بيانات الدخول</span></p>
+            <h2 data-i18n="credentialsTitle">ربط حسابات الـ CLI</h2>
+            <p class="subtitle" data-i18n="credentialsSubtitle">سجّل دخول في الطرفية على اليسار، ثم احفظ المفتاح في اللوحة على اليمين</p>
+          </div>
+        </div>
+        <div class="credentials-layout">
+          <div class="credentials-terminal-pane">
+            <div class="terminal-header">
+              <span class="terminal-title" data-i18n="credentialsTerminalTitle">ترمنال — CLI Auth Helper</span>
+              <span id="credentials-terminal-status" class="terminal-status"></span>
+              <button id="credentials-terminal-stop" class="outline-button small" data-i18n="stop">إيقاف</button>
+            </div>
+            <div id="credentials-terminal-mount" class="terminal-mount"></div>
+          </div>
+          <div class="credentials-panel">
+            <div class="cred-form-card">
+              <h3 data-i18n="addCredential">إضافة بيانات دخول</h3>
+              <label data-i18n="harness">الأداة</label>
+              <select id="cred-harness"></select>
+              <label data-i18n="profileName">اسم البروفايل</label>
+              <input id="cred-profile-name" type="text" placeholder="default" value="default">
+              <label data-i18n="authType">نوع الدخول</label>
+              <select id="cred-auth-type">
+                <option value="token">API Token</option>
+                <option value="environment">Environment</option>
+                <option value="cli">CLI Login</option>
+              </select>
+              <label data-i18n="token">المفتاح / التوكن</label>
+              <textarea id="cred-token" rows="3" placeholder="sk-… or token value"></textarea>
+              <button id="cred-save" class="primary"><span data-i18n="save">حفظ</span></button>
+              <small id="cred-message" role="alert"></small>
+            </div>
+            <div class="cred-list-card">
+              <h3 data-i18n="existingCredentials">بيانات الدخول المحفوظة</h3>
+              <div id="credentials-list" class="table-card"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="keys" class="page hidden"><div class="section-heading"><div><p class="eyebrow">04 / API KEYS</p><h2 data-i18n="keyTitle">مفاتيح الوصول</h2></div><button id="new-key"><span>+</span><span data-i18n="createKey">إنشاء مفتاح</span></button></div><div id="keys-list" class="table-card"></div></section>
       <section id="usage" class="page hidden">
         <div class="section-heading">
           <div>
@@ -311,6 +355,20 @@
         <div id="usage-summary" class="usage-summary hidden"></div>
       </section>
       <section id="users" class="page hidden"><div class="section-heading"><div><p class="eyebrow">05 / <span data-i18n="users">المستخدمون</span></p><h2 data-i18n="userTitle">المستخدمون والصلاحيات</h2></div><button id="new-user"><span>+</span><span data-i18n="addUser">إضافة مستخدم</span></button></div><div id="users-list" class="table-card"></div></section>
+      <section id="terminal" class="page hidden">
+        <div class="terminal-page-header">
+          <div>
+            <p class="eyebrow">07 / <span data-i18n="terminal">الترمنال</span></p>
+            <h2 data-i18n="terminalTitle">ترمنال النظام</h2>
+            <p class="subtitle" data-i18n="terminalSubtitle">شل كامل على نفس المستخدم الذي شغّل البوابة — استخدمه للأوامر والصيانة</p>
+          </div>
+          <div class="terminal-page-actions">
+            <span id="terminal-page-status" class="terminal-status"></span>
+            <button id="terminal-page-stop" class="outline-button small" data-i18n="stop">إيقاف</button>
+          </div>
+        </div>
+        <div id="terminal-page-mount" class="terminal-mount terminal-mount-page"></div>
+      </section>
       <section id="docs" class="page hidden">
         <div class="docs-hero">
           <div class="docs-hero-badge">OpenAI-Compatible API</div>
@@ -632,6 +690,11 @@ while (true) {
   <dialog id="prompt-modal" class="key-modal"><form method="dialog" id="prompt-form"><button type="button" class="modal-close" id="prompt-modal-close" aria-label="Close">×</button><p class="eyebrow" id="prompt-eyebrow" data-i18n="prompt">إدخال</p><h2 id="prompt-title">إدخال</h2><p id="prompt-message" class="muted" style="margin:12px 0 10px; line-height:1.6"></p><label for="prompt-input" class="sr-only" data-i18n="prompt">قيمة</label><input id="prompt-input" type="text" required autocomplete="off"><div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px"><button type="button" id="prompt-cancel" class="outline-button" data-i18n="cancel">إلغاء</button><button type="submit" id="prompt-ok" style="background:var(--brand-primary); color:#fff; border:0; padding:8px 16px; border-radius:8px; cursor:pointer" data-i18n="confirm">تأكيد</button></div></form></dialog>
   <div id="toast" class="toast" role="status"></div>
   <script src="/static/marked.min.js?v=20250904-11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <script src="/static/os_terminal.js?v=20250920-01"></script>
+  <script src="/static/credentials_page.js?v=20250920-01"></script>
   <script src="/static/app.js?v=20250905-01"></script>
 </body>
 </html>

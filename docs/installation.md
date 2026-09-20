@@ -125,3 +125,21 @@ Installing harnesses from the dashboard runs each adapter's approved recipe **in
 ## Stop and Restart
 
 For a foreground local process, press `Ctrl+C`. Restart with the same Uvicorn command. Model discovery runs once during each server startup; use the dashboard's **Refresh models** action to refresh it without restarting.
+
+## Reverse proxy (optional)
+
+If you put the gateway behind nginx, Caddy, or Traefik for TLS
+termination, make sure your proxy forwards WebSocket upgrades — both
+the SSE chat stream and the new `OS Terminal` page use them.
+
+- **nginx:** set `proxy_http_version 1.1;`, `proxy_set_header Upgrade $http_upgrade;`, `proxy_set_header Connection "upgrade";`, and `proxy_read_timeout 86400;` on the gateway location.
+- **Caddy 2.7+ / Traefik:** `Upgrade` is detected automatically — no extra config.
+
+See `docs/os-terminal.md` for the exact snippets and per-route behavior.
+
+## OS Terminal page
+
+The dashboard ships with a `/terminal` page that opens a live POSIX
+shell in the browser (admin-only). See `docs/os-terminal.md` for
+protocol details, auth model, and reverse-proxy notes. The same
+WebSocket PTY is reused on `/credentials` as a CLI auth helper.

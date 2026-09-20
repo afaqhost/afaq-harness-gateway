@@ -19,11 +19,13 @@ from app.api.chat import router as chat_router
 from app.api.usage import router as usage_router
 from app.api.credentials import router as credentials_router
 from app.api.metrics import router as metrics_router
+from app.api.os_terminal import router as os_terminal_router
 from app.harnesses.registry import refresh_models
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIdMiddleware
 from app.services.harness_job_service import harness_job_service
+from app.services.os_terminal import os_terminal_service
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,6 +40,11 @@ async def lifespan(app: FastAPI):
         await refresh_models()
     harness_job_service.set_on_success(_refresh_after_install)
     yield
+    # best-effort cleanup of any in-flight PTY sessions on shutdown
+    try:
+        await os_terminal_service.shutdown()
+    except Exception:
+        pass
 
 app = FastAPI(title=settings.app_name, version=settings.version, description="OpenAI-compatible gateway for terminal AI harnesses", lifespan=lifespan)
 
@@ -88,6 +95,7 @@ app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
 app.include_router(usage_router, prefix="/api/chat", tags=["usage"])
 app.include_router(credentials_router, prefix="/api/admin", tags=["credentials"])
+app.include_router(os_terminal_router, prefix="/api/admin", tags=["terminal"])
 app.include_router(metrics_router)
 
 async def render_page(request: Request, page: str):
@@ -124,6 +132,14 @@ async def users_page(request: Request):
 @app.get("/usage", response_class=HTMLResponse)
 async def usage_page(request: Request):
     return await render_page(request, "usage")
+
+@app.get("/credentials", response_class=HTMLResponse)
+async def credentials_page(request: Request):
+    return await render_page(request, "credentials")
+
+@app.get("/terminal", response_class=HTMLResponse)
+async def terminal_page(request: Request):
+    return await render_page(request, "terminal")
 
 @app.get("/documentation", response_class=HTMLResponse)
 async def documentation_page(request: Request):

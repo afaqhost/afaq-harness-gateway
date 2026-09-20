@@ -1,0 +1,131 @@
+# OS Terminal — CasaOS-style live shell
+
+The dashboard exposes a real POSIX shell over a WebSocket-served PTY.
+Same shape as CasaOS's "Terminal" tile, VS Code's integrated terminal,
+or JupyterLab's terminal — full TTY with ANSI colors, cursor control,
+resize, signal forwarding, and live stdin/stdout.
+
+Two pages use it:
+
+- **`/terminal`** — full-screen system shell. Lets you run any command
+  as the user that launched uvicorn (typically root inside Docker,
+  or your own user on a bare host). Use it to inspect logs, edit
+  `data/afaq.db`, debug harness subprocess behavior, etc.
+- **`/credentials`** — left column is the same terminal, pre-loaded
+  with a banner suggesting the harness's own auth flow
+  (`claude auth login`, `agy signin`, `codex auth`, …). Right column
+  is the existing paste-key form. Sign in inside the terminal, then
+  paste the resulting token into the right panel to save it as a
+  `CredentialProfile`.
+
+Both pages reuse a single WebSocket PTY pump on the server and a single
+`OsTerminal` JS class on the client.
+
+## Auth + access
+
+All terminal endpoints are admin-only. Non-admins get `403`. This is
+deliberate: opening a shell to the gateway host is a trusted operation.
+Every start/stop is logged with the user id, terminal id, and shell path.
+
+The WebSocket upgrade carries the same `Authorization: Bearer <jwt>`
+header as the rest of the dashboard. Browsers forward headers on the WS
+upgrade automatically.
+
+## Endpoints
+
+### `POST /api/admin/terminal/start`
+
+Request body (all optional):
+
+```json
+{ "shell": "/bin/zsh", "cwd": "/srv", "cols": 100, "rows": 30 }
+```
+
+Response `200 OK`:
+
+```json
+{
+  "terminal_id": "f3a1b2c4d5e6f7g8",
+  "pid": 12345,
+  "shell": "/bin/bash",
+  "cwd": "/srv",
+  "cols": 100,
+  "rows": 30
+}
+```
+
+Returns `503` with `{"error": {"code": "terminal_unavailable", ...}}`
+on hosts without `pty.openpty` (Windows).
+
+### `POST /api/admin/terminal/{terminal_id}/stop`
+
+Kills the PTY (SIGTERM, then SIGKILL after 2 s). Idempotent — returns
+`204` if the session was already gone.
+
+### `GET /api/admin/terminal/{terminal_id}`
+
+Returns the current state (no PTY access):
+
+```json
+{
+  "alive": true,
+  "cols": 100, "rows": 30,
+  "cwd": "/srv", "pid": 12345, "shell": "/bin/bash",
+  "uptime_seconds": 12.4, "idle_seconds": 0.8
+}
+```
+
+### `WebSocket /api/admin/terminal/{terminal_id}/ws`
+
+Bidirectional:
+
+- **Client → server text frame:** raw stdin bytes (UTF-8).
+  Or a JSON control message `{"type":"resize","cols":..,"rows":..}`.
+- **Server → client text frame:** raw PTY output bytes (decoded with
+  `errors="replace"`).
+  Or `{"type":"exit","code":int}` when the shell exits.
+
+On WS disconnect the server stops the PTY automatically.
+
+## Reverse proxy notes
+
+If you run the gateway behind nginx, Caddy, or Traefik, ensure your
+proxy forwards WebSocket upgrades:
+
+**nginx:**
+
+```nginx
+location /api/admin/terminal/ {
+    proxy_pass http://127.0.0.1:3500;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 86400;   # 1 day, so long-running shells survive
+}
+```
+
+**Caddy:**
+
+```caddy
+reverse_proxy 127.0.0.1:3500 {
+    @terminal path /api/admin/terminal/*
+    reverse_proxy @terminal 127.0.0.1:3500
+}
+```
+
+(Plain `reverse_proxy` already handles `Upgrade` for Caddy 2.7+.)
+
+**Traefik:** no extra config — Traefik detects `Upgrade` automatically
+and forwards it.
+
+## Limitations
+
+- POSIX only. Windows refuses with `503`.
+- One session per user (re-opening a new tab reuses the existing PTY).
+- Sessions are in-memory and die on gateway restart. Run `tmux` inside
+  the terminal if you want persistence.
+- The shell runs as the gateway's own user (root inside the default
+  Docker image). `sudo` works if the user has it configured.
+- Long-output commands are buffered by xterm.js's scrollback. The
+  server caps each frame at the PTY block size; very chatty commands
+  may show backpressure.
