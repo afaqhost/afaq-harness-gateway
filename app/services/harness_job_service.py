@@ -85,9 +85,55 @@ def _json_to_job(data: str) -> HarnessJob | None:
 class HarnessJobService:
     def __init__(self, max_logs: int = 500, ttl_seconds: int = 3600):
         self._jobs: dict[str, HarnessJob] = {}
+        # live subprocess handles for in-flight install/update jobs; keyed by job_id.
+        # Lets an admin cancel a hanging installer script without container restart.
+        self._processes: dict[str, asyncio.subprocess.Process] = {}
+        self._cancelled: set[str] = set()
         self._lock = asyncio.Lock()
         self._max_logs = max_logs
         self._ttl = ttl_seconds
+
+    async def _register_process(self, job_id: str, proc: asyncio.subprocess.Process) -> None:
+        async with self._lock:
+            # if cancel arrived before the process spawned, kill it now
+            if job_id in self._cancelled:
+                self._cancelled.discard(job_id)
+                try:
+                    if proc.returncode is None:
+                        proc.kill()
+                except ProcessLookupError:
+                    pass
+                return
+            self._processes[job_id] = proc
+
+    async def _unregister_process(self, job_id: str) -> None:
+        async with self._lock:
+            self._processes.pop(job_id, None)
+
+    async def cancel(self, job_id: str) -> bool:
+        """Kill the in-flight subprocess for a job if any. Returns True if a process was running."""
+        async with self._lock:
+            proc = self._processes.pop(job_id, None)
+            if proc is None:
+                # mark so a not-yet-spawned process gets killed as soon as it registers
+                self._cancelled.add(job_id)
+                return False
+        try:
+            if proc.returncode is None:
+                proc.kill()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                try:
+                    proc.terminate()
+                    await asyncio.wait_for(proc.wait(), timeout=1.0)
+                except (ProcessLookupError, asyncio.TimeoutError):
+                    pass
+        except ProcessLookupError:
+            pass
+        except (OSError, RuntimeError) as exc:
+            logger.warning("job_cancel_best_effort_failed job_id=%s error=%s", job_id, exc)
+        return True
 
     def _redis_sync(self, job: HarnessJob) -> None:
         try:
@@ -107,11 +153,15 @@ class HarnessJobService:
 
     async def _run_adapter(self, job: HarnessJob, adapter: HarnessAdapter, mode: str):
         # mode: install or update
+        async def _register(proc):
+            await self._register_process(job.id, proc)
+
         try:
             job.stage = "running"
             job.updated_at = time.monotonic()
             self._redis_sync(job)
-            gen = adapter.install() if mode == "install" else adapter.update()
+            gen = adapter.install(on_process=_register) if mode == "install" else adapter.update(on_process=_register)
+            cancelled_by_user = False
             async for event in gen:
                 msg = event.get("message", "")
                 stage = event.get("stage", "running")
@@ -123,12 +173,25 @@ class HarnessJobService:
                 if stage in ("completed", "failed", "error"):
                     job.stage = "completed" if stage == "completed" or event.get("exit_code") == 0 else "failed"
                     job.exit_code = event.get("exit_code")
+                    # detect a cancel-driven kill: install/update yielded failed with our timeout/cancel sentinel
+                    if stage == "failed" and isinstance(msg, str) and ("timed out" in msg or "cancelled" in msg):
+                        cancelled_by_user = True
                 else:
                     job.stage = stage
                 job.updated_at = time.monotonic()
                 self._redis_sync(job)
                 # small yield to allow streaming
                 await asyncio.sleep(0)
+            # if a cancel was issued the adapter's kill path may not have set exit_code;
+            # reflect the user-initiated cancel as stage=failed and a clear message.
+            async with self._lock:
+                was_cancelled = job.id in self._cancelled
+                if was_cancelled:
+                    self._cancelled.discard(job.id)
+            if was_cancelled and not cancelled_by_user:
+                job.stage = "failed"
+                job.exit_code = -1
+                job.logs.append("cancelled by admin")
             # if not already completed/failed, mark completed
             if job.stage not in ("completed", "failed"):
                 job.stage = "completed" if job.exit_code in (None, 0) else "failed"
@@ -141,6 +204,8 @@ class HarnessJobService:
                 job.logs.append(f"error: {e}")
             job.updated_at = time.monotonic()
             self._redis_sync(job)
+        finally:
+            await self._unregister_process(job.id)
         # schedule cleanup after TTL (fire and forget)
         asyncio.create_task(self._expire_job(job.id))
 

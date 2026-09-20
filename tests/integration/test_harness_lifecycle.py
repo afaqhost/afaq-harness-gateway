@@ -18,7 +18,7 @@ def clear_jobs():
 @pytest.mark.asyncio
 async def test_install_creates_job_and_streams_logs(client, admin_headers):
     # Mock adapter.install to yield quickly
-    async def fake_install():
+    async def fake_install(on_process=None):
         yield {"stage": "running", "message": "installing opencode"}
         yield {"stage": "running", "message": "downloading"}
         yield {"stage": "completed", "message": "done", "exit_code": 0}
@@ -95,7 +95,7 @@ async def test_install_rejects_no_recipe_returns_400(client, admin_headers):
 
 @pytest.mark.asyncio
 async def test_install_accepts_approved_script_recipe(client, admin_headers):
-    async def fake_install():
+    async def fake_install(on_process=None):
         yield {"stage": "completed", "message": "done", "exit_code": 0}
 
     mock_adapter = MagicMock()
@@ -150,7 +150,7 @@ async def test_job_not_found_returns_404(client, admin_headers):
 
 @pytest.mark.asyncio
 async def test_update_creates_job(client, admin_headers):
-    async def fake_update():
+    async def fake_update(on_process=None):
         yield {"stage": "running", "message": "updating"}
         yield {"stage": "completed", "message": "updated", "exit_code": 0}
 
@@ -163,3 +163,41 @@ async def test_update_creates_job(client, admin_headers):
         resp = await client.post("/api/admin/harnesses/opencode/update", headers=admin_headers)
         assert resp.status_code == 200
         assert "job_id" in resp.json()
+
+
+@pytest.mark.asyncio
+async def test_cancel_unknown_job_returns_404(client, admin_headers):
+    resp = await client.post("/api/admin/harnesses/opencode/jobs/nonexistent/cancel", headers=admin_headers)
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_cancel_finished_job_returns_409(client, admin_headers):
+    async def fake_install(on_process=None):
+        yield {"stage": "completed", "message": "done", "exit_code": 0}
+
+    mock_adapter = MagicMock()
+    mock_adapter.name = "opencode"
+    mock_adapter.install_command = ["npm", "install", "-g", "opencode-ai"]
+    mock_adapter.install = fake_install
+    mock_adapter.display_name = "OpenCode"
+    mock_adapter.provider = "opencode"
+
+    with patch("app.api.admin.get_adapter", return_value=mock_adapter):
+        resp = await client.post("/api/admin/harnesses/opencode/install", headers=admin_headers)
+        job_id = resp.json()["job_id"]
+        # wait for it to finish
+        import asyncio
+        for _ in range(20):
+            await asyncio.sleep(0.1)
+            job_resp = await client.get(f"/api/admin/harnesses/opencode/jobs/{job_id}", headers=admin_headers)
+            if job_resp.json()["stage"] in ("completed", "failed"):
+                break
+        cancel_resp = await client.post(f"/api/admin/harnesses/opencode/jobs/{job_id}/cancel", headers=admin_headers)
+        assert cancel_resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_cancel_requires_admin(client, user_headers):
+    resp = await client.post("/api/admin/harnesses/opencode/jobs/whatever/cancel", headers=user_headers)
+    assert resp.status_code == 403

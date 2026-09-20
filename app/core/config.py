@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     credentials_key: str = ""
     access_token_expire_minutes: int = 1440
     harness_timeout_seconds: int = 600
+    harness_install_timeout_seconds: int = 600  # max wall-clock for harness install/update scripts (curl|npm|agy update etc.)
     harness_concurrency: int = 5  # max concurrent harness subprocesses per replica
     harness_queue_max_wait: int = 30  # seconds waiting for concurrency slot before 429
     harness_data_dir: Path = BASE_DIR / "storage" / "harnesses"

@@ -13,12 +13,96 @@ import shutil
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import AsyncIterator
+from typing import AsyncIterator, Awaitable, Callable
 
 from app.core.config import settings
 from app.models.harness import HarnessModel, HarnessResult
 
 logger = logging.getLogger("afaq")
+
+
+async def _drain_subprocess(
+    process: asyncio.subprocess.Process,
+    timeout: float,
+    label: str,
+) -> AsyncIterator[dict]:
+    """Run a subprocess to completion under a wall-clock timeout.
+
+    Two background tasks race: a reader that pushes decoded stdout lines into a
+    queue, and a watcher that waits for the process. Whichever finishes first
+    wins. When the watcher wins because of `asyncio.wait_for` timeout, the
+    subprocess is killed and a "timed out" event is yielded.
+
+    This protects install/update jobs from being parked in "running" forever
+    when an external script hangs (bad DNS, slow mirror, interactive prompt).
+    """
+    assert process.stdout
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def _reader():
+        try:
+            async for raw in process.stdout:
+                await queue.put(raw.decode(errors="replace").rstrip())
+        except (OSError, RuntimeError, ValueError) as exc:
+            logger.warning("subprocess_reader_failed label=%s error=%s", label, exc)
+        finally:
+            await queue.put(None)  # EOF sentinel
+
+    async def _watcher() -> tuple[str, int]:
+        try:
+            code = await asyncio.wait_for(process.wait(), timeout=timeout)
+            return ("exit", code)
+        except asyncio.TimeoutError:
+            try:
+                if process.returncode is None:
+                    process.kill()
+                await asyncio.wait_for(process.wait(), timeout=2.0)
+            except (ProcessLookupError, asyncio.TimeoutError):
+                pass
+            return ("timeout", -1)
+
+    reader_task = asyncio.create_task(_reader())
+    watcher_task = asyncio.create_task(_watcher())
+    try:
+        while True:
+            get_task = asyncio.create_task(queue.get())
+            done, _pending = await asyncio.wait(
+                {get_task, watcher_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if watcher_task in done:
+                kind, code = watcher_task.result()
+                # drain any lines still buffered in the queue
+                while not queue.empty():
+                    try:
+                        line = queue.get_nowait()
+                        if line:
+                            yield {"stage": "running", "message": line}
+                    except asyncio.QueueEmpty:
+                        break
+                if kind == "timeout":
+                    yield {"stage": "failed", "exit_code": -1, "message": f"{label} timed out after {timeout}s — process killed"}
+                else:
+                    yield {"stage": "completed" if code == 0 else "failed", "exit_code": code}
+                return
+            line = get_task.result()
+            if line is None:
+                # reader hit EOF; wait for watcher to settle
+                kind, code = await watcher_task
+                if kind == "timeout":
+                    yield {"stage": "failed", "exit_code": -1, "message": f"{label} timed out after {timeout}s — process killed"}
+                else:
+                    yield {"stage": "completed" if code == 0 else "failed", "exit_code": code}
+                return
+            yield {"stage": "running", "message": line}
+    finally:
+        for t in (reader_task, watcher_task):
+            if not t.done():
+                t.cancel()
+                try:
+                    await t
+                except (asyncio.CancelledError, Exception):
+                    pass
 
 
 class HarnessAdapter(ABC):
@@ -49,31 +133,66 @@ class HarnessAdapter(ABC):
     def is_installed(self) -> bool:
         return shutil.which(self.executable) is not None
 
-    async def install(self) -> AsyncIterator[dict]:
+    async def install(self, on_process: Callable[[asyncio.subprocess.Process], Awaitable[None]] | None = None) -> AsyncIterator[dict]:
         if not self.install_command:
             yield {"stage": "error", "message": "No install recipe configured"}
             return
         yield {"stage": "started", "message": "Installing harness"}
+        # Bounded wall-clock: external installer scripts (curl|npm|bash) can hang on
+        # bad DNS, slow mirrors, or interactive prompts. Without a timeout the job sits
+        # in "running" forever and the only escape is container restart.
+        try:
+            timeout = settings.harness_install_timeout_seconds
+        except (AttributeError, RuntimeError):
+            timeout = 600
         process = await asyncio.create_subprocess_exec(
             *self.install_command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
         )
-        assert process.stdout
-        async for line in process.stdout:
-            yield {"stage": "running", "message": line.decode(errors="replace").rstrip()}
-        code = await process.wait()
-        yield {"stage": "completed" if code == 0 else "failed", "exit_code": code}
+        if on_process is not None:
+            try:
+                await on_process(process)
+            except (OSError, RuntimeError) as exc:
+                logger.warning("install_on_process_callback_failed error=%s", exc)
+        try:
+            async for event in _drain_subprocess(process, timeout, "install"):
+                yield event
+        except Exception:
+            # ensure subprocess is reaped on any error path
+            try:
+                if process.returncode is None:
+                    process.kill()
+                    await process.wait()
+            except ProcessLookupError:
+                pass
+            raise
 
-    async def update(self) -> AsyncIterator[dict]:
+    async def update(self, on_process: Callable[[asyncio.subprocess.Process], Awaitable[None]] | None = None) -> AsyncIterator[dict]:
         if not self.update_command:
             yield {"stage": "error", "message": "No update recipe configured"}
             return
+        try:
+            timeout = settings.harness_install_timeout_seconds
+        except (AttributeError, RuntimeError):
+            timeout = 600
         process = await asyncio.create_subprocess_exec(
             *self.update_command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
         )
-        assert process.stdout
-        async for line in process.stdout:
-            yield {"stage": "running", "message": line.decode(errors="replace").rstrip()}
-        yield {"stage": "completed" if await process.wait() == 0 else "failed"}
+        if on_process is not None:
+            try:
+                await on_process(process)
+            except (OSError, RuntimeError) as exc:
+                logger.warning("update_on_process_callback_failed error=%s", exc)
+        try:
+            async for event in _drain_subprocess(process, timeout, "update"):
+                yield event
+        except Exception:
+            try:
+                if process.returncode is None:
+                    process.kill()
+                    await process.wait()
+            except ProcessLookupError:
+                pass
+            raise
 
     async def authenticate(self, mode: str = "environment") -> dict:
         return {
