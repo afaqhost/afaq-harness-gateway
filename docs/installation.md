@@ -23,7 +23,7 @@ make dev     # → http://127.0.0.1:3500/setup on first run, /login afterwards
 On first run, open `http://127.0.0.1:3500/setup` — the **Setup Wizard** walks you through 3 steps:
 
 1. **Create admin account** — email + display name + password (≥8 chars) → auto-login.
-2. **Harnesses** — shows `opencode`, `codex`, `claude`, `commandcode` with installed flag and model counts; install any harness directly from the dashboard (*Install* runs `npm install -g <package>` **inside the container** with live SSE logs). On the host, run `npm install -g <package>` manually and press *Refresh*.
+2. **Harnesses** — shows `opencode`, `codex`, `claude`, `commandcode` with installed flag and model counts; install any harness directly from the dashboard (*Install* runs the adapter's approved recipe — `npm install -g <package>`, or the official installer script for `agy` — **inside the container** with live SSE logs). On the host, run the command shown on the card manually and press *Refresh*.
 3. **Ready** — go to chat or create API keys.
 
 Check whether setup is needed without opening the browser:
@@ -88,9 +88,9 @@ docker compose up --build
 # then open http://127.0.0.1:3500/setup — wizard will let you create admin + install harnesses inside container
 ```
 
-The service is published as `http://127.0.0.1:3500` with a `HEALTHCHECK` (`/health`). A companion `redis:7-alpine` (64 MB, `allkeys-lru`) is included for optional multi-replica rate limiting / history / job mirroring — leave `REDIS_URL` empty to use the in-memory fallback. Named volumes persist the database, application storage, and `/root/.npm` (so `npm install -g` inside the container survives restarts). The compose file no longer mounts `docker.sock` (do not re-add it in production).
+The service is published as `http://127.0.0.1:3500` with a `HEALTHCHECK` (`/health`). A companion `redis:7-alpine` (64 MB, `allkeys-lru`) is included for optional multi-replica rate limiting / history / job mirroring — leave `REDIS_URL` empty to use the in-memory fallback. Named volumes persist the database, application storage, `/root/.npm` (so `npm install -g` inside the container survives restarts), and `/root/.local` (so the Antigravity script install survives restarts). The compose file no longer mounts `docker.sock` (do not re-add it in production).
 
-Installing harnesses from the dashboard runs `npm install -g <package>` **inside the `afaq-gateway` container** via `app/clients/*` adapters (`opencode-ai`, `@openai/codex`, `@anthropic-ai/claude-code`, `command-code`) and streams logs via `GET /api/admin/harnesses/{name}/jobs/{id}/stream` (SSE, `event: log|done`). You can also `docker exec afaq-harness-gateway npm install -g <package>` and press *Refresh*.
+Installing harnesses from the dashboard runs each adapter's approved recipe **inside the `afaq-gateway` container** via `app/clients/*` adapters — `npm install -g` (`opencode-ai`, `@openai/codex`, `@anthropic-ai/claude-code`, `command-code`) or the official Antigravity installer script (`agy`, binary → `/root/.local/bin`) — and streams logs via `GET /api/admin/harnesses/{name}/jobs/{id}/stream` (SSE, `event: log|done`). On the host you can also run `make install-agy` / `agy update`, or the npm command from `docs/harnesses.md`, then press *Refresh*.
 
 ## Stop and Restart
 

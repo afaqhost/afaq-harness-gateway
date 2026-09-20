@@ -8,7 +8,7 @@
 
 - [ ] **P06.1 Update `docs/harnesses.md:8`** — Add rows to table:
   ```markdown
-  | Agy (Antigravity) | `agy` | `npm i -g @google/agy` | `agy --list-models` |
+  | Agy (Antigravity) | `agy` | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` (not npm) | `agy models` |
   | Pi | `pi` | `npm i -g pi` | `pi models` |
   | Minimax | `minimax` | `npm i -g minimax-cli` | `minimax --list-models` |
   | ... (aider, cline, cursor, grok, kimi, omp, qoder, vibe, copilot, warp, zcode) |

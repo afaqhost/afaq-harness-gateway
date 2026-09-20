@@ -10,7 +10,7 @@ Harnesses are local CLI adapters defined in `app/harnesses/registry.py`. The gat
 | OpenCode | `opencode` | `npm install -g opencode-ai` | Runs `opencode models` |
 | Command Code | `cmd` | `npm install -g command-code` | Runs `cmd --list-models` |
 | Claude Code | `claude` | `npm install -g @anthropic-ai/claude-code` | Uses the adapter's standard Claude model names when installed |
-| Agy (Google Antigravity) | `agy` | `npm install -g @google/agy` | Runs `agy models` (parses first column) |
+| Agy (Google Antigravity) | `agy` | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` (official script, not npm) | Runs `agy models` (parses first column) |
 | Pi | `pi` | `npm install -g pi` | Runs `pi --list-models` (parses provider + model) |
 | Minimax | `minimax` | `npm install -g minimax-cli` | Runs `minimax --list-models` (fallback static `minimax-m2`) — Generic placeholder until CLI verified |
 | Kimi | `kimi` | `npm install -g @moonshot/kimi-code` | Generic `kimi --help` (stream-json) — placeholder `[]` if not installed |
@@ -27,6 +27,7 @@ Harnesses are local CLI adapters defined in `app/harnesses/registry.py`. The gat
 
 > Registry: `app/clients/registry.py:20` (`ADAPTERS`) — facade mirrored at `app/harnesses/registry.py`. Adapters with `is_installed() == False` return `[]` from `list_models()` and appear as `installed: false` in `GET /health` and `GET /api/admin/harnesses`.
 > Custom adapters: `claude`, `codex`, `opencode`, `commandcode`, `agy` (`app/clients/agy.py`), `pi` (`app/clients/pi.py`). Remaining 12 are `GenericAdapter` (text-only, `app/clients/generic.py`) and can be upgraded to Custom (`parse_line` tool calls, `--read-only` flags) in `docs/harness-expansion/phase-03-custom-adapters.md`.
+> The dashboard **Install/Update** actions only run pre-approved recipes (`app/api/admin.py`): `npm install -g` plus the explicitly vetted Antigravity script. Anything else returns `400 no_recipe` — install it manually.
 
 Install and authenticate each CLI through its official documentation. The gateway does not proxy or replace a harness provider's login flow.
 

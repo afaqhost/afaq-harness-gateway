@@ -34,7 +34,7 @@
 
 ```bash
 # install one harness
-npm install -g @google/agy  # or whichever
+curl -fsSL https://antigravity.google/cli/install.sh | bash  # agy is not on npm
 curl -X POST http://127.0.0.1:3500/api/admin/harnesses/refresh -H "Authorization: Bearer <JWT>"
 curl http://127.0.0.1:3500/v1/models | jq '.data[] | .id' | grep -E "agy|pi|minimax"
 curl http://127.0.0.1:3500/health | jq

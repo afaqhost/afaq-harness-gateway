@@ -1,5 +1,7 @@
 FROM node:22-bookworm-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+# Official script installers (e.g. Antigravity CLI) drop binaries in ~/.local/bin
+ENV PATH=/root/.local/bin:$PATH
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip ca-certificates git curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.txt .

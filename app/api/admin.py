@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import admin_user, current_user
+from app.clients.agy import INSTALL_SCRIPT_COMMAND
 from app.core.security import generate_api_key, hash_password
 from app.db.database import APIKey, Harness, User, get_db
 from app.harnesses.registry import all_adapters, cached_models, get_adapter, refresh_models
@@ -16,6 +17,21 @@ from app.shared.sse import sse_event
 from app.shared.time import utcnow
 
 router = APIRouter()
+
+# Install recipes come from trusted adapter code, but the install endpoint still only
+# runs pre-approved command shapes: npm globals, or an explicitly vetted installer script.
+_APPROVED_INSTALL_SCRIPTS = {INSTALL_SCRIPT_COMMAND}
+
+
+def _is_allowed_install_recipe(cmd: list[str] | None) -> bool:
+    if not cmd:
+        return False
+    if len(cmd) >= 3 and cmd[0] == "npm" and cmd[1] == "install" and "-g" in cmd:
+        return True
+    if len(cmd) == 3 and cmd[0] in ("bash", "sh") and cmd[1] == "-c" and cmd[2] in _APPROVED_INSTALL_SCRIPTS:
+        return True
+    return False
+
 
 class UserCreate(BaseModel):
     email: str
@@ -44,7 +60,7 @@ async def harnesses(user: User = Depends(current_user), db: AsyncSession = Depen
         models = cached_models(adapter.name)
         # authenticated is true if either Harness table says so or credential profile is authenticated
         is_auth = bool(row.authenticated) if row and row.authenticated else (adapter.name in authenticated_harnesses)
-        result.append({"name": adapter.name, "display_name": adapter.display_name, "provider": adapter.provider or None, "installed": installed, "authenticated": is_auth, "models": [m.__dict__ for m in models], "last_checked_at": row.last_checked_at.isoformat() if row and row.last_checked_at else None})
+        result.append({"name": adapter.name, "display_name": adapter.display_name, "provider": adapter.provider or None, "installed": installed, "authenticated": is_auth, "models": [m.__dict__ for m in models], "install_recipe": adapter.install_recipe, "update_recipe": adapter.update_recipe, "last_checked_at": row.last_checked_at.isoformat() if row and row.last_checked_at else None})
     return result
 
 
@@ -98,9 +114,9 @@ async def install_harness(name: str, _: User = Depends(admin_user)):
         adapter = get_adapter(name)
     except KeyError:
         raise HTTPException(404, "Harness not found")
-    # allow-list: only npm install -g
+    # allow-list: npm install -g, or an explicitly approved installer script
     cmd = getattr(adapter, "install_command", None)
-    if not cmd or len(cmd) < 3 or cmd[0] != "npm" or cmd[1] != "install" or "-g" not in cmd:
+    if not _is_allowed_install_recipe(cmd):
         raise HTTPException(400, detail={"error": {"code": "no_recipe", "message": "No install recipe for harness"}})
     job = await harness_job_service.start_install(adapter)
     return {"job_id": job.id, "status": job.stage, "harness": name}
