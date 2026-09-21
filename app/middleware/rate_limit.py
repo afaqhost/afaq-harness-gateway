@@ -148,6 +148,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not getattr(settings, "rate_limit_enabled", True):
             return await call_next(request)
 
+        # BaseHTTPMiddleware does not support WebSocket upgrades — the
+        # middleware tries to buffer the request body, which collides with
+        # the WS handshake. Skip the limiter for /ws routes so they reach
+        # the route handler untouched.
+        if request.url.path.endswith("/ws"):
+            return await call_next(request)
+
         # optionally exempt health / docs / static to avoid noisy 429
         # but spec says enforce globally — keep exempt list minimal (health only for monitoring)
         # we keep health exempt so monitoring doesn't trigger quota

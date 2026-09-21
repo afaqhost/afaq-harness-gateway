@@ -138,8 +138,21 @@
         }
         term.write(data);
       };
-      ws.onclose = () => this._handleClose(0);
-      ws.onerror = () => this._handleClose(1);
+      ws.onerror = (ev) => {
+        this.setStatus(language === 'ar' ? 'فشل الاتصال' : 'connection failed', 'error');
+        // Don't kill the terminal yet — onclose will fire too and surface
+        // the actual server-side reason. This avoids racing the close handler.
+      };
+      ws.onclose = (ev) => {
+        // 1000=normal, 1001=going away, 1008=policy violation, 1011=server error,
+        // 1012=service restart, 4000-4999=app-defined
+        const code = ev && typeof ev.code === 'number' ? ev.code : 0;
+        const reason = ev && ev.reason ? ` (${ev.reason})` : '';
+        if (code !== 1000 && code !== 1001 && this.xterm) {
+          try { this.xterm.write(`\r\n\x1b[1;31m[connection closed code=${code}${reason}]\x1b[0m\r\n`); } catch {}
+        }
+        this._handleClose(code);
+      };
       this.ws = ws;
 
       const onResize = () => { try { this.fitAddon.fit(); } catch {} };
@@ -174,8 +187,15 @@
         pre.textContent += data;
         pre.scrollTop = pre.scrollHeight;
       };
-      ws.onclose = () => this._handleClose(0);
-      ws.onerror = () => this._handleClose(1);
+      ws.onerror = () => { this.setStatus('connection failed', 'error'); };
+      ws.onclose = (ev) => {
+        const code = ev && typeof ev.code === 'number' ? ev.code : 0;
+        const reason = ev && ev.reason ? ` (${ev.reason})` : '';
+        if (code !== 1000 && code !== 1001) {
+          pre.textContent += `\n[connection closed code=${code}${reason}]\n`;
+        }
+        this._handleClose(code);
+      };
       this.ws = ws;
 
       input.addEventListener('keydown', (e) => {
