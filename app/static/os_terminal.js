@@ -1,9 +1,8 @@
 // OsTerminal — vanilla-JS WebSocket terminal client (CasaOS-style).
 //
 // One instance per mount point. Public API:
-//   const t = new OsTerminal({mount, statusEl, stopButton, token, banner?});
+//   const t = new OsTerminal({mount, statusEl, stopButton});
 //   await t.start();    // opens WS + xterm
-//   t.banner('hi');     // write a one-shot hint before user input
 //   t.stop();           // kill PTY + close WS
 //   t.onClose(cb);      // notified when shell exits
 //
@@ -17,11 +16,11 @@
     return tok ? { Authorization: 'Bearer ' + tok } : {};
   }
 
-  async function startSession(cwd) {
+  async function startSession() {
     const r = await fetch('/api/admin/terminal/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ shell: undefined, cwd: cwd || undefined, cols: 100, rows: 30 }),
+      body: JSON.stringify({ cols: 100, rows: 30 }),
     });
     if (!r.ok) {
       const t = await r.text();
@@ -44,8 +43,6 @@
       this.mount = opts.mount;
       this.statusEl = opts.statusEl || null;
       this.stopButton = opts.stopButton || null;
-      this.banner = opts.banner || '';
-      this.token = opts.token || '';
       this.terminalId = null;
       this.ws = null;
       this.xterm = null;
@@ -93,7 +90,7 @@
         this._startFallback();
       }
 
-      this.setStatus(`${language === 'ar' ? 'متصل' : 'connected'} · pid ${info.pid}`, 'ok');
+      this.setStatus(`${language === 'ar' ? 'متصل' : 'connected'} · pid ${info.pid} · ${info.shell}`, 'ok');
     }
 
     _startXterm(info) {
@@ -111,7 +108,6 @@
       term.loadAddon(this.fitAddon);
       term.open(this.mount);
       try { this.fitAddon.fit(); } catch {}
-      if (this.banner) term.writeln(this.banner);
 
       term.onData((data) => {
         if (this.ws && this.ws.readyState === 1) this.ws.send(data);
@@ -123,7 +119,6 @@
       });
 
       const ws = new WebSocket(PROTOCOL + '//' + window.location.host + '/api/admin/terminal/' + this.terminalId + '/ws', []);
-      // browsers forward the Authorization header on the upgrade automatically
       ws.onopen = () => {
         this.connected = true;
         try { this.fitAddon.fit(); } catch {}
@@ -150,8 +145,6 @@
       const onResize = () => { try { this.fitAddon.fit(); } catch {} };
       window.addEventListener('resize', onResize);
       this._cleanupResize = () => window.removeEventListener('resize', onResize);
-
-      // xterm.js keeps its own textarea; nothing else to wire.
     }
 
     _startFallback() {
@@ -167,7 +160,6 @@
       this.mount.appendChild(input);
       this.fallbackPre = pre;
       this.fallbackInput = input;
-      if (this.banner) pre.textContent += this.banner + '\n';
 
       const ws = new WebSocket(PROTOCOL + '//' + window.location.host + '/api/admin/terminal/' + this.terminalId + '/ws', []);
       ws.onmessage = (e) => {
@@ -216,4 +208,24 @@
   }
 
   window.OsTerminal = OsTerminal;
+
+  // ---------- /terminal page wiring ----------
+
+  let pageInstance = null;
+  window.initTerminalPage = async function initTerminalPage() {
+    if (pageInstance) return;
+    const mount = document.getElementById('terminal-page-mount');
+    const status = document.getElementById('terminal-page-status');
+    const stopBtn = document.getElementById('terminal-page-stop');
+    if (!mount) return;
+    pageInstance = new OsTerminal({ mount, statusEl: status, stopButton: stopBtn });
+    pageInstance.onClose(() => { pageInstance = null; });
+    try { await pageInstance.start(); } catch (err) {
+      if (window.showToast) showToast(err.message || String(err));
+    }
+    if (stopBtn) stopBtn.onclick = () => { if (pageInstance) pageInstance.stop(); };
+  };
+
+  // Lazy init when the page becomes visible (called from show() in app.js).
 })();
+

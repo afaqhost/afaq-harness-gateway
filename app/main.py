@@ -133,10 +133,6 @@ async def users_page(request: Request):
 async def usage_page(request: Request):
     return await render_page(request, "usage")
 
-@app.get("/credentials", response_class=HTMLResponse)
-async def credentials_page(request: Request):
-    return await render_page(request, "credentials")
-
 @app.get("/terminal", response_class=HTMLResponse)
 async def terminal_page(request: Request):
     return await render_page(request, "terminal")

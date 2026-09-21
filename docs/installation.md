@@ -141,5 +141,4 @@ See `docs/os-terminal.md` for the exact snippets and per-route behavior.
 
 The dashboard ships with a `/terminal` page that opens a live POSIX
 shell in the browser (admin-only). See `docs/os-terminal.md` for
-protocol details, auth model, and reverse-proxy notes. The same
-WebSocket PTY is reused on `/credentials` as a CLI auth helper.
+protocol details, auth model, and reverse-proxy notes.

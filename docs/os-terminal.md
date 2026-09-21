@@ -5,25 +5,20 @@ Same shape as CasaOS's "Terminal" tile, VS Code's integrated terminal,
 or JupyterLab's terminal — full TTY with ANSI colors, cursor control,
 resize, signal forwarding, and live stdin/stdout.
 
-Two pages use it:
+## What it is
 
-- **`/terminal`** — full-screen system shell. Lets you run any command
-  as the user that launched uvicorn (typically root inside Docker,
-  or your own user on a bare host). Use it to inspect logs, edit
-  `data/afaq.db`, debug harness subprocess behavior, etc.
-- **`/credentials`** — left column is the same terminal, pre-loaded
-  with a banner suggesting the harness's own auth flow
-  (`claude auth login`, `agy signin`, `codex auth`, …). Right column
-  is the existing paste-key form. Sign in inside the terminal, then
-  paste the resulting token into the right panel to save it as a
-  `CredentialProfile`.
+A single page at `/terminal` (sidebar link 06) that opens a real
+login shell in the user's browser. The shell runs as the gateway
+process's own user (root inside the default Docker image, your user
+on a bare host). Type any command, hit Enter, see output. `vim`
+works. `tmux` works. `htop` works.
 
-Both pages reuse a single WebSocket PTY pump on the server and a single
-`OsTerminal` JS class on the client.
+That's all it is. No banner, no pre-loaded command, no harness auth
+helpers — just a clean prompt waiting for input.
 
 ## Auth + access
 
-All terminal endpoints are admin-only. Non-admins get `403`. This is
+The terminal endpoints are admin-only. Non-admins get `403`. This is
 deliberate: opening a shell to the gateway host is a trusted operation.
 Every start/stop is logged with the user id, terminal id, and shell path.
 
@@ -104,19 +99,20 @@ location /api/admin/terminal/ {
 }
 ```
 
-**Caddy:**
+**Caddy 2.7+:** plain `reverse_proxy` already handles `Upgrade`.
+**Traefik:** no extra config — detected automatically.
 
-```caddy
-reverse_proxy 127.0.0.1:3500 {
-    @terminal path /api/admin/terminal/*
-    reverse_proxy @terminal 127.0.0.1:3500
-}
-```
+## Customizing the shell
 
-(Plain `reverse_proxy` already handles `Upgrade` for Caddy 2.7+.)
+The shell is `$SHELL` from the gateway process's environment, falling
+back to `/bin/bash`. To use a different shell:
 
-**Traefik:** no extra config — Traefik detects `Upgrade` automatically
-and forwards it.
+- **Docker:** add `ENV SHELL=/bin/zsh` to the `Dockerfile`, or set
+  `SHELL=...` in `docker-compose.yml`.
+- **Bare host / dev:** `SHELL=/bin/zsh .venv/bin/python -m uvicorn ...`.
+
+The shell runs as the user that started the gateway (root inside the
+default container image, your own user on a bare host).
 
 ## Limitations
 
@@ -124,8 +120,5 @@ and forwards it.
 - One session per user (re-opening a new tab reuses the existing PTY).
 - Sessions are in-memory and die on gateway restart. Run `tmux` inside
   the terminal if you want persistence.
-- The shell runs as the gateway's own user (root inside the default
-  Docker image). `sudo` works if the user has it configured.
-- Long-output commands are buffered by xterm.js's scrollback. The
-  server caps each frame at the PTY block size; very chatty commands
-  may show backpressure.
+- The shell runs as the gateway's user. `sudo` works if the user has
+  it configured.
