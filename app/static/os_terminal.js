@@ -16,6 +16,12 @@
     return tok ? { Authorization: 'Bearer ' + tok } : {};
   }
 
+  function getWsUrl(terminalId) {
+    const tok = localStorage.getItem('afaq_token');
+    const qs = tok ? '?token=' + encodeURIComponent(tok) : '';
+    return PROTOCOL + '//' + window.location.host + '/api/admin/terminal/' + terminalId + '/ws' + qs;
+  }
+
   async function startSession() {
     const r = await fetch('/api/admin/terminal/start', {
       method: 'POST',
@@ -78,19 +84,20 @@
         throw err;
       }
       this.terminalId = info.terminal_id;
+      this.info = info;
 
       if (this.stopButton) {
         this.stopButton.disabled = false;
         this.stopButton.onclick = () => this.stop();
       }
 
+      this.setStatus(language === 'ar' ? 'جارٍ الاتصال…' : 'Connecting…');
+
       if (window.Terminal) {
         this._startXterm(info);
       } else {
-        this._startFallback();
+        this._startFallback(info);
       }
-
-      this.setStatus(`${language === 'ar' ? 'متصل' : 'connected'} · pid ${info.pid} · ${info.shell}`, 'ok');
     }
 
     _startXterm(info) {
@@ -118,9 +125,10 @@
         }
       });
 
-      const ws = new WebSocket(PROTOCOL + '//' + window.location.host + '/api/admin/terminal/' + this.terminalId + '/ws', []);
+      const ws = new WebSocket(getWsUrl(this.terminalId));
       ws.onopen = () => {
         this.connected = true;
+        this.setStatus(`${language === 'ar' ? 'متصل' : 'connected'} · pid ${info.pid} · ${info.shell}`, 'ok');
         try { this.fitAddon.fit(); } catch {}
         ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
       };
@@ -160,7 +168,8 @@
       this._cleanupResize = () => window.removeEventListener('resize', onResize);
     }
 
-    _startFallback() {
+    _startFallback(info) {
+      info = info || this.info || {};
       this.mount.innerHTML = '';
       const pre = document.createElement('pre');
       pre.className = 'terminal-fallback';
@@ -174,7 +183,11 @@
       this.fallbackPre = pre;
       this.fallbackInput = input;
 
-      const ws = new WebSocket(PROTOCOL + '//' + window.location.host + '/api/admin/terminal/' + this.terminalId + '/ws', []);
+      const ws = new WebSocket(getWsUrl(this.terminalId));
+      ws.onopen = () => {
+        this.connected = true;
+        this.setStatus(`${language === 'ar' ? 'متصل' : 'connected'}${info.pid ? ` · pid ${info.pid} · ${info.shell}` : ''}`, 'ok');
+      };
       ws.onmessage = (e) => {
         let data = e.data;
         if (typeof data !== 'string') return;
@@ -187,7 +200,7 @@
         pre.textContent += data;
         pre.scrollTop = pre.scrollHeight;
       };
-      ws.onerror = () => { this.setStatus('connection failed', 'error'); };
+      ws.onerror = () => { this.setStatus(language === 'ar' ? 'فشل الاتصال' : 'connection failed', 'error'); };
       ws.onclose = (ev) => {
         const code = ev && typeof ev.code === 'number' ? ev.code : 0;
         const reason = ev && ev.reason ? ` (${ev.reason})` : '';

@@ -138,8 +138,11 @@ class OsTerminalService:
                 os.environ["AFAQ_TERMINAL"] = "1"
                 os.environ["COLORTERM"] = os.environ.get("COLORTERM", "truecolor")
                 # ensure the child is its own session leader so the PTY becomes
-                # its controlling tty
-                os.setsid()
+                # its controlling tty (pty.fork often sets this already; ignore EPERM)
+                try:
+                    os.setsid()
+                except OSError:
+                    pass
                 # best-effort: make the PTY its controlling tty
                 try:
                     fcntl.ioctl(0, termios.TIOCSCTTY, 0)
@@ -183,17 +186,11 @@ class OsTerminalService:
                 os.write(2, f"\r\nexec failed: {exc}\r\n".encode())
                 os._exit(127)
 
-        # Parent: set initial size, mark fd non-blocking, register.
+        # Parent: set initial size and register.
         try:
             self._set_winsize(fd, rows, cols)
         except OSError as exc:
             logger.warning("terminal_winsize_failed fd=%s error=%s", fd, exc)
-
-        try:
-            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-            fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-        except OSError as exc:
-            logger.warning("terminal_nonblock_failed fd=%s error=%s", fd, exc)
 
         terminal_id = uuid.uuid4().hex[:16]
         session = TerminalSession(
@@ -234,22 +231,23 @@ class OsTerminalService:
             os.close(session.fd)
         except OSError:
             pass
-        # signal the shell; escalate if it doesn't exit
-        try:
-            os.kill(session.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        except OSError as exc:
-            logger.warning("terminal_sigterm_failed pid=%s error=%s", session.pid, exc)
+        # signal the shell and its process group (SIGHUP triggers clean hangup)
+        for sig in (signal.SIGHUP, signal.SIGTERM):
+            try:
+                os.kill(session.pid, sig)
+            except (ProcessLookupError, OSError):
+                pass
+            try:
+                os.killpg(session.pid, sig)
+            except (ProcessLookupError, OSError):
+                pass
 
         async def _force_kill() -> None:
             await asyncio.sleep(2.0)
             try:
                 os.kill(session.pid, signal.SIGKILL)
-            except ProcessLookupError:
+            except (ProcessLookupError, OSError):
                 pass
-            except OSError as exc:
-                logger.warning("terminal_sigkill_failed pid=%s error=%s", session.pid, exc)
 
         asyncio.create_task(_force_kill())
 
@@ -315,11 +313,19 @@ class OsTerminalService:
 
     @staticmethod
     def _blocking_read(session: TerminalSession) -> bytes:
-        """Run a blocking os.read on the PTY fd in a thread executor."""
-        try:
-            return os.read(session.fd, 4096)
-        except OSError:
-            return b""
+        """Run a read on the PTY fd in a thread executor with select timeout so threads don't hang on stop."""
+        import select
+        while not session._stopped:
+            try:
+                r, _, _ = select.select([session.fd], [], [], 0.4)
+            except (OSError, ValueError):
+                return b""
+            if r:
+                try:
+                    return os.read(session.fd, 4096)
+                except OSError:
+                    return b""
+        return b""
 
     # ---------- stdin / stdout ----------
 

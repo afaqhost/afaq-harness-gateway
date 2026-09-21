@@ -100,9 +100,8 @@ async def terminal_status(terminal_id: str, user: User = Depends(admin_user)):
 async def terminal_ws(websocket: WebSocket, terminal_id: str):
     """Bidirectional PTY pump over WebSocket.
 
-    Auth: same `Authorization: Bearer <jwt>` header as the rest of the API.
-    Browsers forward headers on the WS upgrade automatically (FastAPI exposes
-    them on `websocket.headers`).
+    Auth: Bearer JWT or API key via `?token=<token>` query parameter (standard
+    for browser WebSockets), Authorization header, cookie, or subprotocol.
     """
     user = await _authenticate_ws(websocket)
     if user is None:
@@ -189,25 +188,56 @@ async def terminal_ws(websocket: WebSocket, terminal_id: str):
 
 
 async def _authenticate_ws(websocket: WebSocket) -> User | None:
-    """Resolve a User from the WS Authorization header (Bearer <jwt>).
+    """Resolve a User from query parameter, Authorization header, cookie, or subprotocol.
 
-    Mirrors `app.api.auth.current_user` but reads from the WS scope instead
-    of a FastAPI Depends, because FastAPI's WebSocket dependency-injection
-    story is awkward and we don't want to import the full `get_db` session
-    machinery into the WS path.
+    Mirrors `app.api.auth.current_user` (which accepts query param ?token= or ?access_token=)
+    so standard browser WebSockets can authenticate (browsers cannot send custom headers
+    during WebSocket upgrade handshake).
     """
     from jose import JWTError, jwt
     from sqlalchemy import select
 
-    from app.db.database import APIKey, SessionLocal, User
     from app.core.security import hash_api_key
+    from app.db import database as db_mod
 
-    auth = websocket.headers.get("authorization") or websocket.headers.get("Authorization")
-    if not auth or not auth.lower().startswith("bearer "):
-        return None
-    raw = auth.split(" ", 1)[1].strip()
+    raw = None
+
+    # 1. Query parameter ?token= or ?access_token= (browser WebSocket standard)
+    raw = websocket.query_params.get("token") or websocket.query_params.get("access_token")
+
+    # 2. Authorization header (for test clients and programmatic clients)
+    if not raw:
+        auth = websocket.headers.get("authorization") or websocket.headers.get("Authorization")
+        if auth and auth.lower().startswith("bearer "):
+            raw = auth.split(" ", 1)[1].strip()
+
+    # 3. Cookie fallback
+    if not raw:
+        raw = (
+            websocket.cookies.get("afaq_token")
+            or websocket.cookies.get("token")
+            or websocket.cookies.get("access_token")
+        )
+
+    # 4. Sec-WebSocket-Protocol fallback (e.g. ['bearer', '<token>'] or ['token.<jwt>'])
+    if not raw:
+        proto_header = websocket.headers.get("sec-websocket-protocol", "")
+        if proto_header:
+            parts = [p.strip() for p in proto_header.split(",")]
+            for p in parts:
+                if p.startswith("token."):
+                    raw = p[6:]
+                    break
+                elif p.startswith("bearer."):
+                    raw = p[7:]
+                    break
+
     if not raw:
         return None
+
+    if raw.lower().startswith("bearer "):
+        raw = raw.split(" ", 1)[1].strip()
+
     # JWT first (3 dot-separated segments)
     if raw.count(".") == 2:
         try:
@@ -216,21 +246,22 @@ async def _authenticate_ws(websocket: WebSocket) -> User | None:
         except (JWTError, TypeError, ValueError):
             uid = None
         if uid:
-            async with SessionLocal() as session:
-                user = await session.get(User, uid)
+            async with db_mod.SessionLocal() as session:
+                user = await session.get(db_mod.User, uid)
                 if user and user.is_active:
                     return user
+
     # API key fallback
     digest = hash_api_key(raw)
-    async with SessionLocal() as session:
+    async with db_mod.SessionLocal() as session:
         key = (
             await session.execute(
-                select(APIKey).where(APIKey.key_hash == digest, APIKey.is_active == True)
+                select(db_mod.APIKey).where(db_mod.APIKey.key_hash == digest, db_mod.APIKey.is_active == True)
             )
         ).scalar_one_or_none()
         if not key:
             return None
-        user = await session.get(User, key.user_id)
+        user = await session.get(db_mod.User, key.user_id)
         if user and user.is_active:
             return user
     return None

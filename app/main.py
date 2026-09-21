@@ -96,6 +96,7 @@ app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
 app.include_router(usage_router, prefix="/api/chat", tags=["usage"])
 app.include_router(credentials_router, prefix="/api/admin", tags=["credentials"])
 app.include_router(os_terminal_router, prefix="/api/admin", tags=["terminal"])
+app.include_router(os_terminal_router, prefix="/api", tags=["terminal"])
 app.include_router(metrics_router)
 
 async def render_page(request: Request, page: str):
