@@ -1,3 +1,4 @@
+# - When reporting a bug, ask the assistant to review code to understand the issue rather than just guessing. Confidence: 0.85
 - When reporting a bug, ask the assistant to review code to understand the issue rather than just guessing. Confidence: 0.85
 - Prefers explicit authorization gates between refactor work and behavior-change fixes (e.g. "ship the fix as a separate, explicitly-authorized commit"). Confidence: 0.9
 - Appreciates root-cause analysis that traces a bug through multiple layers (frontend UI → backend route → background job → in-process cache → DB row) before proposing a fix. Confidence: 0.85

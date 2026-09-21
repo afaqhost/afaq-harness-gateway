@@ -49,6 +49,7 @@
       this.mount = opts.mount;
       this.statusEl = opts.statusEl || null;
       this.stopButton = opts.stopButton || null;
+      this.keypadContainer = opts.keypadContainer || null;
       this.terminalId = null;
       this.ws = null;
       this.xterm = null;
@@ -58,6 +59,134 @@
       this.closeListeners = [];
       this.connected = false;
       this.starting = null;
+      this.ctrlActive = false;
+      this.altActive = false;
+      this.shiftActive = false;
+    }
+
+    sendKey(data) {
+      if (this.ws && this.ws.readyState === 1) {
+        this.ws.send(data);
+      } else if (this.fallbackInput) {
+        this.fallbackInput.value += data;
+      }
+      if (this.xterm) {
+        try { this.xterm.focus(); } catch {}
+      }
+    }
+
+    _applyCtrl(data) {
+      if (!data) return data;
+      const c = data.charCodeAt(0);
+      if (c >= 65 && c <= 90) return String.fromCharCode(c - 64) + data.slice(1);
+      if (c >= 97 && c <= 122) return String.fromCharCode(c - 96) + data.slice(1);
+      if (data[0] === '[') return '\x1b' + data.slice(1);
+      if (data[0] === ']') return '\x1d' + data.slice(1);
+      if (data[0] === '\\') return '\x1c' + data.slice(1);
+      if (data[0] === ' ') return '\x00' + data.slice(1);
+      return data;
+    }
+
+    setCtrlActive(active) {
+      this.ctrlActive = !!active;
+      const el = this.keypadContainer ? this.keypadContainer.querySelector('#term-key-ctrl') : document.getElementById('term-key-ctrl');
+      if (el) el.classList.toggle('active', this.ctrlActive);
+    }
+
+    setAltActive(active) {
+      this.altActive = !!active;
+      const el = this.keypadContainer ? this.keypadContainer.querySelector('#term-key-alt') : document.getElementById('term-key-alt');
+      if (el) el.classList.toggle('active', this.altActive);
+    }
+
+    setShiftActive(active) {
+      this.shiftActive = !!active;
+      const el = this.keypadContainer ? this.keypadContainer.querySelector('#term-key-shift') : document.getElementById('term-key-shift');
+      if (el) el.classList.toggle('active', this.shiftActive);
+    }
+
+    resetModifiers() {
+      this.setCtrlActive(false);
+      this.setAltActive(false);
+      this.setShiftActive(false);
+    }
+
+    async pasteFromClipboard() {
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          const text = await navigator.clipboard.readText();
+          if (text) {
+            this.sendKey(text);
+            return;
+          }
+        }
+      } catch {}
+      const text = prompt(language === 'ar' ? 'الصق النص المراد إرساله:' : 'Paste text to send:');
+      if (text) this.sendKey(text);
+    }
+
+    bindKeypad(container) {
+      const el = container || this.keypadContainer;
+      if (!el) return;
+      this.keypadContainer = el;
+
+      // Prevent button touch from stealing focus from xterm input
+      el.addEventListener('pointerdown', (e) => {
+        const btn = e.target.closest('.term-key-btn');
+        if (btn) e.preventDefault();
+      });
+
+      el.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.term-key-btn');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const key = btn.dataset.key;
+        const char = btn.dataset.char;
+        const action = btn.dataset.action;
+
+        if (key === 'ctrl') {
+          this.setCtrlActive(!this.ctrlActive);
+          return;
+        }
+        if (key === 'alt') {
+          this.setAltActive(!this.altActive);
+          return;
+        }
+        if (key === 'shift') {
+          this.setShiftActive(!this.shiftActive);
+          return;
+        }
+
+        let payload = '';
+        if (key === 'esc') payload = '\x1b';
+        else if (key === 'tab') payload = '\t';
+        else if (key === 'ctrl-c') payload = '\x03';
+        else if (key === 'ctrl-l') payload = '\x0c';
+        else if (key === 'ctrl-d') payload = '\x04';
+        else if (key === 'ctrl-z') payload = '\x1a';
+        else if (key === 'up') payload = '\x1b[A';
+        else if (key === 'down') payload = '\x1b[B';
+        else if (key === 'left') payload = '\x1b[D';
+        else if (key === 'right') payload = '\x1b[C';
+        else if (char) payload = char;
+        else if (action === 'paste') {
+          await this.pasteFromClipboard();
+          return;
+        }
+
+        if (payload) {
+          if (this.ctrlActive && (!key || !key.startsWith('ctrl-'))) {
+            payload = this._applyCtrl(payload);
+            this.setCtrlActive(false);
+          } else if (this.altActive) {
+            payload = '\x1b' + payload;
+            this.setAltActive(false);
+          }
+          this.sendKey(payload);
+        }
+      });
     }
 
     onClose(cb) { this.closeListeners.push(cb); }
@@ -115,9 +244,21 @@
       term.loadAddon(this.fitAddon);
       term.open(this.mount);
       try { this.fitAddon.fit(); } catch {}
+      this.bindKeypad();
 
       term.onData((data) => {
-        if (this.ws && this.ws.readyState === 1) this.ws.send(data);
+        let toSend = data;
+        if (this.ctrlActive) {
+          toSend = this._applyCtrl(data);
+          this.setCtrlActive(false);
+        } else if (this.altActive) {
+          toSend = '\x1b' + data;
+          this.setAltActive(false);
+        } else if (this.shiftActive) {
+          toSend = data.toUpperCase();
+          this.setShiftActive(false);
+        }
+        if (this.ws && this.ws.readyState === 1) this.ws.send(toSend);
       });
       term.onResize(({ cols, rows }) => {
         if (this.ws && this.ws.readyState === 1) {
@@ -182,6 +323,7 @@
       this.mount.appendChild(input);
       this.fallbackPre = pre;
       this.fallbackInput = input;
+      this.bindKeypad();
 
       const ws = new WebSocket(getWsUrl(this.terminalId));
       ws.onopen = () => {
@@ -222,6 +364,7 @@
     }
 
     _handleClose(code) {
+      this.resetModifiers();
       if (!this.connected && code === 0) return;
       this.connected = false;
       const isError = code !== null && code !== undefined && code !== 0;
@@ -266,8 +409,9 @@
     const mount = document.getElementById('terminal-page-mount');
     const status = document.getElementById('terminal-page-status');
     const stopBtn = document.getElementById('terminal-page-stop');
+    const keypad = document.getElementById('terminal-keypad-bar');
     if (!mount) return;
-    pageInstance = new OsTerminal({ mount, statusEl: status, stopButton: stopBtn });
+    pageInstance = new OsTerminal({ mount, statusEl: status, stopButton: stopBtn, keypadContainer: keypad });
     pageInstance.onClose(() => { pageInstance = null; });
     try { await pageInstance.start(); } catch (err) {
       if (window.showToast) showToast(err.message || String(err));
