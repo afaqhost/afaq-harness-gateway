@@ -42,6 +42,7 @@ class TerminalSession:
     rows: int = 24
     created_at: float = field(default_factory=time.monotonic)
     last_activity: float = field(default_factory=time.monotonic)
+    exit_code: int | None = field(default=None, init=False, repr=False)
     _reader_task: asyncio.Task | None = field(default=None, init=False, repr=False)
     _stopped: bool = field(default=False, init=False, repr=False)
     _output_queue: asyncio.Queue[bytes | None] = field(
@@ -80,17 +81,32 @@ class OsTerminalService:
         if not hasattr(os, "fork") or not hasattr(pty, "openpty"):
             raise TerminalError("OS terminal requires a POSIX host (pty.openpty not available).")
 
-        shell = shell or os.environ.get("SHELL") or "/bin/bash"
-        if not os.path.isabs(shell) and not os.path.isfile(shell) and not os.path.isdir(shell):
-            # resolve via PATH
+        # Resolve shell path. If the explicit path doesn't exist or isn't
+        # executable, fall back to a known list of shells (bash, zsh, sh)
+        # before declaring the terminal unavailable.
+        explicit_shell = shell
+        shell_candidates = []
+        if explicit_shell:
             from shutil import which
-
-            resolved = which(shell)
-            if not resolved:
-                raise TerminalError(f"Shell not found: {shell}")
-            shell = resolved
-        if not os.path.isfile(shell):
-            raise TerminalError(f"Shell not executable: {shell}")
+            resolved = explicit_shell if os.path.isabs(explicit_shell) else (which(explicit_shell) or explicit_shell)
+            if os.path.isfile(resolved):
+                shell_candidates.append(resolved)
+        # Common fallbacks — checked in order. /bin/sh is POSIX-mandatory
+        # and almost always present.
+        for fallback in ("/bin/bash", "/bin/zsh", "/bin/sh", "/usr/bin/bash", "/usr/bin/sh"):
+            if fallback not in shell_candidates and os.path.isfile(fallback) and os.access(fallback, os.X_OK):
+                shell_candidates.append(fallback)
+        if not shell_candidates:
+            raise TerminalError(
+                f"No usable shell found (tried: {explicit_shell}, /bin/bash, /bin/zsh, /bin/sh). "
+                "Set $SHELL or pass `shell` in the request."
+            )
+        shell = shell_candidates[0]
+        # Validate exec perms so we get a clear error instead of EPERM at exec time
+        if not os.access(shell, os.X_OK):
+            raise TerminalError(
+                f"Shell not executable: {shell} (check filesystem mount options: noexec)."
+            )
 
         cwd = cwd or os.getcwd()
         if not os.path.isdir(cwd):
@@ -108,7 +124,14 @@ class OsTerminalService:
             try:
                 os.chdir(cwd)
             except OSError as exc:
-                os.write(2, f"chdir failed: {exc}\n".encode())
+                os.write(2, f"\r\nchdir failed: {exc}\r\n".encode())
+                # Stay alive briefly so the parent reads the error; the parent's
+                # reader will see EOF when we exit. We sleep so the WS has time
+                # to send the message before the PTY closes.
+                try:
+                    import time as _time; _time.sleep(0.5)
+                except Exception:
+                    pass
                 os._exit(126)
             try:
                 os.environ["TERM"] = os.environ.get("TERM") or "xterm-256color"
@@ -122,9 +145,42 @@ class OsTerminalService:
                     fcntl.ioctl(0, termios.TIOCSCTTY, 0)
                 except OSError:
                     pass
-                os.execvp(shell, [shell, "--login"])
+                # Try each shell candidate. If the first one fails (e.g. EPERM
+                # because of no_new_privs, or ENOENT because of a deleted cwd),
+                # fall through to the next. This matches the order the parent
+                # resolved above.
+                last_err: Exception | None = None
+                for candidate in shell_candidates:
+                    try:
+                        os.execvp(candidate, [candidate, "-l"])
+                        return  # unreachable
+                    except OSError as exc:
+                        last_err = exc
+                        continue
+                # All candidates failed — write the last error to the PTY
+                # and keep it open long enough for the user to read it.
+                os.write(2, f"\r\n\033[1;31mexec failed\033[0m: {last_err}\r\n".encode())
+                os.write(2, f"  tried: {' '.join(shell_candidates)}\r\n".encode())
+                os.write(2, "\r\nThis often means:\r\n".encode())
+                os.write(2, "  - the shell binary has lost its execute permission\r\n".encode())
+                os.write(2, "  - the binary lives on a noexec-mounted filesystem\r\n".encode())
+                os.write(2, "  - the container has no_new_privs set (execve denied)\r\n".encode())
+                os.write(2, "\r\nPress Ctrl+D or close this tab.\r\n".encode())
+                # Drain stdin so xterm doesn't echo back junk
+                try:
+                    import select as _select
+                    _select.select([0], [], [], 0.5)
+                except Exception:
+                    pass
+                # Sleep so the parent reader has time to flush the message to
+                # the WS before the PTY closes.
+                try:
+                    import time as _time; _time.sleep(5.0)
+                except Exception:
+                    pass
+                os._exit(127)
             except OSError as exc:
-                os.write(2, f"exec failed: {exc}\n".encode())
+                os.write(2, f"\r\nexec failed: {exc}\r\n".encode())
                 os._exit(127)
 
         # Parent: set initial size, mark fd non-blocking, register.
@@ -202,6 +258,17 @@ class OsTerminalService:
                 await asyncio.wait_for(session._reader_task, timeout=0.5)
             except asyncio.TimeoutError:
                 session._reader_task.cancel()
+        # Reap the child to capture exit code (non-blocking; WNOHANG in case
+        # SIGKILL hasn't taken effect yet — we'll reap on the next call).
+        try:
+            wpid, status = os.waitpid(session.pid, os.WNOHANG)
+            if wpid == session.pid:
+                session.exit_code = self._decode_status(status)
+                logger.info("terminal_exit id=%s pid=%s exit_code=%s", session.terminal_id, session.pid, session.exit_code)
+        except ChildProcessError:
+            pass
+        except OSError as exc:
+            logger.debug("terminal_waitpid_best_effort error=%s", exc)
         try:
             session._output_queue.put_nowait(None)  # sentinel for stream()
         except asyncio.QueueFull:
@@ -321,8 +388,17 @@ class OsTerminalService:
         if session is None:
             return None
         alive = self._pid_alive(session.pid)
+        # If the child has exited but we haven't observed it yet, try to reap.
+        if not alive and session.exit_code is None:
+            try:
+                wpid, status = os.waitpid(session.pid, os.WNOHANG)
+                if wpid == session.pid:
+                    session.exit_code = self._decode_status(status)
+            except (ChildProcessError, OSError):
+                pass
         return {
             "alive": alive and not session._stopped,
+            "exit_code": session.exit_code,
             "cols": session.cols,
             "rows": session.rows,
             "cwd": session.cwd,
@@ -341,6 +417,24 @@ class OsTerminalService:
         except OSError:
             return True  # EPERM means it exists but we can't signal
         return True
+
+    @staticmethod
+    def _decode_status(status: int) -> int:
+        """Decode a waitpid status into a meaningful exit code.
+
+        Returns the negative signal number if the child was killed by a
+        signal (matches POSIX shell convention: 128 + signal), or the
+        regular exit code otherwise.
+        """
+        try:
+            import os as _os
+            if _os.WIFSIGNALED(status):
+                return -_os.WTERMSIG(status)
+            if _os.WIFEXITED(status):
+                return _os.WEXITSTATUS(status)
+        except (AttributeError, OSError):
+            pass
+        return status
 
     # ---------- internal ----------
 

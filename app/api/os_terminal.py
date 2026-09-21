@@ -131,10 +131,16 @@ async def terminal_ws(websocket: WebSocket, terminal_id: str):
         except Exception:
             logger.debug("terminal_ws_writer_crash id=%s", terminal_id, exc_info=True)
         finally:
+            # Surface the real exit code (0 = clean exit; non-zero = error).
             try:
-                await websocket.send_json({"type": "exit", "code": 0})
+                status = os_terminal_service.status(terminal_id, user.id)
+                exit_code = status.get("exit_code") if status else None
+                await websocket.send_json({"type": "exit", "code": exit_code if exit_code is not None else 0})
             except Exception:
-                pass
+                try:
+                    await websocket.send_json({"type": "exit", "code": 0})
+                except Exception:
+                    pass
 
     writer_task = asyncio.create_task(writer())
 

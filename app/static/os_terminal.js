@@ -191,10 +191,26 @@
     _handleClose(code) {
       if (!this.connected && code === 0) return;
       this.connected = false;
-      this.setStatus(`${language === 'ar' ? 'منتهٍ' : 'closed'} · code ${code}`, 'muted');
+      const isError = code !== null && code !== undefined && code !== 0;
+      const statusText = isError
+        ? `${language === 'ar' ? 'فشل البدء' : 'failed to start'} · code ${code}`
+        : `${language === 'ar' ? 'منتهٍ' : 'closed'}`;
+      this.setStatus(statusText, isError ? 'error' : 'muted');
       if (this.ws) try { this.ws.close(); } catch {}
-      if (this.xterm) try { this.xterm.write('\r\n\x1b[2m[session closed]\x1b[0m\r\n'); } catch {}
-      if (this.fallbackPre) this.fallbackPre.textContent += '\n[session closed]\n';
+      if (this.xterm) {
+        try {
+          if (isError) {
+            this.xterm.write(`\r\n\x1b[1;31m[session failed to start, exit code ${code}]\x1b[0m\r\n`);
+          } else {
+            this.xterm.write('\r\n\x1b[2m[session closed]\x1b[0m\r\n');
+          }
+        } catch {}
+      }
+      if (this.fallbackPre) {
+        this.fallbackPre.textContent += isError
+          ? `\n[session failed to start, exit code ${code}]\n`
+          : '\n[session closed]\n';
+      }
       this.closeListeners.forEach((cb) => { try { cb(code); } catch {} });
       if (this.stopButton) this.stopButton.disabled = true;
     }
