@@ -10,6 +10,11 @@ logger = logging.getLogger("afaq")
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # BaseHTTPMiddleware does not support WebSocket upgrades — skip the
+        # structured-log emit (we don't have a status code yet) and just
+        # delegate. Terminal WS connections are easy to identify by path.
+        if request.url.path.endswith("/ws"):
+            return await call_next(request)
         start = time.monotonic()
         response = await call_next(request)
         duration_ms = int((time.monotonic() - start) * 1000)

@@ -81,3 +81,74 @@ async def test_rate_limit_enforces_normal_paths():
     assert response.status_code == 200
     assert calls == ["/v1/models"]
     assert limiter.calls, "rate limiter MUST be called for normal paths"
+
+
+# ---------- LoggingMiddleware + RequestIdMiddleware same bypass ----------
+
+from app.middleware.logging import LoggingMiddleware
+from app.middleware.request_id import RequestIdMiddleware
+
+
+@pytest.mark.asyncio
+async def test_logging_middleware_bypasses_ws_path():
+    calls: list[str] = []
+
+    async def call_next(request: Request):
+        calls.append(request.url.path)
+        from starlette.responses import Response
+        return Response("ok")
+
+    middleware = LoggingMiddleware(app=None)
+    req = _make_request("/api/admin/terminal/abc/ws")
+    response = await middleware.dispatch(req, call_next)
+    assert response.status_code == 200
+    assert calls == ["/api/admin/terminal/abc/ws"], "logging middleware must not block WS handshake"
+
+
+@pytest.mark.asyncio
+async def test_request_id_middleware_bypasses_ws_path():
+    calls: list[str] = []
+
+    async def call_next(request: Request):
+        calls.append(request.url.path)
+        from starlette.responses import Response
+        return Response("ok")
+
+    middleware = RequestIdMiddleware(app=None)
+    req = _make_request("/api/admin/terminal/abc/ws")
+    response = await middleware.dispatch(req, call_next)
+    assert response.status_code == 200
+    assert calls == ["/api/admin/terminal/abc/ws"], "request-id middleware must not block WS handshake"
+
+
+@pytest.mark.asyncio
+async def test_logging_middleware_enforces_normal_paths():
+    calls: list[str] = []
+
+    async def call_next(request: Request):
+        calls.append(request.url.path)
+        from starlette.responses import Response
+        return Response("ok")
+
+    middleware = LoggingMiddleware(app=None)
+    req = _make_request("/v1/models")
+    response = await middleware.dispatch(req, call_next)
+    assert response.status_code == 200
+    assert calls == ["/v1/models"]
+
+
+@pytest.mark.asyncio
+async def test_request_id_middleware_enforces_normal_paths():
+    calls: list[str] = []
+
+    async def call_next(request: Request):
+        calls.append(request.url.path)
+        from starlette.responses import Response
+        return Response("ok")
+
+    middleware = RequestIdMiddleware(app=None)
+    req = _make_request("/v1/models")
+    response = await middleware.dispatch(req, call_next)
+    assert response.status_code == 200
+    assert calls == ["/v1/models"]
+    assert response.headers.get("X-Request-ID"), "request id must be set for normal paths"
