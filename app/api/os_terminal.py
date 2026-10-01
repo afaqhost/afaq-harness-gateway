@@ -194,11 +194,9 @@ async def _authenticate_ws(websocket: WebSocket) -> User | None:
     so standard browser WebSockets can authenticate (browsers cannot send custom headers
     during WebSocket upgrade handshake).
     """
-    from jose import JWTError, jwt
-    from sqlalchemy import select
-
-    from app.core.security import hash_api_key
+    from app.core.security import decode_jwt_subject, extract_bearer_token
     from app.db import database as db_mod
+    from app.repositories.auth_repository import get_active_api_key_by_raw, get_active_user_by_id
 
     raw = None
 
@@ -208,8 +206,7 @@ async def _authenticate_ws(websocket: WebSocket) -> User | None:
     # 2. Authorization header (for test clients and programmatic clients)
     if not raw:
         auth = websocket.headers.get("authorization") or websocket.headers.get("Authorization")
-        if auth and auth.lower().startswith("bearer "):
-            raw = auth.split(" ", 1)[1].strip()
+        raw = extract_bearer_token(auth)
 
     # 3. Cookie fallback
     if not raw:
@@ -240,31 +237,23 @@ async def _authenticate_ws(websocket: WebSocket) -> User | None:
 
     # JWT first (3 dot-separated segments)
     if raw.count(".") == 2:
-        try:
-            payload = jwt.decode(raw, settings.secret_key, algorithms=["HS256"])
-            uid = int(payload.get("sub"))
-        except (JWTError, TypeError, ValueError):
-            uid = None
-        if uid:
-            async with db_mod.SessionLocal() as session:
-                user = await session.get(db_mod.User, uid)
-                if user and user.is_active:
-                    return user
+        sub = decode_jwt_subject(raw)
+        if sub:
+            try:
+                uid = int(sub)
+                async with db_mod.SessionLocal() as session:
+                    user = await get_active_user_by_id(session, uid)
+                    if user:
+                        return user
+            except ValueError:
+                pass
 
     # API key fallback
-    digest = hash_api_key(raw)
     async with db_mod.SessionLocal() as session:
-        key = (
-            await session.execute(
-                select(db_mod.APIKey).where(db_mod.APIKey.key_hash == digest, db_mod.APIKey.is_active == True)
-            )
-        ).scalar_one_or_none()
+        key = await get_active_api_key_by_raw(session, raw)
         if not key:
             return None
-        user = await session.get(db_mod.User, key.user_id)
-        if user and user.is_active:
-            return user
-    return None
+        return await get_active_user_by_id(session, key.user_id)
 
 
 def _is_admin(user: User) -> bool:

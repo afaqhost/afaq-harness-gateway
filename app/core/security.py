@@ -22,6 +22,25 @@ def create_access_token(subject: str) -> str:
     expires = utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
     return jwt.encode({"sub": subject, "exp": expires}, settings.secret_key, algorithm=ALGORITHM)
 
+def decode_access_token(token: str) -> dict | None:
+    try:
+        return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+    except (jwt.JWTError, TypeError, ValueError):
+        return None
+
+def decode_jwt_subject(token: str) -> str | None:
+    payload = decode_access_token(token)
+    if payload is None:
+        return None
+    sub = payload.get("sub")
+    return str(sub) if sub is not None else None
+
+def extract_bearer_token(authorization: str | None) -> str | None:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    raw = authorization.split(" ", 1)[1].strip()
+    return raw if raw else None
+
 def generate_api_key() -> tuple[str, str, str]:
     raw = "afaq_" + secrets.token_urlsafe(32)
     return raw, raw[:14], hashlib.sha256(raw.encode()).hexdigest()

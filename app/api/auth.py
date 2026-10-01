@@ -5,8 +5,20 @@ from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
-from app.core.security import create_access_token, hash_api_key, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    decode_jwt_subject,
+    extract_bearer_token,
+    hash_api_key,
+    hash_password,
+    verify_password,
+)
 from app.db.database import APIKey, User, get_db
+from app.repositories.auth_repository import (
+    get_active_api_key_by_raw,
+    get_user_by_id,
+    touch_api_key_last_used,
+)
 from app.shared.time import utcnow
 
 router = APIRouter()
@@ -51,33 +63,27 @@ async def current_user(
     if not raw_token:
         # also try Authorization header manually (fallback)
         auth = request.headers.get("authorization") or request.headers.get("Authorization")
-        if auth and auth.lower().startswith("bearer "):
-            raw_token = auth[7:].strip()
+        raw_token = extract_bearer_token(auth)
     if not raw_token:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
     # try JWT first
-    try:
-        payload = jwt.decode(raw_token, settings.secret_key, algorithms=["HS256"])
-        user_id = int(payload.get("sub"))
-        user = await db.get(User, user_id)
-        if user and user.is_active:
-            return user
-        raise HTTPException(status_code=401, detail="Inactive or missing user")
-    except (JWTError, TypeError, ValueError):
-        pass
+    sub = decode_jwt_subject(raw_token)
+    if sub:
+        try:
+            user_id = int(sub)
+            user = await get_user_by_id(db, user_id)
+            if user and user.is_active:
+                return user
+            raise HTTPException(status_code=401, detail="Inactive or missing user")
+        except ValueError:
+            pass
     # fallback: try API key (allows chat/OpenAI via API key)
     try:
-        digest = hash_api_key(raw_token)
-        key = (await db.execute(select(APIKey).where(APIKey.key_hash == digest, APIKey.is_active == True))).scalar_one_or_none()
+        key = await get_active_api_key_by_raw(db, raw_token)
         if key:
-            user = await db.get(User, key.user_id)
+            user = await get_user_by_id(db, key.user_id)
             if user and user.is_active:
-                # update last_used_at best-effort
-                try:
-                    key.last_used_at = utcnow()
-                    await db.commit()
-                except (OSError, RuntimeError):
-                    await db.rollback()
+                await touch_api_key_last_used(db, key)
                 return user
     except (OSError, RuntimeError) as exc:
         import logging; logging.getLogger("afaq").warning("api_key_lookup_failed error=%s", exc)

@@ -13,9 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
 from app.core.config import settings
-from app.core.security import hash_api_key
+from app.core.security import extract_bearer_token, hash_api_key
 from app.db.database import APIKey, Conversation, Message, UsageRecord, User, get_db
 from app.harnesses.registry import get_adapter
+from app.repositories.auth_repository import get_active_api_key_by_raw
 from app.repositories.conversation_repository import (
     fetch_conversation_summary,
     get_conversation_or_404 as repo_get_conversation_or_404,
@@ -42,13 +43,10 @@ logger = logging.getLogger("afaq")
 
 
 async def _resolve_api_key(authorization: str | None, db: AsyncSession) -> APIKey | None:
-    if not authorization or not authorization.lower().startswith("bearer "):
+    raw = extract_bearer_token(authorization)
+    if not raw or not raw.startswith("afaq_"):
         return None
-    raw = authorization.split(" ", 1)[1].strip()
-    if not raw.startswith("afaq_"):
-        return None
-    digest = hash_api_key(raw)
-    return (await db.execute(select(APIKey).where(APIKey.key_hash == digest, APIKey.is_active == True))).scalar_one_or_none()
+    return await get_active_api_key_by_raw(db, raw)
 
 router = APIRouter()
 

@@ -6,15 +6,15 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from jose import JWTError, jwt
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.security import hash_api_key
+from app.core.security import decode_jwt_subject, extract_bearer_token, hash_api_key
 from app.db.database import APIKey, UsageRecord, User, get_db
 from app.harnesses.registry import all_adapters, cached_models, get_adapter
+from app.repositories.auth_repository import get_active_api_key_by_raw, get_active_user_by_id
 from app.services import credential_service, quota_service
 try:
     from app.api.metrics import HARNESS_CALLS, HARNESS_LATENCY
@@ -91,29 +91,26 @@ class ChatRequest(BaseModel):
 
 
 async def _try_jwt_identity(raw_token: str, db: AsyncSession) -> int | None:
-    try:
-        payload = jwt.decode(raw_token, settings.secret_key, algorithms=["HS256"])
-        user_id = int(payload.get("sub"))
-    except (JWTError, TypeError, ValueError):
+    sub = decode_jwt_subject(raw_token)
+    if not sub:
         return None
-    user = await db.get(User, user_id)
-    return user.id if user and user.is_active else None
+    try:
+        user_id = int(sub)
+    except ValueError:
+        return None
+    user = await get_active_user_by_id(db, user_id)
+    return user.id if user else None
 
 
 async def resolve_identity(authorization: str | None, db: AsyncSession) -> tuple[int | None, int | None]:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        return None, None
-    raw = authorization.split(" ", 1)[1].strip()
+    raw = extract_bearer_token(authorization)
     if not raw:
         return None, None
     if raw.count(".") == 2:
         user_id = await _try_jwt_identity(raw, db)
         if user_id:
             return user_id, None
-    digest = hash_api_key(raw)
-    key = (
-        await db.execute(select(APIKey).where(APIKey.key_hash == digest, APIKey.is_active == True))
-    ).scalar_one_or_none()
+    key = await get_active_api_key_by_raw(db, raw)
     if key:
         return key.user_id, key.id
     user_id = await _try_jwt_identity(raw, db)
