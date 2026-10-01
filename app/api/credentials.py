@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,8 @@ class CredentialCreate(BaseModel):
 
 
 class CredentialOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     harness: str
     profile_name: str
@@ -28,9 +30,6 @@ class CredentialOut(BaseModel):
     status: str
     last_checked_at: datetime | None = None
     created_at: datetime | None = None
-
-    class Config:
-        from_attributes = True
 
 
 def _to_out(p: CredentialProfile) -> dict:

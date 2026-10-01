@@ -7,7 +7,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,16 +71,17 @@ class MessageCreate(BaseModel):
 
 
 class MessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     role: str
     content: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class ConversationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     model: str
@@ -91,9 +92,6 @@ class ConversationOut(BaseModel):
     updated_at: datetime
     message_count: int | None = None
     last_message: str | None = None
-
-    class Config:
-        from_attributes = True
 
 
 class ConversationDetail(ConversationOut):
