@@ -188,79 +188,46 @@ async def _stream_response(
     collected: list[str] = []
 
     async def event_stream():
-        from app.services.process_registry import process_registry
-        from app.shared.sse import sse_event
+        from app.transport.stream import pump_harness_stream, replay_sse_events, store_and_format_sse
 
         history_key = f"openai:{user_id}"
         seq = 1
 
         def _store(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
-            if retry is None:
-                retry = settings.sse_retry_ms
-            payload = sse_event(event, data, id=id_val, retry=retry)
-            try:
-                process_registry.append_history(history_key, id_val if id_val is not None else seq, payload)
-            except (OSError, RuntimeError) as exc:
-                import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
+            nonlocal seq
+            target_id = id_val if id_val is not None else seq
+            payload = store_and_format_sse(history_key, event, data, target_id, retry)
+            seq = max(seq, target_id + 1)
             return payload
 
         # replay from Last-Event-ID
-        if last_event_id is not None:
-            try:
-                last_id = int(last_event_id)
-                for rp in process_registry.get_replay(history_key, last_id):
-                    yield rp
-                hist = process_registry.get_history(history_key)
-                if hist:
-                    seq = max(s for s, _ in hist) + 1
-                else:
-                    seq = last_id + 1
-            except ValueError:
-                pass
+        replayed, seq = replay_sse_events(history_key, last_event_id)
+        for rp in replayed:
+            yield rp
 
         # start lifecycle
         start_data = {"id": completion_id, "model": request_model, "created": int(time.time())}
-        yield _store("start", start_data, id_val=seq, retry=settings.sse_retry_ms)
-        seq += 1
+        yield _store("start", start_data)
 
         cancelled = False
         had_tool_call = False
         # env injection for harness
         env = await credential_service.get_env_for_harness(db, user_id, harness_name)
         stream_iter = adapter.stream(prompt, model, request_id=completion_id, env=env).__aiter__()
-        pending = None
         try:
-            while True:
-                if await request.is_disconnected():
-                    logger.info("client_disconnected cancelling completion_id=%s", completion_id)
-                    await process_registry.cancel(completion_id)
-                    cancelled = True
-                    if pending:
-                        pending.cancel()
-                    yield _store("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
-                    break
-                if pending is None:
-                    pending = asyncio.create_task(stream_iter.__anext__())
-                done, _ = await asyncio.wait([pending], timeout=settings.sse_heartbeat_seconds)
-                if not done:
+            async for item in pump_harness_stream(stream_iter, request, completion_id):
+                if item.is_keepalive:
                     yield ": keepalive\n\n"
                     continue
-                try:
-                    text, metadata = pending.result()
-                except StopAsyncIteration:
-                    break
-                pending = None
-
-                if await request.is_disconnected():
-                    await process_registry.cancel(completion_id)
+                if item.is_cancelled:
                     cancelled = True
-                    yield _store("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
+                    yield _store("cancel", {"code": "cancelled", "message": "cancelled by client"})
                     break
 
                 # tool_call handling
-                if "tool_call" in metadata:
+                if "tool_call" in item.metadata:
                     had_tool_call = True
-                    tc = metadata["tool_call"]
+                    tc = item.metadata["tool_call"]
                     # ensure normalized
                     if isinstance(tc, dict) and "function" in tc:
                         func = tc["function"]
@@ -274,26 +241,23 @@ async def _stream_response(
                         "model": request_model,
                         "choices": [{"index": 0, "delta": {"tool_calls": [{"id": tc["id"], "type": "function", "function": tc["function"]}]}, "finish_reason": None}],
                     }
-                    yield _store("tool_call", tool_chunk, id_val=seq, retry=settings.sse_retry_ms)
-                    seq += 1
+                    yield _store("tool_call", tool_chunk)
                     # stub tool_result
                     result_payload = {"tool_call_id": tc["id"], "status": "requires_action", "content": "requires_action"}
-                    yield _store("tool_result", result_payload, id_val=seq, retry=settings.sse_retry_ms)
-                    seq += 1
+                    yield _store("tool_result", result_payload)
                     continue
 
-                if not text:
+                if not item.text:
                     continue
-                collected.append(text)
+                collected.append(item.text)
                 chunk = {
                     "id": completion_id,
                     "object": "chat.completion.chunk",
                     "created": int(time.time()),
                     "model": request_model,
-                    "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
+                    "choices": [{"index": 0, "delta": {"content": item.text}, "finish_reason": None}],
                 }
-                yield _store("token", chunk, id_val=seq, retry=settings.sse_retry_ms)
-                seq += 1
+                yield _store("token", chunk)
 
             if cancelled:
                 return

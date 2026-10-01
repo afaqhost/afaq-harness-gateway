@@ -383,8 +383,7 @@ async def stream_message(
 
     async def event_stream():
         from app.db.database import SessionLocal
-        from app.services.process_registry import process_registry
-        from app.shared.sse import sse_event
+        from app.transport.stream import pump_harness_stream, replay_sse_events, store_and_format_sse
 
         collected: list[str] = []
         started = time.monotonic()
@@ -393,80 +392,43 @@ async def stream_message(
 
         # helper to yield and store in history
         def _store_and_yield(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
-            if retry is None:
-                retry = settings.sse_retry_ms
-            payload = sse_event(event, data, id=id_val, retry=retry)
-            # store for reconnect (per conv)
-            try:
-                process_registry.append_history(history_key, id_val if id_val is not None else seq, payload)
-            except (OSError, RuntimeError) as exc:
-                import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
+            nonlocal seq
+            target_id = id_val if id_val is not None else seq
+            payload = store_and_format_sse(history_key, event, data, target_id, retry)
+            seq = max(seq, target_id + 1)
             return payload
 
         # replay from Last-Event-ID if provided
-        if last_event_id is not None:
-            try:
-                last_id = int(last_event_id)
-                replay = process_registry.get_replay(history_key, last_id)
-                for rp in replay:
-                    yield rp
-                # set seq to max after replay
-                hist = process_registry.get_history(history_key)
-                if hist:
-                    seq = max(s for s, _ in hist) + 1
-                else:
-                    seq = last_id + 1
-            except ValueError:
-                pass
+        replayed, seq = replay_sse_events(history_key, last_event_id)
+        for rp in replayed:
+            yield rp
 
         # lifecycle: start
         start_data = {"id": str(conv.id), "model": model, "created": int(time.time()), "request_id": request_id}
-        yield _store_and_yield("start", start_data, id_val=seq, retry=settings.sse_retry_ms)
-        seq += 1
+        yield _store_and_yield("start", start_data)
 
-        # heartbeat + token loop with configurable timeout (keep pending task alive)
+        # heartbeat + token loop via transport pump
         stream_iter = adapter.stream(prompt, model_name, request_id=request_id, env=stream_env).__aiter__()
-        pending = None
         try:
-            while True:
-                if await request.is_disconnected():
-                    logger.info("client_disconnected cancelling request_id=%s", request_id)
-                    await process_registry.cancel(request_id)
-                    cancelled = True
-                    if pending:
-                        pending.cancel()
-                    yield _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
-                    break
-                if pending is None:
-                    pending = asyncio.create_task(stream_iter.__anext__())
-                done, _ = await asyncio.wait([pending], timeout=settings.sse_heartbeat_seconds)
-                if not done:
+            async for item in pump_harness_stream(stream_iter, request, request_id):
+                if item.is_keepalive:
                     yield ": keepalive\n\n"
                     continue
-                try:
-                    text, metadata = pending.result()
-                except StopAsyncIteration:
-                    break
-                pending = None
-
-                if await request.is_disconnected():
-                    await process_registry.cancel(request_id)
+                if item.is_cancelled:
                     cancelled = True
-                    yield _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
+                    yield _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled by client"})
                     break
-
-                if not text:
+                if not item.text:
                     continue
-                collected.append(text)
+                collected.append(item.text)
                 chunk = {
                     "id": str(conv.id),
                     "object": "chat.completion.chunk",
                     "created": int(time.time()),
                     "model": model,
-                    "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
+                    "choices": [{"index": 0, "delta": {"content": item.text}, "finish_reason": None}],
                 }
-                yield _store_and_yield("token", chunk, id_val=seq, retry=settings.sse_retry_ms)
-                seq += 1
+                yield _store_and_yield("token", chunk)
 
             if cancelled:
                 return
