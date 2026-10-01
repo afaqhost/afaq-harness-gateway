@@ -45,3 +45,40 @@ async def list_usage(
 async def count_usage_for_user(db: AsyncSession, user_id: int) -> int:
     stmt = select(func.count()).select_from(UsageRecord).where(UsageRecord.user_id == user_id)
     return int(await db.scalar(stmt) or 0)
+
+
+async def record_usage(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    api_key_id: int | None = None,
+    harness: str,
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    total_tokens: int | None = None,
+    latency_ms: int = 0,
+    cached_tokens: int = 0,
+    status: str = "success",
+    cost: float = 0.0,
+    auto_commit: bool = True,
+) -> UsageRecord:
+    """Create and optionally commit a new UsageRecord."""
+    tot = total_tokens if total_tokens is not None else (prompt_tokens + completion_tokens)
+    rec = UsageRecord(
+        user_id=user_id,
+        api_key_id=api_key_id,
+        harness=harness,
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cached_tokens=cached_tokens,
+        total_tokens=tot,
+        latency_ms=latency_ms,
+        status=status,
+        cost=cost,
+    )
+    db.add(rec)
+    if auto_commit:
+        await db.commit()
+    return rec

@@ -12,9 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import decode_jwt_subject, extract_bearer_token, hash_api_key
-from app.db.database import APIKey, UsageRecord, User, get_db
+from app.db.database import APIKey, User, get_db
 from app.harnesses.registry import all_adapters, cached_models, get_adapter
 from app.repositories.auth_repository import get_active_api_key_by_raw, get_active_user_by_id
+from app.repositories.usage_repository import record_usage
 from app.services import credential_service, quota_service
 try:
     from app.api.metrics import HARNESS_CALLS, HARNESS_LATENCY
@@ -283,19 +284,17 @@ async def _stream_response(
 
             yield _store("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
 
-            db.add(
-                UsageRecord(
-                    user_id=user_id,
-                    api_key_id=key_id,
-                    harness=harness_name,
-                    model=request_model,
-                    prompt_tokens=len(prompt.split()),
-                    completion_tokens=len("".join(collected).split()),
-                    total_tokens=len(prompt.split()) + len("".join(collected).split()),
-                    latency_ms=int((time.monotonic() - started) * 1000),
-                )
+            await record_usage(
+                db,
+                user_id=user_id,
+                api_key_id=key_id,
+                harness=harness_name,
+                model=request_model,
+                prompt_tokens=len(prompt.split()),
+                completion_tokens=len("".join(collected).split()),
+                total_tokens=len(prompt.split()) + len("".join(collected).split()),
+                latency_ms=int((time.monotonic() - started) * 1000),
             )
-            await db.commit()
         except RuntimeError as exc:
             msg_lower = str(exc).lower()
             is_killed = "exit code -9" in msg_lower or "exit code -15" in msg_lower or "killed" in msg_lower
@@ -377,20 +376,18 @@ async def _non_stream_response(adapter, prompt: str, model: str, request_model: 
         "cached_tokens": result.cached_tokens,
     }
     usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
-    db.add(
-        UsageRecord(
-            user_id=user_id,
-            api_key_id=key_id,
-            harness=harness_name,
-            model=request_model,
-            prompt_tokens=usage["prompt_tokens"],
-            completion_tokens=usage["completion_tokens"],
-            cached_tokens=usage["cached_tokens"],
-            total_tokens=usage["total_tokens"],
-            latency_ms=int((time.monotonic() - started) * 1000),
-        )
+    await record_usage(
+        db,
+        user_id=user_id,
+        api_key_id=key_id,
+        harness=harness_name,
+        model=request_model,
+        prompt_tokens=usage["prompt_tokens"],
+        completion_tokens=usage["completion_tokens"],
+        cached_tokens=usage["cached_tokens"],
+        total_tokens=usage["total_tokens"],
+        latency_ms=int((time.monotonic() - started) * 1000),
     )
-    await db.commit()
 
     # tool_calls handling for non-stream
     if request_payload and request_payload.tools:

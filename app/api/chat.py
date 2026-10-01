@@ -14,13 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import current_user
 from app.core.config import settings
 from app.core.security import extract_bearer_token, hash_api_key
-from app.db.database import APIKey, Conversation, Message, UsageRecord, User, get_db
+from app.db.database import APIKey, Conversation, Message, User, get_db
 from app.harnesses.registry import get_adapter
 from app.repositories.auth_repository import get_active_api_key_by_raw
 from app.repositories.conversation_repository import (
     fetch_conversation_summary,
     get_conversation_or_404 as repo_get_conversation_or_404,
 )
+from app.repositories.usage_repository import record_usage
 from app.services import credential_service, quota_service
 from app.services.model_service import (
     select_model_for_conversation,
@@ -313,20 +314,18 @@ async def send_message(
         "cached_tokens": result_h.cached_tokens or 0,
     }
     usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
-    db.add(
-        UsageRecord(
-            user_id=user.id,
-            api_key_id=None,
-            harness=harness_name,
-            model=model,
-            prompt_tokens=usage["prompt_tokens"],
-            completion_tokens=usage["completion_tokens"],
-            cached_tokens=usage["cached_tokens"],
-            total_tokens=usage["total_tokens"],
-            latency_ms=int((time.monotonic() - started) * 1000),
-        )
+    await record_usage(
+        db,
+        user_id=user.id,
+        api_key_id=None,
+        harness=harness_name,
+        model=model,
+        prompt_tokens=usage["prompt_tokens"],
+        completion_tokens=usage["completion_tokens"],
+        cached_tokens=usage["cached_tokens"],
+        total_tokens=usage["total_tokens"],
+        latency_ms=int((time.monotonic() - started) * 1000),
     )
-    await db.commit()
     await db.refresh(assistant_msg)
     await db.refresh(conv)
     return {
@@ -465,17 +464,17 @@ async def stream_message(
                 conv2 = await session.get(Conversation, conv.id)
                 if conv2:
                     conv2.updated_at = utcnow()
-                session.add(
-                    UsageRecord(
-                        user_id=user.id,
-                        api_key_id=None,
-                        harness=harness_name,
-                        model=model,
-                        prompt_tokens=len(prompt.split()),
-                        completion_tokens=len(full_text.split()),
-                        total_tokens=len(prompt.split()) + len(full_text.split()),
-                        latency_ms=int((time.monotonic() - started) * 1000),
-                    )
+                await record_usage(
+                    session,
+                    user_id=user.id,
+                    api_key_id=None,
+                    harness=harness_name,
+                    model=model,
+                    prompt_tokens=len(prompt.split()),
+                    completion_tokens=len(full_text.split()),
+                    total_tokens=len(prompt.split()) + len(full_text.split()),
+                    latency_ms=int((time.monotonic() - started) * 1000),
+                    auto_commit=False,
                 )
                 await session.commit()
         except RuntimeError as exc:
