@@ -2,11 +2,14 @@ services:
   redis:
     image: redis:7-alpine
     container_name: afaq-redis
-    ports:
-      - "6379:6379"
     volumes:
       - afaq_redis:/data
     command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
     mem_limit: 64m
 
@@ -15,19 +18,20 @@ services:
     image: afaq-harness-gateway:latest
     container_name: afaq-harness-gateway
     ports:
-      - "3500:3500"
+      - "127.0.0.1:3500:3500"
     env_file:
       - .env
     environment:
       - REDIS_URL=redis://redis:6379/0
       - REDIS_ENABLED=true
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     volumes:
       - afaq_data:/app/data
       - afaq_storage:/app/storage
-      - afaq_harnesses:/root/.npm
-      - afaq_local_bin:/root/.local
+      - afaq_harnesses:/home/node/.npm-global
+      - afaq_local_bin:/home/node/.local
       # DO NOT mount docker.sock in production — use Docker TCP+TLS or build-only image
     restart: unless-stopped
 volumes:

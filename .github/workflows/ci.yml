@@ -25,3 +25,25 @@ jobs:
         run: node --check app/static/app.js
       - name: Pytest
         run: python -m pytest -q
+      - name: Create temporary .env for Compose
+        run: |
+          python3 -c "import secrets; open('.env', 'w').write(f'SECRET_KEY={secrets.token_urlsafe(48)}\nCREDENTIALS_KEY={secrets.token_urlsafe(48)}\n')"
+      - name: Build Docker image
+        run: docker compose build
+      - name: Start Compose stack and run health smoke test
+        run: |
+          docker compose up -d
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3500/health; then
+              echo "Gateway is healthy and reachable"
+              exit 0
+            fi
+            echo "Waiting for gateway to be healthy ($i/30)..."
+            sleep 2
+          done
+          echo "Gateway health check timed out"
+          docker compose logs
+          exit 1
+      - name: Tear down Compose
+        if: always()
+        run: docker compose down -v --remove-orphans
