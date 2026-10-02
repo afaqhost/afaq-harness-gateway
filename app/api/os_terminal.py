@@ -196,7 +196,7 @@ async def _authenticate_ws(websocket: WebSocket) -> User | None:
     """
     from app.core.security import decode_jwt_subject, extract_bearer_token
     from app.db import database as db_mod
-    from app.repositories.auth_repository import get_active_api_key_by_raw, get_active_user_by_id
+    from app.repositories.auth_repository import get_active_user_by_id
 
     raw = None
 
@@ -235,7 +235,7 @@ async def _authenticate_ws(websocket: WebSocket) -> User | None:
     if raw.lower().startswith("bearer "):
         raw = raw.split(" ", 1)[1].strip()
 
-    # JWT first (3 dot-separated segments)
+    # JWT (3 dot-separated segments)
     if raw.count(".") == 2:
         sub = decode_jwt_subject(raw)
         if sub:
@@ -248,12 +248,7 @@ async def _authenticate_ws(websocket: WebSocket) -> User | None:
             except ValueError:
                 pass
 
-    # API key fallback
-    async with db_mod.SessionLocal() as session:
-        key = await get_active_api_key_by_raw(session, raw)
-        if not key:
-            return None
-        return await get_active_user_by_id(session, key.user_id)
+    return None
 
 
 def _is_admin(user: User) -> bool:

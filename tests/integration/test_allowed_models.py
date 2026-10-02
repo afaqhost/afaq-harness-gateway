@@ -142,8 +142,7 @@ async def test_allowed_models_none_allows_any(client, db_session, regular_user):
 
 
 @pytest.mark.asyncio
-async def test_chat_send_message_allowed_models_enforced(client, db_session, regular_user):
-    # also test via chat endpoint with API key
+async def test_chat_conversations_rejects_api_key_authentication(client, db_session, regular_user):
     raw, prefix, digest = generate_api_key()
     key = APIKey(
         user_id=regular_user.id,
@@ -157,17 +156,5 @@ async def test_chat_send_message_allowed_models_enforced(client, db_session, reg
     await db_session.refresh(key)
     headers = {"Authorization": f"Bearer {raw}"}
 
-    # need to ensure current_user accepts API key (patched in auth)
-    # create conversation via chat with API key
     resp = await client.post("/api/chat/conversations", headers=headers, json={"model": "opencode//opencode/big-pickle"})
-    # if chat creation enforces allowed, should succeed for allowed model
-    assert resp.status_code == 200
-    conv_id = resp.json()["id"]
-
-    # try sending message with disallowed model
-    resp2 = await client.post(
-        f"/api/chat/conversations/{conv_id}/messages",
-        headers=headers,
-        json={"content": "hello", "model": "commandcode//deepseek/deepseek-v4-flash"},
-    )
-    assert resp2.status_code == 403
+    assert resp.status_code == 401

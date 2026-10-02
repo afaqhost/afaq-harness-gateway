@@ -192,8 +192,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return f"auth:{auth[:80]}"
         # fallback to client IP
         client_host = request.client.host if request.client else "anonymous"
-        # respect X-Forwarded-For if behind proxy
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            client_host = forwarded.split(",")[0].strip()
+        # Only trust X-Forwarded-For if immediate peer is in trusted_proxies
+        trusted_proxies = {ip.strip() for ip in settings.trusted_proxies.split(",") if ip.strip()}
+        if client_host in trusted_proxies:
+            forwarded = request.headers.get("x-forwarded-for")
+            if forwarded:
+                candidate = forwarded.split(",")[0].strip()
+                if candidate:
+                    client_host = candidate
         return f"ip:{client_host}"

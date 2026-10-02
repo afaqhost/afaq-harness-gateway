@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     model_refresh_seconds: int = 300
     rate_limit_per_minute: int = 60
     rate_limit_enabled: bool = True
+    trusted_proxies: str = ""
     redis_url: str = ""  # e.g. redis://localhost:6379/0 — empty = in-memory fallback
     redis_enabled: bool = False  # set True when REDIS_URL is set and redis is available
     sse_heartbeat_seconds: int = 15
@@ -31,6 +32,36 @@ class Settings(BaseSettings):
     default_system_prompt: str = ""  # transparent passthrough: no injected SYSTEM block unless client sends one. Keeps harness as direct model API.
     # To enforce text-only centrally, set via env: DEFAULT_SYSTEM_PROMPT="You are a helpful assistant. Return text only, do not write files."
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+INSECURE_SECRETS = {
+    "",
+    "change-me-in-production",
+    "change-me-in-production-32-byte-key",
+    "replace-with-a-long-random-secret",
+    "replace-with-a-long-random-encryption-secret",
+    "replace-with-a-long-random-secret-generate-with-secrets-token_urlsafe",
+    "replace-with-a-long-random-encryption-secret-generate-with-secrets-token_urlsafe",
+    "secret",
+    "password",
+    "admin",
+    "test",
+}
+
+
+def validate_production_secret(key: str, name: str) -> None:
+    if not key or not key.strip():
+        raise RuntimeError(f"{name} must be set to a strong random value in production (debug=false)")
+    val = key.strip()
+    if len(val) < 32:
+        raise RuntimeError(f"{name} is too short; must be at least 32 characters in production (debug=false)")
+    low = val.lower()
+    if val in INSECURE_SECRETS or any(ph in low for ph in ("replace-with", "change-me", "placeholder")):
+        raise RuntimeError(f"{name} must not use example or known weak placeholder values in production (debug=false)")
+
+
+def validate_production_settings(s: Settings) -> None:
+    validate_production_secret(s.secret_key, "SECRET_KEY")
+    validate_production_secret(s.credentials_key, "CREDENTIALS_KEY")
 
 @lru_cache
 def get_settings() -> Settings:
@@ -48,11 +79,7 @@ def get_settings() -> Settings:
     # Skip check during tests (PYTEST_CURRENT_TEST env set) or when using in-memory DB or pytest imported
     is_test = bool(os.getenv("PYTEST_CURRENT_TEST")) or ":memory:" in settings.database_url or "pytest" in sys.modules
     if not settings.debug and not is_test:
-        insecure_secrets = {"", "change-me-in-production", "change-me-in-production-32-byte-key", "replace-with-a-long-random-secret", "replace-with-a-long-random-encryption-secret"}
-        if settings.secret_key in insecure_secrets or not settings.secret_key:
-            raise RuntimeError("SECRET_KEY must be set to a strong random value in production (debug=false)")
-        if settings.credentials_key in insecure_secrets or not settings.credentials_key:
-            raise RuntimeError("CREDENTIALS_KEY must be set to a strong random value in production (debug=false)")
+        validate_production_settings(settings)
     return settings
 
 settings = get_settings()
