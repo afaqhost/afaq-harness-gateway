@@ -4,19 +4,30 @@ from datetime import timedelta
 
 from cryptography.fernet import Fernet
 from jose import jwt
-from passlib.context import CryptContext
+import bcrypt
 
 from app.core.config import settings
 from app.shared.time import utcnow
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+BCRYPT_MAX_PASSWORD_BYTES = 72
 ALGORITHM = "HS256"
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    pwd_bytes = password.encode("utf-8")
+    if len(pwd_bytes) > BCRYPT_MAX_PASSWORD_BYTES:
+        raise ValueError(f"Password cannot exceed {BCRYPT_MAX_PASSWORD_BYTES} bytes")
+    return bcrypt.hashpw(pwd_bytes, bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return pwd_context.verify(password, password_hash)
+    if not isinstance(password, str) or not isinstance(password_hash, str):
+        return False
+    pwd_bytes = password.encode("utf-8")
+    if len(pwd_bytes) > BCRYPT_MAX_PASSWORD_BYTES:
+        return False
+    try:
+        return bcrypt.checkpw(pwd_bytes, password_hash.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 def create_access_token(subject: str) -> str:
     expires = utcnow() + timedelta(minutes=settings.access_token_expire_minutes)

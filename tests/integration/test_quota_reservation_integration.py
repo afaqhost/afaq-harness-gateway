@@ -81,6 +81,8 @@ async def shared_db(tmp_path: Path):
     yield engine, session_factory, db_path
 
     quota_service.set_session_factory(None)
+    if hasattr(engine.sync_engine.pool, "checkedout"):
+        assert engine.sync_engine.pool.checkedout() == 0
     await engine.dispose()
 
 

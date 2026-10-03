@@ -92,8 +92,9 @@ async def test_harness_health_unknown_returns_404(client, user_headers):
 
 @pytest.mark.asyncio
 async def test_harnesses_list_includes_last_checked_at(client, user_headers):
-    # call health to update last_checked_at, then list
-    await client.get("/api/admin/harnesses/opencode/health", headers=user_headers)
+    # call health with mocked model discovery to update last_checked_at without invoking real local CLI, then list
+    with patch("app.clients.opencode.OpenCodeAdapter.list_models", new=AsyncMock(return_value=[])):
+        await client.get("/api/admin/harnesses/opencode/health", headers=user_headers)
     resp = await client.get("/api/admin/harnesses", headers=user_headers)
     assert resp.status_code == 200
     data = resp.json()
@@ -104,7 +105,9 @@ async def test_harnesses_list_includes_last_checked_at(client, user_headers):
 
 @pytest.mark.asyncio
 async def test_refresh_updates_health(client, admin_headers):
-    # refresh should update model cache and be fast
-    resp = await client.post("/api/admin/harnesses/refresh", headers=admin_headers)
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "refreshed"
+    # refresh should update model cache and be fast, without invoking real local CLIs
+    with patch("app.api.admin.refresh_models", new=AsyncMock()) as mock_refresh:
+        resp = await client.post("/api/admin/harnesses/refresh", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "refreshed"
+        mock_refresh.assert_awaited_once()

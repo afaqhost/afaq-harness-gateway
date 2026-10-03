@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from app.clients.base import HarnessAdapter
+from app.clients.base import HarnessAdapter, communicate_with_timeout
 from app.models.harness import HarnessModel
 
 # Antigravity CLI ships as a standalone Go binary, not an npm package — there is no
@@ -126,7 +126,7 @@ class AgyAdapter(HarnessAdapter):
             proc = await asyncio.create_subprocess_exec(
                 self.executable, "models", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=4)
+            stdout, _ = await communicate_with_timeout(proc, timeout=4)
             if proc.returncode != 0:
                 raise RuntimeError(f"agy models exit {proc.returncode}")
             models = []

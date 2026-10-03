@@ -30,6 +30,8 @@ class RegisterRequest(BaseModel):
     def validate_password(cls, v: str) -> str:
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters")
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
         return v
 
 
@@ -95,8 +97,6 @@ async def bootstrap(registration: RegisterRequest, db: AsyncSession = Depends(ge
     existing = (await db.execute(select(User).limit(1))).scalar_one_or_none()
     if existing:
         raise HTTPException(status_code=409, detail="Bootstrap already completed")
-    if len(registration.password) < 8:
-        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
     user = User(
         email=registration.email,
         password_hash=hash_password(registration.password),
@@ -114,6 +114,8 @@ async def bootstrap(registration: RegisterRequest, db: AsyncSession = Depends(ge
 
 @router.post("/login")
 async def login(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    if len(form.password.encode("utf-8")) > 72:
+        raise HTTPException(status_code=422, detail="Password cannot exceed 72 bytes")
     email = form.username.strip().lower()
     user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
     # fallback case-sensitive for legacy data

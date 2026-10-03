@@ -53,6 +53,38 @@ def _executable_on_disk(executable: str, extra_paths: list[str | os.PathLike[str
     return None
 
 
+async def communicate_with_timeout(
+    process: asyncio.subprocess.Process,
+    timeout: float,
+    cleanup_timeout: float = 2.0,
+) -> tuple[bytes, bytes]:
+    """Await process.communicate() with timeout, ensuring child termination and pipe cleanup.
+
+    On timeout:
+    1. Kills child process if still alive.
+    2. Awaits communicate() bounded by cleanup_timeout so the process is reaped
+       and stdout/stderr transports reach EOF/close.
+    3. Preserves timeout semantics by re-raising asyncio.TimeoutError.
+    4. Handles ProcessLookupError precisely and preserves unrelated errors.
+    """
+    try:
+        return await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except (asyncio.TimeoutError, asyncio.CancelledError):
+        try:
+            if process.returncode is None:
+                process.kill()
+        except ProcessLookupError:
+            pass
+        try:
+            await asyncio.shield(asyncio.wait_for(process.communicate(), timeout=cleanup_timeout))
+        except (asyncio.TimeoutError, asyncio.CancelledError, ProcessLookupError):
+            try:
+                await process.wait()
+            except ProcessLookupError:
+                pass
+        raise
+
+
 async def _drain_subprocess(
     process: asyncio.subprocess.Process,
     timeout: float,
@@ -394,13 +426,8 @@ class HarnessAdapter(ABC):
                     logger.warning("harness_registry_best_effort_failed error=%s", exc)
             run_timeout = min(settings.harness_timeout_seconds, 90)
             try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=run_timeout)
+                stdout, stderr = await communicate_with_timeout(process, timeout=run_timeout)
             except asyncio.TimeoutError:
-                try:
-                    process.kill()
-                    await process.wait()
-                except ProcessLookupError:
-                    pass
                 raise RuntimeError(
                     f"{self.name} timed out after {run_timeout}s — model '{model}' may be unavailable or harness hung. "
                     "Try a different model (e.g. opencode/big-pickle)."

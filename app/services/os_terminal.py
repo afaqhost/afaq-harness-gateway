@@ -4,7 +4,7 @@ Same shape as CasaOS / VS Code / JupyterLab's terminal: spawn a login shell
 under a real PTY, expose it over asyncio primitives so the WebSocket
 endpoint in `app/api/os_terminal.py` can pump bytes both ways.
 
-POSIX only (`pty.openpty`). Windows hosts refuse at API layer.
+POSIX only (openpty + posix_spawn). Windows hosts refuse at API layer.
 """
 
 from __future__ import annotations
@@ -14,9 +14,9 @@ import errno
 import fcntl
 import logging
 import os
-import pty
 import signal
 import struct
+import sys
 import termios
 import time
 import uuid
@@ -78,8 +78,8 @@ class OsTerminalService:
         cols: int = 80,
         rows: int = 24,
     ) -> TerminalSession:
-        if not hasattr(os, "fork") or not hasattr(pty, "openpty"):
-            raise TerminalError("OS terminal requires a POSIX host (pty.openpty not available).")
+        if not hasattr(os, "posix_spawn") or not hasattr(os, "openpty"):
+            raise TerminalError("OS terminal requires a POSIX host with posix_spawn and openpty.")
 
         # Resolve shell path. If the explicit path doesn't exist or isn't
         # executable, fall back to a known list of shells (bash, zsh, sh)
@@ -101,11 +101,11 @@ class OsTerminalService:
                 f"No usable shell found (tried: {explicit_shell}, /bin/bash, /bin/zsh, /bin/sh). "
                 "Set $SHELL or pass `shell` in the request."
             )
-        shell = shell_candidates[0]
+        primary_shell = shell_candidates[0]
         # Validate exec perms so we get a clear error instead of EPERM at exec time
-        if not os.access(shell, os.X_OK):
+        if not os.access(primary_shell, os.X_OK):
             raise TerminalError(
-                f"Shell not executable: {shell} (check filesystem mount options: noexec)."
+                f"Shell not executable: {primary_shell} (check filesystem mount options: noexec)."
             )
 
         cwd = cwd or os.getcwd()
@@ -115,90 +115,71 @@ class OsTerminalService:
         cols = max(20, min(cols, 500))
         rows = max(5, min(rows, 200))
 
-        # pty.fork creates the child + opens the PTY in one syscall; safer than
-        # fork()+exec because the controlling-terminal setup is done in the
-        # child before exec.
-        pid, fd = pty.fork()
-        if pid == 0:
-            # Child: set up env, become session leader, exec shell.
-            try:
-                os.chdir(cwd)
-            except OSError as exc:
-                os.write(2, f"\r\nchdir failed: {exc}\r\n".encode())
-                # Stay alive briefly so the parent reads the error; the parent's
-                # reader will see EOF when we exit. We sleep so the WS has time
-                # to send the message before the PTY closes.
-                try:
-                    import time as _time; _time.sleep(0.5)
-                except Exception:
-                    pass
-                os._exit(126)
-            try:
-                os.environ["TERM"] = os.environ.get("TERM") or "xterm-256color"
-                os.environ["AFAQ_TERMINAL"] = "1"
-                os.environ["COLORTERM"] = os.environ.get("COLORTERM", "truecolor")
-                # ensure the child is its own session leader so the PTY becomes
-                # its controlling tty (pty.fork often sets this already; ignore EPERM)
-                try:
-                    os.setsid()
-                except OSError:
-                    pass
-                # best-effort: make the PTY its controlling tty
-                try:
-                    fcntl.ioctl(0, termios.TIOCSCTTY, 0)
-                except OSError:
-                    pass
-                # Try each shell candidate. If the first one fails (e.g. EPERM
-                # because of no_new_privs, or ENOENT because of a deleted cwd),
-                # fall through to the next. This matches the order the parent
-                # resolved above.
-                last_err: Exception | None = None
-                for candidate in shell_candidates:
-                    try:
-                        os.execvp(candidate, [candidate, "-l"])
-                        return  # unreachable
-                    except OSError as exc:
-                        last_err = exc
-                        continue
-                # All candidates failed — write the last error to the PTY
-                # and keep it open long enough for the user to read it.
-                os.write(2, f"\r\n\033[1;31mexec failed\033[0m: {last_err}\r\n".encode())
-                os.write(2, f"  tried: {' '.join(shell_candidates)}\r\n".encode())
-                os.write(2, "\r\nThis often means:\r\n".encode())
-                os.write(2, "  - the shell binary has lost its execute permission\r\n".encode())
-                os.write(2, "  - the binary lives on a noexec-mounted filesystem\r\n".encode())
-                os.write(2, "  - the container has no_new_privs set (execve denied)\r\n".encode())
-                os.write(2, "\r\nPress Ctrl+D or close this tab.\r\n".encode())
-                # Drain stdin so xterm doesn't echo back junk
-                try:
-                    import select as _select
-                    _select.select([0], [], [], 0.5)
-                except Exception:
-                    pass
-                # Sleep so the parent reader has time to flush the message to
-                # the WS before the PTY closes.
-                try:
-                    import time as _time; _time.sleep(5.0)
-                except Exception:
-                    pass
-                os._exit(127)
-            except OSError as exc:
-                os.write(2, f"\r\nexec failed: {exc}\r\n".encode())
-                os._exit(127)
-
-        # Parent: set initial size and register.
+        master_fd, slave_fd = os.openpty()
         try:
-            self._set_winsize(fd, rows, cols)
+            file_actions = [
+                (os.POSIX_SPAWN_DUP2, slave_fd, 0),
+                (os.POSIX_SPAWN_DUP2, slave_fd, 1),
+                (os.POSIX_SPAWN_DUP2, slave_fd, 2),
+                (os.POSIX_SPAWN_CLOSE, master_fd),
+                (os.POSIX_SPAWN_CLOSE, slave_fd),
+            ]
+
+            cmd = [
+                sys.executable,
+                "-m",
+                "app.services.os_terminal_child",
+                "--cwd",
+                cwd,
+                *shell_candidates,
+            ]
+
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            child_env = dict(os.environ)
+            existing_pp = child_env.get("PYTHONPATH", "")
+            child_env["PYTHONPATH"] = f"{project_root}:{existing_pp}" if existing_pp else project_root
+
+            # Spawn child wrapper module via posix_spawn; setsid where supported
+            try:
+                pid = os.posix_spawn(
+                    sys.executable,
+                    cmd,
+                    child_env,
+                    file_actions=file_actions,
+                    setsid=True,
+                )
+            except (TypeError, ValueError, NotImplementedError):
+                pid = os.posix_spawn(
+                    sys.executable,
+                    cmd,
+                    child_env,
+                    file_actions=file_actions,
+                )
+        except Exception:
+            try:
+                os.close(master_fd)
+            except OSError:
+                pass
+            raise
+        finally:
+            try:
+                os.close(slave_fd)
+            except OSError:
+                pass
+
+        # Set initial size on master fd
+        try:
+            self._set_winsize(master_fd, rows, cols)
         except OSError as exc:
-            logger.warning("terminal_winsize_failed fd=%s error=%s", fd, exc)
+            logger.warning("terminal_winsize_failed fd=%s error=%s", master_fd, exc)
 
         terminal_id = uuid.uuid4().hex[:16]
         session = TerminalSession(
             terminal_id=terminal_id,
             user_id=user_id,
-            fd=fd,
+            fd=master_fd,
             pid=pid,
-            shell=shell,
+            shell=primary_shell,
             cwd=cwd,
             cols=cols,
             rows=rows,
@@ -206,7 +187,7 @@ class OsTerminalService:
         async with self._lock:
             self._sessions[terminal_id] = session
         session._reader_task = asyncio.create_task(self._read_loop(session), name=f"term-{terminal_id}")
-        logger.info("terminal_started id=%s user_id=%s pid=%s shell=%s cwd=%s", terminal_id, user_id, pid, shell, cwd)
+        logger.info("terminal_started id=%s user_id=%s pid=%s shell=%s cwd=%s", terminal_id, user_id, pid, primary_shell, cwd)
         return session
 
     async def stop(self, terminal_id: str, user_id: int | None = None) -> bool:
@@ -226,11 +207,12 @@ class OsTerminalService:
         if session._stopped:
             return
         session._stopped = True
-        # close the fd so the reader loop wakes from blocking read
+        # close the master fd so the reader loop wakes from blocking read
         try:
             os.close(session.fd)
         except OSError:
             pass
+
         # signal the shell and its process group (SIGHUP triggers clean hangup)
         for sig in (signal.SIGHUP, signal.SIGTERM):
             try:
@@ -242,31 +224,55 @@ class OsTerminalService:
             except (ProcessLookupError, OSError):
                 pass
 
-        async def _force_kill() -> None:
-            await asyncio.sleep(2.0)
-            try:
-                os.kill(session.pid, signal.SIGKILL)
-            except (ProcessLookupError, OSError):
-                pass
-
-        asyncio.create_task(_force_kill())
-
-        if session._reader_task is not None and not session._reader_task.done():
-            try:
-                await asyncio.wait_for(session._reader_task, timeout=0.5)
-            except asyncio.TimeoutError:
-                session._reader_task.cancel()
-        # Reap the child to capture exit code (non-blocking; WNOHANG in case
-        # SIGKILL hasn't taken effect yet — we'll reap on the next call).
+        # Check if already exited
         try:
             wpid, status = os.waitpid(session.pid, os.WNOHANG)
             if wpid == session.pid:
                 session.exit_code = self._decode_status(status)
-                logger.info("terminal_exit id=%s pid=%s exit_code=%s", session.terminal_id, session.pid, session.exit_code)
-        except ChildProcessError:
+        except (ChildProcessError, OSError):
             pass
-        except OSError as exc:
-            logger.debug("terminal_waitpid_best_effort error=%s", exc)
+
+        # Bounded graceful wait
+        if session.exit_code is None and self._pid_alive(session.pid):
+            for _ in range(8):
+                await asyncio.sleep(0.05)
+                try:
+                    wpid, status = os.waitpid(session.pid, os.WNOHANG)
+                    if wpid == session.pid:
+                        session.exit_code = self._decode_status(status)
+                        break
+                except (ChildProcessError, OSError):
+                    break
+
+        # Force kill if still running and reap
+        if session.exit_code is None and self._pid_alive(session.pid):
+            try:
+                os.kill(session.pid, signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                pass
+            try:
+                os.killpg(session.pid, signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                pass
+            for _ in range(8):
+                try:
+                    wpid, status = os.waitpid(session.pid, os.WNOHANG)
+                    if wpid == session.pid:
+                        session.exit_code = self._decode_status(status)
+                        break
+                except (ChildProcessError, OSError):
+                    break
+                await asyncio.sleep(0.05)
+
+        # Cancel reader task and await completion
+        if session._reader_task is not None and not session._reader_task.done():
+            session._reader_task.cancel()
+            try:
+                await session._reader_task
+            except asyncio.CancelledError:
+                pass
+
+        logger.info("terminal_exit id=%s pid=%s exit_code=%s", session.terminal_id, session.pid, session.exit_code)
         try:
             session._output_queue.put_nowait(None)  # sentinel for stream()
         except asyncio.QueueFull:

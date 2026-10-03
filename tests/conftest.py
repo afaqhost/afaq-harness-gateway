@@ -20,6 +20,8 @@ async def test_engine():
     yield engine
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    if hasattr(engine.sync_engine.pool, "checkedout"):
+        assert engine.sync_engine.pool.checkedout() == 0
     await engine.dispose()
 
 
@@ -86,10 +88,12 @@ async def client(db_session: AsyncSession, test_engine):
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
     with patch("app.db.database.SessionLocal", TestSessionLocal):
         app.dependency_overrides[get_db] = override_get_db
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            yield ac
-        app.dependency_overrides.clear()
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                yield ac
+        finally:
+            app.dependency_overrides.pop(get_db, None)
 
 
 @pytest_asyncio.fixture

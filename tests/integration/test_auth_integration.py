@@ -97,3 +97,38 @@ async def test_api_key_lifecycle_create_list_toggle_delete(client, db_session, u
     # verify deleted
     resp5 = await client.get("/api/admin/keys", headers=user_headers)
     assert all(k["id"] != key_id for k in resp5.json())
+
+
+@pytest.mark.asyncio
+async def test_login_rejects_oversize_password_with_validation_error(client, db_session):
+    resp = await client.post("/api/auth/login", data={"username": "any@test.com", "password": "x" * 73})
+    assert resp.status_code == 422
+    data = resp.json()
+    assert "error" in data or "detail" in data
+    assert "72 bytes" in str(data)
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_rejects_oversize_password_with_validation_error(client, db_session):
+    # clear users to allow bootstrap
+    from sqlalchemy import delete
+    await db_session.execute(delete(User))
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/auth/bootstrap",
+        json={"email": "first_admin@test.com", "password": "a" * 80, "display_name": "Admin"},
+    )
+    assert resp.status_code == 422
+    assert "72 bytes" in str(resp.json())
+
+
+@pytest.mark.asyncio
+async def test_admin_create_user_rejects_oversize_password_with_validation_error(client, admin_headers):
+    resp = await client.post(
+        "/api/admin/users",
+        headers=admin_headers,
+        json={"email": "oversize@test.com", "password": "b" * 75, "display_name": "Oversize", "role": "user"},
+    )
+    assert resp.status_code == 422
+    assert "72 bytes" in str(resp.json())

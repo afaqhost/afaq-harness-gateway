@@ -218,13 +218,14 @@ async def chat_completions(
     prompt = _build_openai_prompt(request_payload.messages)
     completion_id = _completion_id()
     reservation_token = reservation.token if reservation else None
+    env = await credential_service.get_env_for_harness(db, user_id, harness_name)
 
     if request_payload.stream:
         stream_id = identity.stream_id if identity else completion_id
         hist_key = identity.history_key if identity else f"openai:{user_id}:{stream_id}"
         return StreamingResponse(
             _stream_response(
-                adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request, hist_key, request_payload, reservation_token=reservation_token
+                adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, env, request, hist_key, request_payload, reservation_token=reservation_token
             ),
             media_type="text/event-stream",
             headers={"X-Request-ID": completion_id, "X-Stream-ID": stream_id},
@@ -236,7 +237,7 @@ async def chat_completions(
 
 
 async def _stream_response(
-    adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request, history_key: str | None = None, request_payload: ChatRequest | None = None, reservation_token: str | None = None
+    adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, env: dict[str, str], request: Request, history_key: str | None = None, request_payload: ChatRequest | None = None, reservation_token: str | None = None
 ):
     started = time.monotonic()
     collected: list[str] = []
@@ -262,8 +263,7 @@ async def _stream_response(
 
         cancelled = False
         had_tool_call = False
-        # env injection for harness
-        env = await credential_service.get_env_for_harness(db, user_id, harness_name)
+        # env injection for harness (already resolved before streaming response)
         stream_iter = adapter.stream(prompt, model, request_id=completion_id, env=env).__aiter__()
         try:
             async for item in pump_harness_stream(stream_iter, request, completion_id):

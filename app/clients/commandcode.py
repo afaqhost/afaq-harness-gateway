@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 
-from app.clients.base import HarnessAdapter
+from app.clients.base import HarnessAdapter, communicate_with_timeout
 from app.models.harness import HarnessModel
 
 
@@ -85,7 +85,7 @@ class CommandCodeAdapter(HarnessAdapter):
         process = await asyncio.create_subprocess_exec(
             self.executable, "--list-models", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        stdout, _ = await asyncio.wait_for(process.communicate(), timeout=30)
+        stdout, _ = await communicate_with_timeout(process, timeout=30)
         if process.returncode != 0:
             return []
         model_ids = []

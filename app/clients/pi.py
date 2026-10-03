@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from app.clients.base import HarnessAdapter
+from app.clients.base import HarnessAdapter, communicate_with_timeout
 from app.models.harness import HarnessModel
 
 
@@ -110,7 +110,7 @@ class PiAdapter(HarnessAdapter):
             proc = await asyncio.create_subprocess_exec(
                 self.executable, "--list-models", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            stdout, _ = await communicate_with_timeout(proc, timeout=10)
             if proc.returncode != 0:
                 return []
             models = []

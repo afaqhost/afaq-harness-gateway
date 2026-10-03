@@ -1,6 +1,7 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 
+from app.shared.time import utcnow
 from app.db.database import UsageRecord
 from app.clients.registry import MODEL_CACHE
 from app.models.harness import HarnessModel
@@ -84,7 +85,7 @@ async def test_usage_isolation_between_users(client, db_session, admin_headers, 
 
 @pytest.mark.asyncio
 async def test_usage_from_to_filters(client, db_session, user_headers, regular_user):
-    now = datetime.utcnow()
+    now = utcnow()
     old = now - timedelta(days=5)
     recent = now - timedelta(hours=1)
 

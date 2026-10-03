@@ -17,6 +17,8 @@ from app.services.os_terminal import (
 
 pytestmark = pytest.mark.integration
 
+POSIX_SPAWN_AVAILABLE = hasattr(os, "posix_spawn") and hasattr(os, "openpty")
+
 
 @pytest.fixture(autouse=True)
 def reset_service():
@@ -42,7 +44,7 @@ def reset_service():
 
 # ---------- service tests (no FastAPI) ----------
 
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="POSIX-only")
+@pytest.mark.skipif(not POSIX_SPAWN_AVAILABLE, reason="POSIX-only (requires posix_spawn and openpty)")
 @pytest.mark.asyncio
 async def test_service_starts_streams_and_stops():
     svc = OsTerminalService()
@@ -67,7 +69,7 @@ async def test_service_starts_streams_and_stops():
     assert svc.get(s.terminal_id, user_id=1) is None
 
 
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="POSIX-only")
+@pytest.mark.skipif(not POSIX_SPAWN_AVAILABLE, reason="POSIX-only (requires posix_spawn and openpty)")
 @pytest.mark.asyncio
 async def test_service_isolates_users():
     svc = OsTerminalService()
@@ -85,7 +87,7 @@ async def test_service_isolates_users():
         await svc.stop(s.terminal_id, user_id=1)
 
 
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="POSIX-only")
+@pytest.mark.skipif(not POSIX_SPAWN_AVAILABLE, reason="POSIX-only (requires posix_spawn and openpty)")
 @pytest.mark.asyncio
 async def test_service_resize_changes_winsize():
     svc = OsTerminalService()
@@ -100,7 +102,7 @@ async def test_service_resize_changes_winsize():
         await svc.stop(s.terminal_id, user_id=1)
 
 
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="POSIX-only")
+@pytest.mark.skipif(not POSIX_SPAWN_AVAILABLE, reason="POSIX-only (requires posix_spawn and openpty)")
 @pytest.mark.asyncio
 async def test_service_stop_is_idempotent():
     svc = OsTerminalService()
@@ -124,7 +126,7 @@ async def test_api_terminal_start_unauth_returns_403(client):
     assert resp.status_code in (401, 403)
 
 
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="POSIX-only")
+@pytest.mark.skipif(not POSIX_SPAWN_AVAILABLE, reason="POSIX-only (requires posix_spawn and openpty)")
 @pytest.mark.asyncio
 async def test_api_terminal_start_and_status_and_stop(client, admin_headers):
     # start
@@ -183,7 +185,7 @@ async def test_api_terminal_user_cannot_stop_admin_session(client, admin_headers
 
 # ---------- WebSocket smoke ----------
 
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="POSIX-only")
+@pytest.mark.skipif(not POSIX_SPAWN_AVAILABLE, reason="POSIX-only (requires posix_spawn and openpty)")
 @pytest.mark.asyncio
 async def test_websocket_roundtrip(client, admin_headers, admin_user):
     """Open a WebSocket with query-param token, send a command, read back the echo."""
@@ -240,7 +242,7 @@ async def test_websocket_roundtrip(client, admin_headers, admin_user):
     assert found, f"Did not see echo in outgoing messages: {outgoing}"
 
 
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="POSIX-only")
+@pytest.mark.skipif(not POSIX_SPAWN_AVAILABLE, reason="POSIX-only (requires posix_spawn and openpty)")
 @pytest.mark.asyncio
 async def test_websocket_unauthenticated_rejected(client, admin_headers):
     """Verify WebSocket connection without token is closed with policy violation (code 1008)."""
@@ -281,3 +283,144 @@ async def test_websocket_unauthenticated_rejected(client, admin_headers):
     close_msgs = [m for m in outgoing if m.get("type") == "websocket.close"]
     assert len(close_msgs) == 1
     assert close_msgs[0].get("code") == 1008
+
+
+# ---------- Hardening & Regression Tests ----------
+
+@pytest.mark.skipif(not POSIX_SPAWN_AVAILABLE, reason="POSIX-only (requires posix_spawn and openpty)")
+@pytest.mark.asyncio
+async def test_invalid_shell_fallback_succeeds_with_valid_shell():
+    """Verify that requesting a nonexistent or fallback shell still runs via standard shells."""
+    svc = OsTerminalService()
+    # /nonexistent/shell does not exist, so start() falls back to /bin/bash or /bin/sh
+    s = await svc.start(user_id=1, shell="/nonexistent/shell-path", cwd=".")
+    try:
+        assert s.pid > 0
+        await svc.write(s.terminal_id, 1, b"echo fallback-ok\n")
+        chunks = []
+        async for chunk in svc.stream(s.terminal_id, 1):
+            chunks.append(chunk)
+            if b"fallback-ok" in b"".join(chunks):
+                break
+        assert b"fallback-ok" in b"".join(chunks)
+    finally:
+        await svc.stop(s.terminal_id, user_id=1)
+
+
+@pytest.mark.asyncio
+async def test_child_wrapper_all_invalid_shells_fail_closed_with_error_output():
+    """When child wrapper cannot exec any shell candidate, it writes error output and exits with code 127."""
+    env = dict(os.environ)
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    env["PYTHONPATH"] = f"{project_root}:{env.get('PYTHONPATH', '')}"
+
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-m",
+        "app.services.os_terminal_child",
+        "--cwd",
+        ".",
+        "/bin/nonexistent-shell-1",
+        "/bin/nonexistent-shell-2",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=env,
+    )
+    _, stderr = await proc.communicate()
+    assert proc.returncode == 127
+    err_text = stderr.decode(errors="replace")
+    assert "exec failed" in err_text
+    assert "tried: /bin/nonexistent-shell-1 /bin/nonexistent-shell-2" in err_text
+
+
+@pytest.mark.asyncio
+async def test_child_wrapper_invalid_cwd_fails_with_exit_code_126():
+    """When child wrapper encounters invalid cwd, it writes error output and exits with code 126."""
+    env = dict(os.environ)
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    env["PYTHONPATH"] = f"{project_root}:{env.get('PYTHONPATH', '')}"
+
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-m",
+        "app.services.os_terminal_child",
+        "--cwd",
+        "/nonexistent/directory/path/xyz",
+        "/bin/sh",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=env,
+    )
+    _, stderr = await proc.communicate()
+    assert proc.returncode == 126
+    err_text = stderr.decode(errors="replace")
+    assert "chdir failed" in err_text
+
+
+@pytest.mark.asyncio
+async def test_service_no_usable_shell_raises_terminal_error():
+    """Service start raises TerminalError if no candidate shells exist."""
+    svc = OsTerminalService()
+    from unittest.mock import patch
+    with patch("os.path.isfile", return_value=False):
+        with pytest.raises(TerminalError, match="No usable shell found"):
+            await svc.start(user_id=1, shell="/bin/nonexistent", cwd=".")
+
+
+@pytest.mark.asyncio
+async def test_invalid_cwd_rejected_cleanly():
+    """Starting with a nonexistent CWD raises TerminalError without starting child."""
+    svc = OsTerminalService()
+    with pytest.raises(TerminalError, match="CWD does not exist"):
+        await svc.start(user_id=1, shell="/bin/bash", cwd="/nonexistent/path/xyz/123")
+
+
+@pytest.mark.skipif(not POSIX_SPAWN_AVAILABLE, reason="POSIX-only (requires posix_spawn and openpty)")
+@pytest.mark.asyncio
+async def test_cleanup_reaps_child_and_closes_fds():
+    """Stopping a session reaps child process and leaves no zombies."""
+    svc = OsTerminalService()
+    s = await svc.start(user_id=1, shell="/bin/bash", cwd=".")
+    pid = s.pid
+    fd = s.fd
+
+    # verify alive
+    assert OsTerminalService._pid_alive(pid) is True
+
+    # stop
+    ok = await svc.stop(s.terminal_id, user_id=1)
+    assert ok is True
+
+    # fd should be closed
+    with pytest.raises(OSError):
+        os.fstat(fd)
+
+    # Process must already have been reaped by stop(); waitpid must raise ChildProcessError
+    await asyncio.sleep(0.1)
+    with pytest.raises(ChildProcessError):
+        os.waitpid(pid, os.WNOHANG)
+
+
+def test_no_pty_fork_or_os_fork_in_production_terminal_code():
+    """Verify production terminal code contains no pty.fork, os.fork, or preexec_fn."""
+    import ast
+    from pathlib import Path
+
+    terminal_service_file = Path("app/services/os_terminal.py")
+    child_wrapper_file = Path("app/services/os_terminal_child.py")
+
+    for path in (terminal_service_file, child_wrapper_file):
+        assert path.exists(), f"{path} must exist"
+        content = path.read_text()
+        assert "pty.fork" not in content, f"Forbidden pty.fork found in {path}"
+        assert "preexec_fn" not in content, f"Forbidden preexec_fn found in {path}"
+        assert "os.forkpty" not in content, f"Forbidden os.forkpty found in {path}"
+
+        tree = ast.parse(content)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Attribute) and func.attr == "fork":
+                    # Check if call is os.fork or pty.fork
+                    if isinstance(func.value, ast.Name) and func.value.id in ("os", "pty"):
+                        pytest.fail(f"Forbidden call {func.value.id}.fork() in {path}")

@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from app.clients.base import HarnessAdapter
+from app.clients.base import HarnessAdapter, communicate_with_timeout
 from app.models.harness import HarnessModel
 
 
@@ -48,7 +48,7 @@ class OpenCodeAdapter(HarnessAdapter):
         process = await asyncio.create_subprocess_exec(
             self.executable, "models", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        stdout, _ = await asyncio.wait_for(process.communicate(), timeout=30)
+        stdout, _ = await communicate_with_timeout(process, timeout=30)
         if process.returncode != 0:
             return []
         models = [line.strip() for line in stdout.decode(errors="replace").splitlines() if "/" in line.strip()]

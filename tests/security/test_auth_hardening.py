@@ -59,7 +59,7 @@ async def test_admin_api_key_cannot_reach_admin_endpoints_or_terminal_start(clie
     assert resp_conv.status_code == 401
 
 
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="POSIX-only")
+@pytest.mark.skipif(not (hasattr(os, "posix_spawn") and hasattr(os, "openpty")), reason="POSIX-only (requires posix_spawn and openpty)")
 @pytest.mark.asyncio
 async def test_os_terminal_websocket_rejects_admin_api_key(client, admin_headers, admin_user, db_session):
     from app.api.os_terminal import terminal_ws

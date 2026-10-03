@@ -68,9 +68,10 @@ async def test_fetch_summary_returns_zero_when_no_messages(db_session, regular_u
 
 @pytest.mark.asyncio
 async def test_list_conversations_ordered_by_updated_at_desc(db_session, regular_user):
-    from datetime import datetime, timedelta
+    from datetime import timedelta
+    from app.shared.time import utcnow
 
-    now = datetime.utcnow()
+    now = utcnow()
     c1 = Conversation(user_id=regular_user.id, title="First", model="opencode//m", created_at=now - timedelta(hours=2), updated_at=now - timedelta(hours=2))
     c2 = Conversation(user_id=regular_user.id, title="Second", model="opencode//m", created_at=now - timedelta(hours=1), updated_at=now - timedelta(hours=1))
     db_session.add_all([c1, c2])
