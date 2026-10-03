@@ -1,18 +1,20 @@
 import asyncio
 import time
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import admin_user, current_user
 from app.clients.agy import INSTALL_SCRIPT_COMMAND
-from app.core.security import generate_api_key, hash_password
+from app.core.security import generate_api_key
 from app.db.database import APIKey, Harness, User, get_db
 from app.harnesses.registry import all_adapters, cached_models, cached_models_clear, clear_model_cache_mirror, get_adapter, refresh_models
 from app.services.harness_job_service import harness_job_service
+from app.services import user_service
 from app.shared.sse import sse_event
 from app.shared.time import utcnow
 
@@ -34,10 +36,10 @@ def _is_allowed_install_recipe(cmd: list[str] | None) -> bool:
 
 
 class UserCreate(BaseModel):
-    email: str
+    email: EmailStr
     password: str
-    display_name: str = ""
-    role: str = "user"
+    display_name: str = Field(default="", max_length=120)
+    role: Literal["admin", "user"] = "user"
 
     @field_validator("password")
     @classmethod
@@ -47,6 +49,33 @@ class UserCreate(BaseModel):
         if len(v.encode("utf-8")) > 72:
             raise ValueError("Password cannot exceed 72 bytes")
         return v
+
+
+class UserUpdate(BaseModel):
+    email: EmailStr | None = None
+    password: str | None = None
+    display_name: str | None = Field(default=None, max_length=120)
+    role: Literal["admin", "user"] | None = None
+    is_active: bool | None = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, password: str | None) -> str | None:
+        if password is None:
+            return None
+        if len(password) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if len(password.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
+        return password
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set or all(
+            getattr(self, field_name) is None for field_name in self.model_fields_set
+        ):
+            raise ValueError("At least one user field is required")
+        return self
 
 class KeyCreate(BaseModel):
     name: str
@@ -256,24 +285,53 @@ async def uninstall_harness(name: str, _: User = Depends(admin_user), db: AsyncS
         await db.rollback()
     return {"harness": name, "installed": False, "models_cleared": True}
 
+
+def _user_response(user: User) -> dict[str, object]:
+    return {
+        "id": user.id,
+        "email": user.email,
+        "display_name": user.display_name,
+        "role": user.role,
+        "is_active": user.is_active,
+    }
+
+
 @router.post("/users", response_model=dict)
 async def create_user(user_payload: UserCreate, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
-    if (await db.execute(select(User).where(User.email == user_payload.email))).scalar_one_or_none():
-        raise HTTPException(409, "Email already exists")
-    user = User(
-        email=user_payload.email,
-        password_hash=hash_password(user_payload.password),
-        display_name=user_payload.display_name,
-        role=user_payload.role,
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return {"id": user.id, "email": user.email, "role": user.role}
+    request = user_service.NewUser(**user_payload.model_dump())
+    try:
+        user = await user_service.create_user(db, request)
+    except user_service.UserConflictError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return _user_response(user)
+
 
 @router.get("/users")
 async def list_users(_: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
-    return [{"id": u.id, "email": u.email, "display_name": u.display_name, "role": u.role, "is_active": u.is_active} for u in (await db.execute(select(User).order_by(User.id))).scalars().all()]
+    return [_user_response(user) for user in await user_service.list_users(db)]
+
+
+@router.patch("/users/{user_id}")
+async def update_user(user_id: int, payload: UserUpdate, actor: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
+    changes = user_service.UserChanges(**payload.model_dump(exclude_unset=True))
+    try:
+        user = await user_service.update_user(db, actor, user_id, changes)
+    except user_service.UserNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except user_service.UserConflictError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return _user_response(user)
+
+
+@router.delete("/users/{user_id}", status_code=204)
+async def delete_user(user_id: int, actor: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
+    try:
+        await user_service.delete_user(db, actor, user_id)
+    except user_service.UserNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except user_service.UserConflictError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
 
 @router.post("/keys")
 async def create_key(key_payload: KeyCreate, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):

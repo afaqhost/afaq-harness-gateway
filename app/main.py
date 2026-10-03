@@ -109,7 +109,15 @@ app.include_router(os_terminal_router, prefix="/api", tags=["terminal"])
 app.include_router(metrics_router)
 
 async def render_page(request: Request, page: str):
-    return templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name, "page": page})
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "app_name": settings.app_name,
+            "app_version": settings.version,
+            "page": page,
+        },
+    )
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):

@@ -437,6 +437,12 @@ html[dir="rtl"] .nav-link:hover { transform: translateX(-1px); }
 }
 
 .sidebar-footer { margin-top: 10px; display:flex; flex-direction:column; gap:10px; }
+.project-actions{ border-top:1px solid var(--border-subtle); padding-top:10px; }
+.project-actions-heading{ display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; color:var(--text-faint); font:600 10px var(--font-mono); letter-spacing:.06em; text-transform:uppercase; }
+.project-version{ color:var(--brand-cyan); text-transform:none; letter-spacing:0; }
+.project-actions-grid{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.project-action{ display:flex; align-items:center; justify-content:center; gap:5px; min-height:34px; padding:7px 8px; border:1px solid var(--border-subtle); border-radius:var(--radius-control); color:var(--text-muted); background:rgba(255,255,255,.02); font-size:11px; font-weight:600; text-decoration:none; transition:all var(--speed) ease; }
+.project-action:hover{ color:var(--text-primary); border-color:var(--brand-primary); background:rgba(59,130,246,.08); transform:translateY(-1px); }
 .logout-button {
   display:flex; align-items:center; gap:10px; width:100%;
   padding: 9px 10px; border-radius: var(--radius-control);
@@ -972,6 +978,10 @@ button[id$="-key"], #new-key, #new-user{ background: var(--brand-primary); }
 .key-action:hover{ border-color: var(--brand-primary); color: var(--text-primary); background: rgba(59,130,246,0.06); transform: translateY(-1px); }
 .key-action.danger{ color: var(--status-error); }
 .key-action.danger:hover{ border-color: var(--status-error); background: rgba(239,68,68,0.08); }
+.user-identity{ display:flex; flex-direction:column; gap:3px; min-width:180px; }
+.user-identity strong{ font-size:13px; font-weight:600; }
+.role-badge{ padding:4px 9px; border-radius:var(--radius-pill); color:var(--brand-cyan); background:rgba(34,211,238,.07); border:1px solid rgba(34,211,238,.18); font-size:11px; font-weight:600; }
+.empty-table{ padding:18px 0; text-align:center; }
 
 /* ---------- Docs ---------- */
 .docs{ max-width: 860px; }
@@ -1109,12 +1119,15 @@ dialog::backdrop{ background: rgba(2,6,23,0.72); backdrop-filter: blur(8px); -we
 }
 .modal-close:hover{ color: var(--text-primary); border-color: var(--brand-primary); background: rgba(59,130,246,0.08); }
 .key-modal label{ font-size:11px; font-weight:600; letter-spacing:.04em; color: var(--text-secondary); margin-bottom:5px; }
-.key-modal input{
+.key-modal input, .key-modal select{
   background: var(--bg-primary); border:1px solid var(--border-default);
   border-radius: var(--radius-input); padding:10px 14px; margin-bottom:14px; font-size:13px; transition: all var(--speed) ease;
 }
-.key-modal input:focus{ outline:none; border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(59,130,246,0.14); }
+.key-modal input:focus, .key-modal select:focus{ outline:none; border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(59,130,246,0.14); }
 .key-modal input[readonly]{ font-family: var(--font-mono); color: var(--brand-cyan); font-size:12px; }
+.field-hint{ color:var(--text-faint); font-size:11px; margin:-8px 0 14px; }
+.key-modal .checkbox-row{ display:flex; align-items:center; gap:9px; margin:0 0 16px; color:var(--text-secondary); font-size:12px; cursor:pointer; }
+.key-modal .checkbox-row input{ width:16px; height:16px; margin:0; accent-color:var(--brand-primary); }
 #key-result > p{ color: var(--status-warning); font-size:12px; margin:0 0 10px; }
 .key-copy-row{ display:flex; gap:8px; }
 .key-copy-row input{ flex:1; margin-bottom:6px; }

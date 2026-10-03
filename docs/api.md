@@ -90,6 +90,38 @@ Every response includes `X-Request-ID` (echoes incoming or generated `uuid4` 12 
 
 `POST /api/admin/keys/{id}/rotate` returns new `key` (old revoked immediately).
 
+## Administrator User Management
+
+User-management routes require an administrator JWT. API keys cannot access
+these endpoints.
+
+| Method | Endpoint | Behavior |
+| --- | --- | --- |
+| `GET` | `/api/admin/users` | List users with role and active status |
+| `POST` | `/api/admin/users` | Create a user from `email`, `password`, optional `display_name`, and `role` (`user` or `admin`) |
+| `PATCH` | `/api/admin/users/{user_id}` | Change one or more of `email`, `password`, `display_name`, `role`, and `is_active` |
+| `DELETE` | `/api/admin/users/{user_id}` | Delete the user and their conversations, messages, API keys, quota reservations, usage records, and credential profiles |
+
+Passwords must contain at least 8 characters and no more than 72 UTF-8 bytes.
+Email uniqueness is case-insensitive. An administrator cannot delete, disable,
+or demote their own account, and the gateway preserves at least one active
+administrator.
+
+Example update:
+
+```bash
+export AFAQ_ADMIN_JWT="REPLACE_WITH_DASHBOARD_JWT"
+
+curl -X PATCH http://127.0.0.1:3500/api/admin/users/2 \
+  -H "Authorization: Bearer ${AFAQ_ADMIN_JWT}" \
+  -H "Content-Type: application/json" \
+  -d '{"display_name":"Maintainer","role":"admin","is_active":true}'
+```
+
+A duplicate email or an unsafe self-change returns `409 conflict` in the unified
+error shape. Missing users return `404 not_found`. Deletion is irreversible, so
+the dashboard asks for confirmation first.
+
 ## SSE Events & Reconnection
 
 Streaming endpoints (`POST /v1/chat/completions` with `stream: true` and `POST /api/chat/conversations/{conv_id}/messages/stream`) emit server-sent events with structured lifecycle:

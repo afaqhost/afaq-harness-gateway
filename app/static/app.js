@@ -57,7 +57,7 @@ function resetThemeToAuto() {
 
 const translations = {
   ar: {
-    newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', usage: 'الاستهلاك', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', addUser: 'إضافة مستخدم', displayName: 'الاسم',
+    newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', usage: 'الاستهلاك', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', harnessSubtitle: 'تثبيت أدوات CLI وتحديثها ومراجعة الموديلات المتاحة.', keySubtitle: 'إنشاء مفاتيح الوصول وتعطيلها أو حذفها بأمان.', usageSubtitle: 'مراجعة استهلاك الموديلات والأداء وسجل الطلبات.', docsSubtitle: 'أمثلة ومرجع سريع لاستخدام واجهة API.', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', userSubtitle: 'إضافة الحسابات وتعديل الصلاحيات وتعطيل الوصول أو حذف المستخدم وبياناته.', addUser: 'إضافة مستخدم', editUser: 'تعديل المستخدم', displayName: 'الاسم', role: 'الصلاحية', member: 'مستخدم', administrator: 'مدير', create: 'إنشاء', save: 'حفظ التغييرات', edit: 'تعديل', enable: 'تفعيل', disable: 'تعطيل', activeAccount: 'الحساب نشط', optionalPassword: 'اتركها فارغة للاحتفاظ بكلمة المرور الحالية.', noUsers: 'لا يوجد مستخدمون.', userDeleteConfirm: 'سيتم حذف المستخدم ومحادثاته ومفاتيحه وبياناته نهائياً. هل تريد المتابعة؟', project: 'المشروع', getUpdates: 'الحصول على تحديث', reportIssue: 'الإبلاغ عن مشكلة',
     docsTitle: 'توثيق API', docsIntro: 'AFAQ Gateway واجهة متوافقة مع OpenAI تتيح الوصول إلى نماذج الذكاء الاصطناعي من أي تطبيق. جميع النماذج المثبتة متاحة فورًا.', docsOverviewTitle: 'نظرة عامة', docsOverviewText: 'تدعم البوابة معايير OpenAI كاملة —authentication, list models, chat completions, streaming — مع إضافات خاصة بالبوابة.', docsBaseUrl: 'رابط القاعدة', docsBaseUrlText: 'الرابط الأساسي للبوابة هو عنوان الخادم متبوعًا بـ v1', docsQuickStartTitle: 'البداية السريعة', docsQuickStartText: 'أنشئ مفتاح API من لوحة التحكم، ثم أرسل أول طلب في خطوتين: المصادقة ثم الإرسال.', docsAuthTitle: 'المصادقة', docsAuthText: 'أنشئ مفتاح API من لوحة التحكم وأرسله في ترويسة Authorization مع كل طلب بهذا الشكل: Bearer afaq_YOUR_KEY', docsModelsTitle: 'الموديلات', docsModelsText: 'استخدم GET /v1/models لمعرفة قائمة كاملة بجميع الموديلات المتاحة من جميع الهارنسس المثبتة.', docsResponseTitle: 'الاستجابة', docsResponseText: 'الرد الكامل موجود في choices[0].message.content. تأكد من التحقق من ok === true.', docsModelsHeading: 'جلب الموديلات', docsModelsBody: 'يعيد هذا المسار قائمة بجميع الموديلات المتاحة. كل موديل له معرف فريد بصيغة harness/provider/model — مثل opencode//opencode/big-pickle.', docsChatHeading: 'إرسال رسالة', docsChatBody: 'أرسل طلب POST إلى /v1/chat/completions مع مفتاح API في الترويسة ورسائل المحادثة في الجسم.', docsModelIdTitle: 'صيغة معرف الموديل', docsModelIdText: 'كل معرف موديل يتكون من ثلاثة أجزاء مفصولة بـ //: اسم الهارنسس // المزود // اسم الموديل. مثال: opencode//opencode/big-pickle.', docsContextTitle: 'الذاكرة السياقية', docsContextText: 'البوابة تحفظ سياق المحادثة تلقائيًا لكل محادثة على حدة. أرسل نفس محادثة继续保持 نفس السياق دون إعادة إرسال السجل.', docsSystemPromptTitle: 'التعليمات النظامية', docsSystemPromptText: 'أضف role: system في مصفوفة الرسائل لتعيين سلوك الموديل. سيتم إرسالها مع كل طلب.', docsStreamHeading: 'البث المباشر (Streaming)', docsStreamText: 'فعّل stream: true للحصول على الرد تدريجيًا عبر SSE. كل جزء يحتوي delta.content يتم إلحاقه بالرد. الطلب الناجح ينتهي بـ data: [DONE].', docsStreamExampleHeading: 'مثال على البث', docsStreamExampleText: 'أضف stream: true في جسم الطلب، ثم اقرأ Server-Sent Events من الاستجابة.', docsErrorsTitle: 'أخطاء شائعة', docsErrorsText: '401 = مفتاح غير صالح أو انتهت الجلسة. 400 = اسم هارنس غير معروف. 502 = خطأ في أداة CLI. 504 = انتهت مهلة الاتصال.',
     searchModels: 'ابحث عن موديل... (claude, gpt, gemini)', filterAll: 'الكل', modelFooterHint: '↑↓ للتنقل · Enter للاختيار · Esc للإغلاق', noModelsFound: 'لا توجد نتائج',
     setupEyebrow: 'الإعداد الأولي — 3 خطوات', setupTitle: 'مرحباً بك في AFAQ', setupSubtitle: 'أنشئ حساب المدير ثم اختر الأدوات التي تريد تثبيتها — كل شيء داخل الكونتينر',
@@ -80,7 +80,7 @@ const translations = {
     filterAllHarnesses: 'كل الهارنسس', usageModelPlaceholder: 'فلتر الموديل', dateRange: 'النطاق الزمني', last7Days: 'آخر 7 أيام', last30Days: 'آخر 30 يوم', last90Days: 'آخر 90 يوم', allTime: 'كل الوقت', usageChartEmpty: 'لا توجد بيانات كافية للرسم', usageEmpty: 'لا توجد بيانات بعد', usageStatTotal: 'إجمالي'
   },
   en: {
-    newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', usage: 'Usage', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', addUser: 'Add user', displayName: 'Name',
+    newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', usage: 'Usage', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', harnessSubtitle: 'Install and update CLI tools, and review available models.', keySubtitle: 'Create, disable, or remove access keys safely.', usageSubtitle: 'Review model consumption, performance, and request history.', docsSubtitle: 'Examples and a quick reference for the API.', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', userSubtitle: 'Create accounts, edit permissions, disable access, or delete a user and their data.', addUser: 'Add user', editUser: 'Edit user', displayName: 'Name', role: 'Role', member: 'User', administrator: 'Administrator', create: 'Create', save: 'Save changes', edit: 'Edit', enable: 'Enable', disable: 'Disable', activeAccount: 'Active account', optionalPassword: 'Leave blank to keep the current password.', noUsers: 'No users found.', userDeleteConfirm: 'This permanently deletes the user, conversations, keys, and owned data. Continue?', project: 'Project', getUpdates: 'Get updates', reportIssue: 'Report issue',
     terminal: 'Terminal', terminalTitle: 'OS Terminal', terminalSubtitle: 'Full shell as the user running the gateway — for commands and maintenance', stop: 'Stop',
     docsTitle: 'API Documentation', docsIntro: 'AFAQ Gateway is an OpenAI-compatible interface for AI models from any application. All installed models are immediately available.', docsOverviewTitle: 'Overview', docsOverviewText: 'The gateway supports the full OpenAI standard — authentication, list models, chat completions, streaming — plus gateway-specific extensions.', docsBaseUrl: 'Base URL', docsBaseUrlText: 'The base URL is your gateway server address followed by /v1', docsQuickStartTitle: 'Quick Start', docsQuickStartText: 'Create an API key from the dashboard, then send your first request in two steps: authenticate, then send.', docsAuthTitle: 'Authentication', docsAuthText: 'Create an API key from the dashboard and include it in the Authorization header with every request: Bearer afaq_YOUR_KEY', docsModelsTitle: 'Models', docsModelsText: 'Use GET /v1/models to get a full list of all available models from all installed harnesses.', docsResponseTitle: 'Response', docsResponseText: 'The full reply is at choices[0].message.content. Always check ok === true in the response.', docsModelsHeading: 'List models', docsModelsBody: 'This route returns all available models. Each model has a unique ID in the format harness/provider/model — e.g. opencode//opencode/big-pickle.', docsChatHeading: 'Send a message', docsChatBody: 'Send a POST request to /v1/chat/completions with your API key in the header and the conversation messages in the body.', docsModelIdTitle: 'Model ID Format', docsModelIdText: 'Every model ID has three parts separated by //: harness name // provider // model name. Example: opencode//opencode/big-pickle.', docsContextTitle: 'Context Memory', docsContextText: 'The gateway automatically maintains conversation context for each chat. Send to the same conversation to keep the context without resending the full history.', docsSystemPromptTitle: 'System Prompt', docsSystemPromptText: 'Add role: system in the messages array to set the model behavior. It will be sent with every request.', docsStreamHeading: 'Streaming', docsStreamText: 'Set stream: true to receive the reply incrementally via SSE. Each chunk contains delta.content that appends to the reply. Successful streams end with data: [DONE].', docsStreamExampleHeading: 'Streaming Example', docsStreamExampleText: 'Add stream: true in the request body, then read Server-Sent Events from the response.', docsErrorsTitle: 'Common errors', docsErrorsText: '401 = invalid or expired key. 400 = unknown harness name. 502 = CLI tool error. 504 = connection timed out.',
     searchModels: 'Search models... (claude, gpt, gemini)', filterAll: 'All', modelFooterHint: '↑↓ Navigate · Enter Select · Esc Close', noModelsFound: 'No results',
@@ -159,7 +159,10 @@ function show(page, updateUrl = true) {
   target.classList.remove('hidden');
   document.querySelectorAll('.nav-link').forEach((el) => el.classList.toggle('active', el.dataset.page === page));
   if (updateUrl && page !== 'login') history.pushState({ page }, '', `/${page}`);
-  $('#page-title').textContent = page === 'chat' ? text('chat') : page === 'harnesses' ? text('harnesses') : page === 'keys' ? text('apiKeys') : page === 'usage' ? text('usage') : page === 'users' ? text('users') : page === 'terminal' ? text('terminal') : text('docs');
+  const titleKeys = {chat:'chat', harnesses:'harnesses', keys:'apiKeys', usage:'usage', users:'users', terminal:'terminal', documentation:'docs'};
+  const subtitleKeys = {chat:'chatSubtitle', harnesses:'harnessSubtitle', keys:'keySubtitle', usage:'usageSubtitle', users:'userSubtitle', terminal:'terminalSubtitle', documentation:'docsSubtitle'};
+  $('#page-title').textContent = text(titleKeys[page] || 'docs');
+  $('#page-subtitle').textContent = text(subtitleKeys[page] || 'docsSubtitle');
   if (page === 'harnesses') loadHarnesses();
   if (page === 'keys') loadKeys();
   if (page === 'users') loadUsers();
@@ -1092,8 +1095,17 @@ async function loadKeys(){
     $('#keys-list').innerHTML = keys.length ? keys.map((k)=> `<div class="row"><span>${escapeHtml(k.name)}<br><small class="muted">${escapeHtml(k.prefix)}••••</small></span><span class="key-actions"><span class="badge ${k.is_active?'ok':''}">${k.is_active?text('active'):text('disabled')}</span><button class="key-action" data-action="toggle" data-key-id="${k.id}">${k.is_active?text('disable'):text('enable')}</button><button class="key-action danger" data-action="delete" data-key-id="${k.id}">${text('delete')}</button></span></div>`).join('') : `<p class="muted">${text('noKeys')}</p>`;
   }catch(e){ $('#keys-list').innerHTML = `<p class="error-message">${escapeHtml(e.message)}</p>`; }
 }
+let usersCache = [];
+function userRow(user){
+  const roleLabel = user.role === 'admin' ? text('administrator') : text('member');
+  const statusLabel = user.is_active ? text('active') : text('disabled');
+  return `<div class="row user-row"><span class="user-identity"><strong>${escapeHtml(user.display_name||user.email)}</strong><small>${escapeHtml(user.email)}</small></span><span class="key-actions"><span class="badge ${user.is_active?'ok':''}">${statusLabel}</span><span class="role-badge">${roleLabel}</span><button class="key-action" data-user-action="edit" data-user-id="${user.id}">${text('edit')}</button><button class="key-action" data-user-action="toggle" data-user-id="${user.id}">${user.is_active?text('disable'):text('enable')}</button><button class="key-action danger" data-user-action="delete" data-user-id="${user.id}">${text('delete')}</button></span></div>`;
+}
 async function loadUsers(){
-  try{ const users=await api('/api/admin/users'); $('#users-list').innerHTML = users.map((u)=> `<div class="row"><span>${escapeHtml(u.display_name||u.email)}<br><small class="muted">${escapeHtml(u.email)}</small></span><span class="badge">${escapeHtml(u.role)}</span></div>`).join(''); }catch(e){ $('#users-list').innerHTML=`<p class="error-message">${escapeHtml(e.message)}</p>`; }
+  try{
+    usersCache = await api('/api/admin/users');
+    $('#users-list').innerHTML = usersCache.length ? usersCache.map(userRow).join('') : `<p class="muted empty-table">${text('noUsers')}</p>`;
+  }catch(error){ $('#users-list').innerHTML=`<p class="error-message">${escapeHtml(error.message)}</p>`; }
 }
 function openKeyModal(){ $('#key-form').reset(); $('#key-create-fields').classList.remove('hidden'); $('#key-result').classList.add('hidden'); $('#key-modal-title').textContent=text('createKey'); $('#key-modal').showModal(); }
 async function createKey(e){ e.preventDefault(); const b=$('#key-create-submit'); b.disabled=true; try{ const k=await api('/api/admin/keys',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:$('#key-name').value.trim()})}); $('#key-value').value=k.key; $('#key-create-fields').classList.add('hidden'); $('#key-result').classList.remove('hidden'); await loadKeys(); }catch(err){ showToast(`${text('keyError')}: ${err.message}`);}finally{ b.disabled=false; } }
@@ -1103,8 +1115,45 @@ async function deleteKey(id){
   if(!ok) return;
   try{ await api(`/api/admin/keys/${id}`,{method:'DELETE'}); await loadKeys(); }catch(e){ showToast(`${text('deleteError')}: ${e.message}`);}
 }
-function openUserModal(){ $('#user-form').reset(); $('#user-modal').showModal(); }
-async function createUser(e){ e.preventDefault(); const s=e.submitter; s.disabled=true; try{ await api('/api/admin/users',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:$('#user-email').value.trim(), password:$('#user-password').value, display_name:$('#user-name').value.trim()})}); $('#user-modal').close(); await loadUsers(); }catch(err){ showToast(err.message);}finally{ s.disabled=false; } }
+function openUserModal(userId = null){
+  const user = usersCache.find((candidate)=>candidate.id === Number(userId));
+  $('#user-form').reset(); $('#user-id').value = user?.id || '';
+  $('#user-email').value = user?.email || ''; $('#user-name').value = user?.display_name || '';
+  $('#user-role').value = user?.role || 'user'; $('#user-active').checked = user?.is_active ?? true;
+  $('#user-password').required = !user; $('#user-password-hint').classList.toggle('hidden', !user);
+  $('#user-active-row').classList.toggle('hidden', !user);
+  const titleKey = user ? 'editUser' : 'addUser'; const submitKey = user ? 'save' : 'create';
+  $('#user-modal-title').dataset.i18n = titleKey; $('#user-modal-title').textContent = text(titleKey);
+  $('#user-submit').dataset.i18n = submitKey; $('#user-submit').textContent = text(submitKey);
+  $('#user-modal').showModal();
+}
+function userFormPayload(isEditing){
+  const payload = {email:$('#user-email').value.trim(), display_name:$('#user-name').value.trim(), role:$('#user-role').value};
+  const password = $('#user-password').value;
+  if(password) payload.password = password;
+  if(isEditing) payload.is_active = $('#user-active').checked;
+  return payload;
+}
+async function saveUser(event){
+  event.preventDefault(); const submitButton=event.submitter; const userId=$('#user-id').value;
+  submitButton.disabled=true;
+  try{
+    await api(userId?`/api/admin/users/${userId}`:'/api/admin/users',{method:userId?'PATCH':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(userFormPayload(Boolean(userId)))});
+    $('#user-modal').close(); await loadUsers();
+  }catch(error){ showToast(error.message); }finally{ submitButton.disabled=false; }
+}
+async function toggleUser(userId){
+  const user = usersCache.find((candidate)=>candidate.id === Number(userId));
+  if(!user) return;
+  try{ await api(`/api/admin/users/${user.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active:!user.is_active})}); await loadUsers(); }
+  catch(error){ showToast(error.message); }
+}
+async function deleteUser(userId){
+  const confirmed = await showConfirmBox({title:text('confirmDelete'),message:text('userDeleteConfirm'),confirmText:text('delete'),cancelText:text('cancel')});
+  if(!confirmed) return;
+  try{ await api(`/api/admin/users/${userId}`,{method:'DELETE'}); await loadUsers(); }
+  catch(error){ showToast(`${text('deleteError')}: ${error.message}`); }
+}
 function showToast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('visible'); setTimeout(()=>t.classList.remove('visible'),3500); }
 
 // ---------- UI Box (replaces alert/confirm/prompt) ----------
@@ -1403,7 +1452,7 @@ $('#prompt')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftK
 $('#prompt')?.addEventListener('input', autoResize);
 $('#login-btn').onclick = login;
 $('#new-key').onclick = openKeyModal; $('#key-form').onsubmit = createKey; $('#key-modal-close').onclick = ()=> $('#key-modal').close();
-$('#new-user').onclick = openUserModal; $('#user-form').onsubmit = createUser; $('#user-modal-close').onclick = ()=> $('#user-modal').close();
+$('#new-user').onclick = ()=>openUserModal(); $('#user-form').onsubmit = saveUser; $('#user-modal-close').onclick = ()=> $('#user-modal').close();
 $('#confirm-modal-close')?.addEventListener('click', ()=> $('#confirm-modal').close());
 $('#prompt-modal-close')?.addEventListener('click', ()=> $('#prompt-modal').close());
 // allow backdrop click to close dialogs (native <dialog> does not close on backdrop, so add listener)
@@ -1417,6 +1466,12 @@ document.querySelectorAll('dialog').forEach(dlg=>{
 });
 $('#key-copy').onclick = async ()=>{ await navigator.clipboard.writeText($('#key-value').value); $('#key-copy-message').textContent=text('copied'); };
 $('#keys-list').onclick = (e)=>{ const b=e.target.closest('[data-action]'); if(!b) return; b.dataset.action==='toggle'?updateKey(b.dataset.keyId):deleteKey(b.dataset.keyId); };
+$('#users-list').onclick = (event)=>{
+  const button=event.target.closest('[data-user-action]'); if(!button) return;
+  if(button.dataset.userAction==='edit') openUserModal(button.dataset.userId);
+  else if(button.dataset.userAction==='toggle') toggleUser(button.dataset.userId);
+  else deleteUser(button.dataset.userId);
+};
 $('#refresh-harnesses').onclick = refreshHarnesses;
 $('#clear-chat')?.addEventListener('click', clearCurrentChat);
 $('#rename-chat')?.addEventListener('click', ()=>{ if(currentConversationId) renameConversation(currentConversationId); });
@@ -2098,4 +2153,3 @@ function bindMainHarnessGrid(){
     }
   });
 }
-

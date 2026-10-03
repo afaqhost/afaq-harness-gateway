@@ -4,6 +4,12 @@ All notable changes to Afaq Harness Gateway are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Dashboard links to the GitHub Releases page and repository issue chooser.
+- Complete administrator user management: create, edit, reset password, change role, activate/deactivate, and delete with owned-data cleanup and self-lockout protection.
+
 ## [0.1.0] - 2026-10-04
 
 ### Added

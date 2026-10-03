@@ -2,7 +2,16 @@ import pytest
 from httpx import AsyncClient
 
 from app.core.security import hash_password
-from app.db.database import User
+from app.db.database import (
+    APIKey,
+    Conversation,
+    CredentialProfile,
+    Message,
+    QuotaReservation,
+    UsageRecord,
+    User,
+)
+
 pytestmark = pytest.mark.integration
 
 
@@ -132,3 +141,167 @@ async def test_admin_create_user_rejects_oversize_password_with_validation_error
     )
     assert resp.status_code == 422
     assert "72 bytes" in str(resp.json())
+
+
+@pytest.mark.asyncio
+async def test_admin_user_crud_lifecycle(client, admin_headers):
+    created = await client.post(
+        "/api/admin/users",
+        headers=admin_headers,
+        json={
+            "email": "Managed@Example.com",
+            "password": "OriginalPass123!",
+            "display_name": "Managed User",
+            "role": "user",
+        },
+    )
+    assert created.status_code == 200
+    user_id = created.json()["id"]
+    assert created.json()["email"] == "managed@example.com"
+    assert created.json()["is_active"] is True
+
+    updated = await client.patch(
+        f"/api/admin/users/{user_id}",
+        headers=admin_headers,
+        json={
+            "email": "updated@example.com",
+            "password": "UpdatedPass123!",
+            "display_name": "Updated User",
+            "role": "admin",
+            "is_active": False,
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json() == {
+        "id": user_id,
+        "email": "updated@example.com",
+        "display_name": "Updated User",
+        "role": "admin",
+        "is_active": False,
+    }
+
+    inactive_login = await client.post(
+        "/api/auth/login",
+        data={"username": "updated@example.com", "password": "UpdatedPass123!"},
+    )
+    assert inactive_login.status_code == 401
+
+    reactivated = await client.patch(
+        f"/api/admin/users/{user_id}",
+        headers=admin_headers,
+        json={"is_active": True},
+    )
+    assert reactivated.status_code == 200
+
+    users = await client.get("/api/admin/users", headers=admin_headers)
+    assert users.status_code == 200
+    assert any(user["id"] == user_id for user in users.json())
+
+    deleted = await client.delete(f"/api/admin/users/{user_id}", headers=admin_headers)
+    assert deleted.status_code == 204
+    users_after_delete = await client.get("/api/admin/users", headers=admin_headers)
+    assert all(user["id"] != user_id for user in users_after_delete.json())
+
+
+@pytest.mark.asyncio
+async def test_admin_user_crud_authorization_and_self_protection(
+    client,
+    admin_headers,
+    user_headers,
+    admin_user,
+    regular_user,
+):
+    forbidden_update = await client.patch(
+        f"/api/admin/users/{admin_user.id}",
+        headers=user_headers,
+        json={"display_name": "No access"},
+    )
+    forbidden_delete = await client.delete(
+        f"/api/admin/users/{admin_user.id}",
+        headers=user_headers,
+    )
+    assert forbidden_update.status_code == 403
+    assert forbidden_delete.status_code == 403
+
+    self_disable = await client.patch(
+        f"/api/admin/users/{admin_user.id}",
+        headers=admin_headers,
+        json={"is_active": False},
+    )
+    self_demote = await client.patch(
+        f"/api/admin/users/{admin_user.id}",
+        headers=admin_headers,
+        json={"role": "user"},
+    )
+    self_delete = await client.delete(
+        f"/api/admin/users/{admin_user.id}",
+        headers=admin_headers,
+    )
+    assert self_disable.status_code == 409
+    assert self_demote.status_code == 409
+    assert self_delete.status_code == 409
+
+    duplicate_email = await client.patch(
+        f"/api/admin/users/{regular_user.id}",
+        headers=admin_headers,
+        json={"email": admin_user.email.upper()},
+    )
+    assert duplicate_email.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_admin_delete_user_removes_owned_records(
+    client,
+    db_session,
+    admin_headers,
+    regular_user,
+):
+    api_key = APIKey(
+        user_id=regular_user.id,
+        name="owned-key",
+        key_prefix="afaq_owned",
+        key_hash="owned-key-hash",
+    )
+    conversation = Conversation(
+        user_id=regular_user.id,
+        title="Owned conversation",
+        model="opencode//fake-model",
+    )
+    credential = CredentialProfile(
+        user_id=regular_user.id,
+        harness="opencode",
+        profile_name="owned-profile",
+    )
+    db_session.add_all([api_key, conversation, credential])
+    await db_session.flush()
+    message = Message(
+        conversation_id=conversation.id,
+        role="user",
+        content="Owned message",
+    )
+    usage = UsageRecord(
+        user_id=regular_user.id,
+        api_key_id=api_key.id,
+        harness="opencode",
+        model="fake-model",
+    )
+    reservation = QuotaReservation(
+        token="owned-reservation",
+        api_key_id=api_key.id,
+        expires_at=regular_user.created_at,
+    )
+    db_session.add_all([message, usage, reservation])
+    await db_session.commit()
+
+    deleted = await client.delete(
+        f"/api/admin/users/{regular_user.id}",
+        headers=admin_headers,
+    )
+    assert deleted.status_code == 204
+    assert await db_session.get(User, regular_user.id) is None
+    assert await db_session.get(APIKey, api_key.id) is None
+    assert await db_session.get(Conversation, conversation.id) is None
+    assert await db_session.get(CredentialProfile, credential.id) is None
+    assert await db_session.get(Message, message.id) is None
+    assert await db_session.get(UsageRecord, usage.id) is None
+    assert await db_session.get(QuotaReservation, reservation.id) is None
