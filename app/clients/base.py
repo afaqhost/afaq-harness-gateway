@@ -137,6 +137,71 @@ async def _drain_subprocess(
                     pass
 
 
+class _BoundedStderrDrainer:
+    """Concurrently reads stderr from a subprocess and retains a bounded diagnostic tail.
+
+    Drains stderr continuously so verbose subprocesses never fill the OS pipe buffer
+    and deadlock while stdout is consumed. Retains up to `max_bytes` (default 64 KiB)
+    to prevent unbounded memory use while keeping useful diagnostics on failure.
+    """
+
+    def __init__(self, stream: asyncio.StreamReader, max_bytes: int = 65536) -> None:
+        self._stream = stream
+        self._max_bytes = max_bytes
+        self._buffer = bytearray()
+        self._task: asyncio.Task[None] | None = None
+
+    def start(self) -> asyncio.Task[None]:
+        self._task = asyncio.create_task(self._drain())
+        return self._task
+
+    async def _drain(self) -> None:
+        chunk_size = 8192
+        try:
+            while True:
+                chunk = await self._stream.read(chunk_size)
+                if not chunk:
+                    break
+                self._buffer.extend(chunk)
+                if len(self._buffer) > self._max_bytes:
+                    del self._buffer[: len(self._buffer) - self._max_bytes]
+        except asyncio.CancelledError:
+            pass
+        except (OSError, RuntimeError, ValueError) as exc:
+            logger.warning("stderr_drain_error error=%s", exc)
+
+    async def finish(self, timeout: float = 2.0) -> None:
+        """Wait for the drain task to complete, cancelling if it takes too long."""
+        if self._task is None:
+            return
+        if not self._task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(self._task), timeout=timeout)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                self._task.cancel()
+                try:
+                    await self._task
+                except (asyncio.CancelledError, Exception):
+                    pass
+        else:
+            try:
+                await self._task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+    async def close(self) -> None:
+        """Cancel and await the drain task to guarantee no orphan task."""
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+            try:
+                await self._task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+    def get_text(self) -> str:
+        return self._buffer.decode(errors="replace").strip()
+
+
 class HarnessAdapter(ABC):
     name: str = "custom"
     display_name: str = "Custom Harness"
@@ -390,6 +455,8 @@ class HarnessAdapter(ABC):
                 ) from exc
             assert process.stdout
             assert process.stderr
+            stderr_drainer = _BoundedStderrDrainer(process.stderr, max_bytes=65536)
+            stderr_drainer.start()
             cur_timeout = min(settings.harness_timeout_seconds, 90)
             if request_id:
                 try:
@@ -417,6 +484,7 @@ class HarnessAdapter(ABC):
                             await process.wait()
                         except ProcessLookupError:
                             pass
+                        await stderr_drainer.close()
                         raise RuntimeError(
                             f"{self.name} stream timed out after {cur_timeout}s — الموديل '{model}' لا يرد. "
                             "جرب opencode/big-pickle أو تأكد من تثبيت الموديل."
@@ -437,13 +505,13 @@ class HarnessAdapter(ABC):
                         await process.wait()
                     except ProcessLookupError:
                         pass
+                    await stderr_drainer.close()
                     raise RuntimeError(f"{self.name} did not exit cleanly after stream")
+                await stderr_drainer.finish(timeout=2.0)
                 if code != 0:
-                    try:
-                        err_bytes = await asyncio.wait_for(process.stderr.read(), timeout=2)
-                        error = err_bytes.decode(errors="replace").strip()
-                    except asyncio.TimeoutError:
-                        error = ""
+                    error = stderr_drainer.get_text()
+                    if "ollama" in error.lower() or ("model" in error.lower() and "not found" in error.lower()):
+                        error = f"{error} — تأكد أن الموديل متاح. جرب opencode/big-pickle"
                     if not error:
                         error = f"exit code {code}"
                     raise RuntimeError(f"{self.name} failed ({code}): {error}")
@@ -461,3 +529,4 @@ class HarnessAdapter(ABC):
                         await process.wait()
                     except ProcessLookupError:
                         pass
+                await stderr_drainer.close()

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sys
 
 import pytest
 
@@ -141,3 +142,45 @@ def test_install_on_process_callback_receives_subprocess():
     asyncio.run(_collect())
     assert "proc" in received
     assert received["proc"].returncode is not None  # 'true' exited cleanly
+
+
+@pytest.mark.asyncio
+async def test_stream_verbose_stderr_no_deadlock():
+    # 128 KiB of stderr exceeds the default 64 KiB OS pipe buffer;
+    # without concurrent background draining, this command would deadlock.
+    cmd = "import sys; sys.stderr.write('E' * 131072); sys.stderr.flush(); print('tok1'); sys.stdout.flush(); print('tok2'); sys.stdout.flush()"
+    adapter = GenericAdapter.from_params(name="verbose", executable=sys.executable, command_template=[sys.executable, "-c", cmd])
+    tokens = []
+    async for text, _ in adapter.stream("hi"):
+        tokens.append(text.strip())
+    assert "tok1" in tokens
+    assert "tok2" in tokens
+
+
+@pytest.mark.asyncio
+async def test_stream_nonzero_exit_retains_bounded_diagnostics():
+    cmd = "import sys; sys.stderr.write('HEAD_' + ('X' * 100000) + '_TAIL_DIAGNOSTIC\\n'); sys.stderr.flush(); sys.exit(42)"
+    adapter = GenericAdapter.from_params(name="fail_verbose", executable=sys.executable, command_template=[sys.executable, "-c", cmd])
+    with pytest.raises(RuntimeError) as exc_info:
+        async for _ in adapter.stream("hi"):
+            pass
+    err_msg = str(exc_info.value)
+    assert "failed (42)" in err_msg
+    assert "TAIL_DIAGNOSTIC" in err_msg
+    assert "HEAD_" not in err_msg
+    # Retained diagnostics are capped at 64 KiB (+ small wrapper message)
+    assert len(err_msg) <= 70000
+
+
+@pytest.mark.asyncio
+async def test_stream_cleanup_leaves_no_orphan_tasks_and_kills_process():
+    cmd = "import sys, time; sys.stderr.write('err\\n'); sys.stderr.flush(); print('tok_live', flush=True); time.sleep(30)"
+    adapter = GenericAdapter.from_params(name="cancel_test", executable=sys.executable, command_template=[sys.executable, "-c", cmd])
+    gen = adapter.stream("hi")
+    first = await gen.__anext__()
+    assert first[0].strip() == "tok_live"
+    await gen.aclose()
+
+    # Verify no _drain task is still pending or running
+    drain_tasks = [t for t in asyncio.all_tasks() if "_drain" in getattr(t.get_coro(), "__name__", "") and not t.done()]
+    assert len(drain_tasks) == 0

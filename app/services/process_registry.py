@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections import defaultdict, deque
+from collections import deque
 from dataclasses import dataclass, field
 
 logger = logging.getLogger("afaq")
@@ -34,12 +34,14 @@ class ProcessRegistry:
         # history delegated to transport layer — auto-chooses Redis if available, else in-memory
         # lazy import to avoid circular
         try:
-            from app.transport.history import get_history_store  # type: ignore
+            from app.transport.history import history_store  # type: ignore
 
-            self._history = get_history_store()  # type: ignore
+            self._history = history_store
         except (ImportError, OSError, RuntimeError) as exc:
             logger.warning("history_store_init_fallback error=%s", exc)
-            self._history: dict[str, deque[tuple[int, str]]] = defaultdict(lambda: deque(maxlen=100))  # type: ignore
+            from app.transport.history import HistoryStore
+
+            self._history = HistoryStore()
 
     async def register(self, request_id: str, handle: ProcessHandle) -> None:
         # if cancel was requested before register (race), kill immediately and don't store
@@ -125,27 +127,16 @@ class ProcessRegistry:
             logger.warning("history_clear_failed error=%s", exc)
 
     def append_history(self, key: str, seq: int, payload: str) -> None:
-        try:
-            # new HistoryStore API
-            self._history.append(key, seq, payload)  # type: ignore
-        except AttributeError:
-            # fallback dict api (old)
-            self._history[key].append((seq, payload))  # type: ignore
+        self._history.append(key, seq, payload)
 
     def get_replay(self, key: str, last_id: int) -> list[str]:
-        try:
-            return self._history.replay(key, last_id)  # type: ignore
-        except AttributeError:
-            dq = self._history.get(key)  # type: ignore
-            if not dq:
-                return []
-            return [payload for seq, payload in dq if seq > last_id]
+        return self._history.replay(key, last_id)
 
     def get_history(self, key: str) -> deque[tuple[int, str]]:
-        try:
-            return self._history.get_history(key)  # type: ignore
-        except AttributeError:
-            return self._history.get(key, deque())  # type: ignore
+        return self._history.get_history(key)
+
+    def has_history(self, key: str) -> bool:
+        return self._history.exists(key)
 
     # for test introspection
     @property

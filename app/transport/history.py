@@ -32,6 +32,9 @@ class HistoryStore:
     def clear(self) -> None:
         self._store.clear()
 
+    def exists(self, key: str) -> bool:
+        return key in self._store and len(self._store[key]) > 0
+
     def size(self, key: str | None = None) -> int:
         if key is not None:
             return len(self._store.get(key, []))
@@ -128,6 +131,16 @@ class RedisHistoryStore:
                     self._client.delete(k)
             except (OSError, RuntimeError) as exc:
                 import logging; logging.getLogger("afaq").warning("history_best_effort error=%s", exc)
+
+    def exists(self, key: str) -> bool:
+        if not self._available or self._client is None:
+            return self._fallback.exists(key)
+        try:
+            rk = self._key(key)
+            return bool(self._client.exists(rk))
+        except (OSError, RuntimeError) as exc:
+            import logging; logging.getLogger("afaq").warning("redis_exists_fallback error=%s", exc)
+            return self._fallback.exists(key)
 
     def size(self, key: str | None = None) -> int:
         if key is not None:

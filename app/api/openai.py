@@ -145,11 +145,52 @@ async def chat_completions(
     request: Request,
     authorization: str | None = Header(default=None),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+    x_stream_id: str | None = Header(default=None, alias="X-Stream-ID"),
     db: AsyncSession = Depends(get_db),
 ):
     user_id, key_id = await resolve_identity(authorization, db)
     if not user_id:
         raise HTTPException(401, "Authentication required. Please sign in or provide a valid API key.")
+
+    from app.services.process_registry import process_registry
+    from app.transport.identity import resolve_stream_identity
+
+    if not request_payload.stream and (x_stream_id is not None or last_event_id is not None):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "invalid_request_error",
+                    "message": "X-Stream-ID and Last-Event-ID headers are only supported when stream=true.",
+                }
+            },
+        )
+
+    identity = None
+    if request_payload.stream:
+        identity = resolve_stream_identity(
+            endpoint="openai",
+            user_id=user_id,
+            stream_id=x_stream_id,
+            last_event_id=last_event_id,
+            history=process_registry,
+        )
+        if identity.is_reconnect:
+            async def replay_event_stream():
+                for rp in process_registry.get_replay(identity.history_key, identity.last_event_id):  # type: ignore[arg-type]
+                    yield rp
+
+            return StreamingResponse(
+                replay_event_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "X-Accel-Buffering": "no",
+                    "Connection": "keep-alive",
+                    "X-Request-ID": identity.stream_id,
+                    "X-Stream-ID": identity.stream_id,
+                },
+            )
 
     # Enforce per-key quota and allowed_models if using API key
     if key_id is not None:
@@ -173,38 +214,35 @@ async def chat_completions(
     completion_id = _completion_id()
 
     if request_payload.stream:
+        stream_id = identity.stream_id if identity else completion_id
+        hist_key = identity.history_key if identity else f"openai:{user_id}:{stream_id}"
         return StreamingResponse(
-            _stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request, last_event_id, request_payload),
+            _stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request, hist_key, request_payload),
             media_type="text/event-stream",
-            headers={"X-Request-ID": completion_id},
+            headers={"X-Request-ID": completion_id, "X-Stream-ID": stream_id},
         )
 
     return await _non_stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request, request_payload)
 
 
 async def _stream_response(
-    adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request, last_event_id: str | None = None, request_payload: ChatRequest | None = None
+    adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request, history_key: str | None = None, request_payload: ChatRequest | None = None
 ):
     started = time.monotonic()
     collected: list[str] = []
 
     async def event_stream():
-        from app.transport.stream import pump_harness_stream, replay_sse_events, store_and_format_sse
+        from app.transport.stream import pump_harness_stream, store_and_format_sse
 
-        history_key = f"openai:{user_id}"
+        h_key = history_key or f"openai:{user_id}:{completion_id}"
         seq = 1
 
         def _store(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
             nonlocal seq
             target_id = id_val if id_val is not None else seq
-            payload = store_and_format_sse(history_key, event, data, target_id, retry)
+            payload = store_and_format_sse(h_key, event, data, target_id, retry)
             seq = max(seq, target_id + 1)
             return payload
-
-        # replay from Last-Event-ID
-        replayed, seq = replay_sse_events(history_key, last_event_id)
-        for rp in replayed:
-            yield rp
 
         # start lifecycle
         start_data = {"id": completion_id, "model": request_model, "created": int(time.time())}

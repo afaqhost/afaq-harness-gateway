@@ -100,14 +100,6 @@ class RedisRateLimiter:
 
     def reset(self) -> None:
         self._fallback.reset()
-        # best-effort flush for tests
-        if self._client:
-            try:
-                import asyncio
-
-                asyncio.create_task(self._client.flushdb())
-            except (OSError, RuntimeError) as exc:
-                logger.warning("rate_limit_best_effort error=%s", exc)
 
     def _size(self, key: str) -> int:
         return self._fallback._size(key)

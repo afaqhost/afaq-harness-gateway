@@ -32,7 +32,26 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest.fixture(autouse=True)
-def reset_rate_limiter():
+def isolate_external_redis(monkeypatch):
+    """Keep tests deterministic and prevent them from mutating a developer Redis."""
+    from app.middleware.rate_limit import global_rate_limiter
+    from app.services.process_registry import process_registry
+    from app.transport.history import HistoryStore
+
+    monkeypatch.setattr(settings, "redis_enabled", False)
+    if hasattr(global_rate_limiter, "_available"):
+        monkeypatch.setattr(global_rate_limiter, "_available", False)
+
+    original_history = process_registry._history
+    process_registry._history = HistoryStore()
+    try:
+        yield
+    finally:
+        process_registry._history = original_history
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter(isolate_external_redis):
     from app.middleware.rate_limit import global_rate_limiter
 
     global_rate_limiter.reset()

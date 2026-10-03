@@ -344,8 +344,41 @@ async def stream_message(
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+    x_stream_id: str | None = Header(default=None, alias="X-Stream-ID"),
 ):
     conv = await _get_conversation_or_404(conv_id, user, db)
+
+    from app.services.process_registry import process_registry
+    from app.transport.identity import resolve_stream_identity
+
+    identity = resolve_stream_identity(
+        endpoint="conv",
+        user_id=user.id,
+        stream_id=x_stream_id,
+        last_event_id=last_event_id,
+        history=process_registry,
+        resource_id=conv.id,
+    )
+
+    request_id = f"chat:{conv.id}:{identity.stream_id}"
+
+    if identity.is_reconnect:
+        async def replay_event_stream():
+            for rp in process_registry.get_replay(identity.history_key, identity.last_event_id):  # type: ignore[arg-type]
+                yield rp
+
+        return StreamingResponse(
+            replay_event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+                "X-Request-ID": request_id,
+                "X-Stream-ID": identity.stream_id,
+            },
+        )
+
     content = payload.content.strip()
     if not content:
         raise HTTPException(400, "Message content required")
@@ -374,15 +407,13 @@ async def stream_message(
     history = (await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))).scalars().all()
     prompt = _history_to_prompt(history)
 
-    # request_id for cancel tracking
-    request_id = f"chat:{conv.id}:{uuid.uuid4().hex[:8]}"
-    history_key = f"conv:{conv.id}"
+    history_key = identity.history_key
     # credential env for harness
     stream_env = await credential_service.get_env_for_harness(db, user.id, harness_name)
 
     async def event_stream():
         from app.db.database import SessionLocal
-        from app.transport.stream import pump_harness_stream, replay_sse_events, store_and_format_sse
+        from app.transport.stream import pump_harness_stream, store_and_format_sse
 
         collected: list[str] = []
         started = time.monotonic()
@@ -396,11 +427,6 @@ async def stream_message(
             payload = store_and_format_sse(history_key, event, data, target_id, retry)
             seq = max(seq, target_id + 1)
             return payload
-
-        # replay from Last-Event-ID if provided
-        replayed, seq = replay_sse_events(history_key, last_event_id)
-        for rp in replayed:
-            yield rp
 
         # lifecycle: start
         start_data = {"id": str(conv.id), "model": model, "created": int(time.time()), "request_id": request_id}
@@ -508,6 +534,7 @@ async def stream_message(
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
             "X-Request-ID": request_id,
+            "X-Stream-ID": identity.stream_id,
         },
     )
 

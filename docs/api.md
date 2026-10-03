@@ -90,9 +90,26 @@ Every response includes `X-Request-ID` (echoes incoming or generated `uuid4` 12 
 
 `POST /api/admin/keys/{id}/rotate` returns new `key` (old revoked immediately).
 
-## SSE Events
+## SSE Events & Reconnection
 
-`event: start` (with `id`, `model`), `event: token` (`id`, `retry:3000`), `event: usage`, `event: done` (`[DONE]`), `event: error`, `event: cancel`, `event: log`/`done` for harness jobs, `: keepalive` every 15s, `Last-Event-ID` replay.
+Streaming endpoints (`POST /v1/chat/completions` with `stream: true` and `POST /api/chat/conversations/{conv_id}/messages/stream`) emit server-sent events with structured lifecycle:
+- Events: `event: start` (with `id`, `model`), `event: token` (`id`, `retry:3000`), `event: tool_call`, `event: tool_result`, `event: usage`, `event: done` (`[DONE]`), `event: error`, `event: cancel`, and `: keepalive` heartbeats every 15s.
+
+### Reconnection Headers & Stream Identity
+
+To ensure reliable reconnection without event collision between concurrent streams:
+- `X-Stream-ID`: Identifies the specific SSE stream instance.
+  - Optional on request: Clients may supply a client-generated stream ID matching 1-128 URL-safe ASCII characters (`[A-Za-z0-9_-]`).
+  - Generated if omitted: The gateway assigns an opaque server-generated UUID hex stream ID.
+  - Echoed on response: Returned in the `X-Stream-ID` response header for all streaming responses.
+  - Key scoping: Replay history is strictly scoped by user, resource, and stream ID (`openai:{user_id}:{stream_id}` or `conv:{user_id}:{conv_id}:{stream_id}`). Unrelated streams never share sequence numbers or replay buffers.
+- `Last-Event-ID`: Specifies the last event ID received by the client (non-negative integer).
+- **Header Relationship & Validation Rules**:
+  - Reconnecting via `Last-Event-ID` **requires** providing the matching `X-Stream-ID`. Requests sending `Last-Event-ID` without `X-Stream-ID` are rejected with `HTTP 400 Bad Request` before any child process is spawned or database record is created.
+  - Malformed `X-Stream-ID` (containing spaces, colons, special characters, or exceeding 128 characters) is rejected with `HTTP 400 Bad Request`.
+  - Reusing an existing `X-Stream-ID` on a new request without `Last-Event-ID` is rejected with `HTTP 409 Conflict` to prevent overwriting or appending to an existing stream.
+  - Valid reconnection replays strictly the events with IDs greater than `Last-Event-ID` in sequential order without spawning duplicate subprocesses or creating duplicate user messages.
+  - Reconnecting to an expired or non-existent stream ID returns `HTTP 404 Not Found`.
 
 ## Dashboard Authentication Endpoints
 
