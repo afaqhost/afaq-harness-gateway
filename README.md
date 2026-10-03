@@ -1,136 +1,194 @@
 # Afaq Harness Gateway
 
-Afaq Harness Gateway is a local OpenAI-compatible gateway for command-line AI tools. It exposes a single HTTP API for chat completions and model discovery, while keeping each CLI integration behind a dedicated harness adapter.
+Afaq Harness Gateway turns supported command-line AI tools into one local,
+OpenAI-compatible API. Install and sign in to a harness CLI, start the gateway,
+and applications can use that CLI through `GET /v1/models` and
+`POST /v1/chat/completions`.
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Tests: passing](https://img.shields.io/badge/tests-passing-brightgreen)](#development-checks)
-[![Python: 3.12](https://img.shields.io/badge/python-3.12-blue)](requirements.txt)
+The project also includes a browser dashboard for conversations, harness
+management, API keys, usage, users, and an administrator-only terminal.
 
-## What It Provides
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Python: 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](requirements.txt)
 
-- **OpenAI-compatible** `GET /v1/models` and `POST /v1/chat/completions` (stream and non-stream, `tools`/`tool_choice`, `response_format` with one retry on `malformed_output`).
-- **Dashboard** at `/login` and authenticated routes `/chat`, `/harnesses`, `/keys`, `/users`, `/usage`, `/documentation` — bilingual Arabic/English, searchable models, markdown rendering.
-- **Auth:** JWT for dashboard + hashed, one-time-display API keys (`afaq_…`) for external clients; key rotation (`POST /keys/{id}/rotate`) with immediate revocation.
-- **Persistence:** SQLite with WAL (`journal_mode=WAL`, 64 MB cache, 5 s busy timeout) — users, API keys, conversations (soft-delete + archive + restore), messages, harness state, credential profiles (Fernet-encrypted), usage records.
-- **Harnesses:** adapters for Codex, OpenCode, Command Code, Claude (and generic fallback) — `is_installed`, `list_models`, queued `run`/`stream` with cancel, install/update jobs with SSE log streaming.
-- **Realtime:** SSE with `event: start|token|usage|tool_call|tool_result|done|error|cancel|log`, `id:` + `retry:`, `Last-Event-ID` replay via `transport/history`, `: keepalive` heartbeats.
-- **Production hardening:** per-bucket global rate limiting (in-memory or Redis), per-key `daily_limit`/`monthly_limit` + `allowed_models` enforcement, harness concurrency queue (`5` + 30 s wait → `429`), request IDs (`X-Request-ID`), structured JSON logs with redacted auth, sanitized harness errors, Prometheus `/metrics`, health checks.
+## What you can do
 
-## Quick Start
+- Connect one client to multiple AI harness CLIs through a consistent API.
+- Use normal or streaming chat completions.
+- Manage local conversations and API keys from a bilingual Arabic/English dashboard.
+- Set per-key model access and daily or monthly quotas.
+- Run with SQLite only, or add Redis for shared rate limits and stream history.
+- Install supported npm-based harnesses from the dashboard using approved recipes.
 
-```bash
-make setup          # interactive install wizard — detects missing tools, picks native or docker
-make dev            # → http://127.0.0.1:3500/setup  (wizard on first run) or /login
-```
+This is a gateway, not an AI provider. You still need at least one supported CLI
+installed and authenticated with its provider before chat requests can succeed.
 
-The `make setup` install wizard detects missing prerequisites (Python, pip,
-venv, node/npm, docker, redis, build tools) and lets you choose between a
-**native install** (gateway runs on the host) or a **Docker** install
-(gateway runs in a container). It installs whatever is missing for the
-chosen path, then drops you at the dashboard.
+## Start in five minutes
 
-For non-interactive / CI use:
+### Option 1: run locally
 
-```bash
-make setup-fast                                 # native, no OS installs (assumes Python+git+curl)
-make setup ARGS="--path=native --no-redis"      # native, skip redis install
-make setup ARGS="--path=docker"                 # install docker if missing, run compose
-make setup ARGS="--path=native --harness agy"   # also install the agy CLI
-make setup-legacy                               # legacy scripts/setup.sh (no OS installs)
-```
-
-Run `bash scripts/install.sh --help` for the full flag list.
-
-First dashboard run opens the **Setup Wizard** at `/setup` — create the admin
-account (auto-login) and optionally install harnesses *inside the container*
-via `npm` with live SSE logs. Subsequent runs go to `/login`. Manual
-alternative:
+Requirements: Python 3.10 or newer, `pip`, `venv`, Git, and `curl`. Node.js and
+npm are needed for JavaScript-based harness CLIs.
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-python -m pip install -r requirements.txt
-cp .env.example .env
-# secrets are auto-patched by make setup; or generate manually:
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"  # -> SECRET_KEY / CREDENTIALS_KEY
-python -m uvicorn app.main:app --host localhost --port 3500
+git clone <YOUR_FORK_OR_REPOSITORY_URL>
+cd afaq-harness-gateway
+make setup
+make dev
 ```
 
-Or via CLI without the wizard:
+When prompted, choose the native setup path. `make setup` checks prerequisites,
+creates `.venv`, installs Python packages, creates `.env` with strong local
+secrets, and prepares the data directories.
+
+Open <http://127.0.0.1:3500/setup>. On the first run, the setup page creates the
+administrator account and helps you install a harness. Later visits use
+<http://127.0.0.1:3500/login>.
+
+### Option 2: run with Docker
 
 ```bash
-make bootstrap EMAIL=admin@example.com PASS=StrongPass123 NAME=Admin
+make setup ARGS="--path=docker"
+docker compose up --build
 ```
+
+Then open <http://127.0.0.1:3500/setup>. Compose exposes the gateway only on the
+host loopback interface at port `3500`; Redis remains private to the Compose
+network.
+
+For a fully manual installation, troubleshooting, and non-interactive setup,
+read [Installation and setup](docs/installation.md).
+
+## Make your first API request
+
+1. Install and authenticate at least one harness CLI.
+2. In the dashboard, open **Harnesses** and refresh the model list.
+3. Open **API Keys**, create a key, and copy it when shown. The raw key cannot be
+   displayed again.
+4. List the available model identifiers:
+
+```bash
+curl http://127.0.0.1:3500/v1/models
+```
+
+5. Copy an `id` from the response and send a completion request:
+
+```bash
+export AFAQ_API_KEY="afaq_REPLACE_WITH_YOUR_KEY"
+export AFAQ_MODEL="REPLACE_WITH_AN_ID_FROM_V1_MODELS"
+
+curl http://127.0.0.1:3500/v1/chat/completions \
+  -H "Authorization: Bearer ${AFAQ_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{\"model\":\"${AFAQ_MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
+```
+
+`GET /v1/models` is public. `POST /v1/chat/completions` requires either an API
+key or a dashboard JWT. API keys work only with `/v1/*`; they cannot access the
+dashboard, administration APIs, or terminal.
+
+## Supported harnesses
+
+The registry includes custom adapters for Claude, Codex, OpenCode, Command Code,
+Antigravity (`agy`), and Pi. Other registered CLIs use a generic text adapter.
+Availability depends on which executables are installed on the machine or in
+the container.
+
+Always use the model identifiers returned by `/v1/models`; do not guess them.
+See [Harness integrations](docs/harnesses.md) for the current registry,
+installation notes, and the process for adding an adapter.
+
+## Important security boundary
+
+The dashboard contains an administrator-only OS terminal. A terminal session
+runs with the same operating-system permissions as the gateway process. Keep the
+service on a trusted machine, protect administrator credentials, and do not
+publish port `3500` directly to the internet.
+
+For a non-local deployment:
+
+- keep `DEBUG=false`;
+- use strong, unique `SECRET_KEY` and `CREDENTIALS_KEY` values;
+- put TLS and authentication-aware access controls in front of the gateway;
+- set `ALLOWED_ORIGINS` and `TRUSTED_PROXIES` explicitly;
+- back up the SQLite database and its WAL sidecar files; and
+- review [SECURITY.md](SECURITY.md) and the known limitations in
+  [bugs&issues.md](bugs%26issues.md).
 
 ## Documentation
 
-- [Installation and setup](docs/installation.md)
-- [Configuration reference](docs/configuration.md)
-- [OpenAI-compatible API](docs/api.md)
-- [Harness integrations](docs/harnesses.md)
-- [Architecture](docs/architecture.md)
+| Document | Use it for |
+| --- | --- |
+| [Installation](docs/installation.md) | Native, Docker, and manual setup |
+| [Configuration](docs/configuration.md) | Environment variables and production settings |
+| [API guide](docs/api.md) | Requests, streaming, errors, tools, and structured output |
+| [Harnesses](docs/harnesses.md) | Supported CLIs and adapter development |
+| [Architecture](docs/architecture.md) | Layers, request flow, persistence, and concurrency |
+| [OS terminal](docs/os-terminal.md) | Terminal operation and security model |
+| [Contributing](CONTRIBUTING.md) | Development workflow and pull requests |
+| [Agent rules](AGENTS.md) | Repository-wide rules for humans and coding agents |
 
-## External Client Example
+FastAPI also serves interactive API documentation at `/docs` and `/redoc` while
+the gateway is running.
 
-Create an API key in the dashboard, then call the gateway from another project:
-
-```bash
-export AFAQ_BASE_URL="http://127.0.0.1:3500"
-export AFAQ_API_KEY="afaq_YOUR_KEY"
-python external_api_example.py
-```
-
-The client sends only `Authorization: Bearer <api-key>` to `/v1/chat/completions`; it does not use the dashboard login endpoint.
-
-## Docker Compose
+## Development quick start
 
 ```bash
-make setup          # generates .env with strong secrets if missing
-docker compose up --build
-# open http://127.0.0.1:3500/setup — wizard will let you create admin + install harnesses inside container
+make setup-fast
+make check
+make dev
 ```
 
-The service listens on port `3500` with a `HEALTHCHECK` (`/health`). Compose runs `redis:7-alpine` (64 MB, `allkeys-lru`) for rate limiting / history / job mirroring — fallback is in-memory when `REDIS_URL` is empty. The gateway container runs as a dedicated unprivileged user (`node`), listening on `0.0.0.0:3500` inside the container so Compose's published port is reachable from the host. Redis is kept private on the internal Compose network (host port 6379 is not published), and Compose waits for Redis health (`condition: service_healthy`) before starting the gateway. Named volumes persist `/app/data`, `/app/storage`, user-writable global npm packages (`/home/node/.npm-global`), and local binaries (`/home/node/.local`), and no longer mounts `docker.sock`. Harness CLIs can be installed directly from the dashboard (*Harnesses → Install* or during the Setup Wizard) — `npm install -g <package>` runs inside the container with live SSE logs. On the host, run `npm install -g <package>` manually and press *Refresh*.
+`make check` compiles the Python package, validates the browser JavaScript, and
+runs the complete test suite with warnings treated as errors. Tests use isolated
+databases and fake harnesses; they do not require provider accounts or real CLI
+binaries.
 
-## Development Checks
+The main dependency direction is:
 
-```bash
-make check          # compileall + node --check + pytest -q -W error (warning-free)
-# or granular:
-.venv/bin/python -m compileall -q app
-node --check app/static/app.js
-.venv/bin/python -m pytest -q -W error          # warning-free; no external services required
-# optional: Redis-backed mode
-# REDIS_URL=redis://localhost:6379/0 REDIS_ENABLED=true .venv/bin/python -m pytest -q -W error
-make health         # curl /health
-make setup-status   # check if bootstrap needed
+```text
+HTTP route -> service -> repository or harness client -> database or CLI
 ```
 
-## Project Structure (layered)
+New business logic belongs in `app/services/`, SQL and persistence queries in
+`app/repositories/`, CLI behavior in `app/clients/`, and wire-level streaming
+mechanics in `app/transport/`. Read [AGENTS.md](AGENTS.md) before changing code.
 
-```
+## Project layout
+
+```text
 app/
-  api/            # controllers — moving toward thin request/response adapters
-  services/       # business logic (quota, harness jobs, queue, process registry)
-  repositories/   # extracted data access; some legacy controller SQL remains
-  clients/        # outbound adapters — hide harness CLIs behind HarnessAdapter
-  models/         # serializable data shapes (HarnessModel/HarnessResult)
-  transport/      # SSE/history streaming mechanics
-  config/         # composition root & settings (app/core/config.py facade)
-  middleware/     # rate limiting, request IDs, structured logging
-  shared/         # leaf utilities (no app imports)
+  api/             HTTP and WebSocket controllers
+  services/        business rules and orchestration
+  repositories/    database access
+  clients/         harness CLI adapters
+  transport/       SSE identity, replay, and heartbeat mechanics
+  middleware/      rate limiting, request IDs, and logging
+  shared/          dependency-light utilities
+  static/          dashboard JavaScript, CSS, and images
+  templates/       dashboard HTML
+tests/
+  unit/ integration/ contract/ security/ performance/ e2e/
+docs/              operator and developer documentation
+scripts/           setup and installation scripts
 ```
 
-`DESIGN.md` is the visual brand source of truth; `docs/architecture.md` is the code layer map.
+## Known limits
 
-## Security Notes
+- Database schema changes do not yet use a migration framework.
+- SQLite backups and disaster recovery are operator-managed.
+- During a Redis outage, fallback history and rate-limit state are replica-local.
+- The administrator terminal requires POSIX and is unavailable on Windows.
+- Live provider accounts and multi-node network faults are outside the automated
+  test suite.
+- Some large controllers and the dashboard JavaScript still need incremental
+  decomposition; new changes must not increase that coupling.
 
-- Never commit `.env`, API keys, the SQLite database, or local harness storage (all ignored via `.gitignore`).
-- API keys are SHA-256 hashed; the raw value is shown once at creation and on rotation. Use `POST /api/admin/keys/{id}/rotate`.
-- `SECRET_KEY` / `CREDENTIALS_KEY` fail fast when weak and `DEBUG=false` (`app/core/config.py:63`). Generate with `secrets.token_urlsafe(48)`.
-- All harness subprocess errors are sanitized (`app/shared/errors.py`) — raw `stderr` never leaks to clients.
-- Put a TLS-terminating reverse proxy in front and restrict `ALLOWED_ORIGINS` for non-local deployments.
-- See [SECURITY.md](SECURITY.md) for reporting and hardening, and [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow.
+See [report.md](report.md) for the production-readiness review and
+[bugs&issues.md](bugs%26issues.md) for the resolved findings and remaining debt.
 
-## License
+## Contributing and license
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), follow
+[AGENTS.md](AGENTS.md), and use the pull-request template. The project is
+licensed under the [Apache License 2.0](LICENSE).

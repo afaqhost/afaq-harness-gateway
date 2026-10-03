@@ -1,6 +1,6 @@
 # Harness Integrations
 
-Harnesses are local CLI adapters defined in `app/harnesses/registry.py`. The gateway checks whether each executable is available on `PATH`, discovers models, builds a command, and parses the command output.
+Harnesses are local CLI adapters registered in `app/clients/registry.py` and re-exported by the compatibility facade in `app/harnesses/registry.py`. The gateway checks whether each executable is available on `PATH`, discovers models, builds a command, and parses the command output.
 
 ## Supported Adapters
 
@@ -26,7 +26,7 @@ Harnesses are local CLI adapters defined in `app/harnesses/registry.py`. The gat
 | Vibe | `vibe` | `vibe` binary (manual) | Generic placeholder |
 
 > Registry: `app/clients/registry.py:20` (`ADAPTERS`) — facade mirrored at `app/harnesses/registry.py`. Adapters with `is_installed() == False` return `[]` from `list_models()` and appear as `installed: false` in `GET /health` and `GET /api/admin/harnesses`.
-> Custom adapters: `claude`, `codex`, `opencode`, `commandcode`, `agy` (`app/clients/agy.py`), `pi` (`app/clients/pi.py`). Remaining 12 are `GenericAdapter` (text-only, `app/clients/generic.py`) and can be upgraded to Custom (`parse_line` tool calls, `--read-only` flags) in `docs/harness-expansion/phase-03-custom-adapters.md`.
+> Custom adapters: `claude`, `codex`, `opencode`, `commandcode`, `agy` (`app/clients/agy.py`), `pi` (`app/clients/pi.py`). Remaining adapters use `GenericAdapter` (text-only, `app/clients/generic.py`) and can be upgraded when their real command and output contracts are verified.
 > The dashboard **Install/Update** actions only run pre-approved recipes (`app/api/admin.py`): `npm install -g` plus the explicitly vetted Antigravity script. Anything else returns `400 no_recipe` — install it manually.
 
 Install and authenticate each CLI through its official documentation. The gateway does not proxy or replace a harness provider's login flow.
@@ -67,7 +67,7 @@ The refresh endpoint is `POST /api/admin/harnesses/refresh` and requires dashboa
 5. Implement `list_models()` with the CLI's actual discovery mechanism (or fallback `[]` / static list if CLI has no command — like `claude.py:44`).
 6. Add the adapter instance to `ADAPTERS` in `app/clients/registry.py:20` (mirrored in `app/harnesses/registry.py`).
 7. Test installation detection (`is_installed()` via `shutil.which`), model discovery, non-streaming output, streaming output, and non-zero exit handling.
-8. Update inventory in `docs/harness-expansion/inventory.md` and this table.
+8. Update this table and document any new installation or authentication steps.
 
 Do not guess model names or output formats. Verify them against the installed CLI's help output and official documentation.
-See `docs/harness-expansion/README.md` for the 6-phase expansion plan (P01–P06) and `docs/harness-expansion/inventory.md` for per-harness probe results.
+Add unit tests for command construction and output parsing, plus integration coverage for installation detection and failure handling. Follow the adapter and subprocess rules in `AGENTS.md`.

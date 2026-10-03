@@ -37,6 +37,10 @@ logs/
 .DS_Store
 Thumbs.db
 
+# Local analysis and coding-tool state
+graphify-out/
+.commandcode/
+
 # Build and packaging
 build/
 dist/

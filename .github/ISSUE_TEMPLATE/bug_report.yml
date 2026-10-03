@@ -1,0 +1,62 @@
+name: Bug report
+description: Report reproducible incorrect behavior in Afaq Harness Gateway
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities here. Follow SECURITY.md instead.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the smallest reliable sequence. Remove keys, tokens, prompts, and personal data.
+      placeholder: |
+        1. Start the gateway with ...
+        2. Send ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include commit/version, operating system, Python version, native or Docker setup, and harness name/version.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized logs or response
+      description: Paste only relevant output. Remove Authorization headers, API keys, credentials, and sensitive prompts.
+      render: text
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Did this work before?
+      options:
+        - Unknown
+        - Yes
+        - No
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and pull requests.
+          required: true
+        - label: I removed secrets and personal data from this report.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

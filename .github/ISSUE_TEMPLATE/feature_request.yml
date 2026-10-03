@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a focused improvement to the gateway
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user or operator problem, not only the desired implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What observable behavior would solve the problem?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe current workarounds or simpler options.
+  - type: textarea
+    id: impact
+    attributes:
+      label: Compatibility and risk
+      description: Note effects on APIs, harnesses, authentication, data, streaming, Docker, or existing clients.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and pull requests.
+          required: true
+        - label: I read the architecture and contribution guides.
+          required: true
