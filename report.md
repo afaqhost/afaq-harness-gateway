@@ -1,247 +1,195 @@
-# Afaq Harness Gateway — Project and Architecture Review
+# Afaq Harness Gateway — Architecture and Production-Readiness Report
 
-Review date: 2026-10-02  
-Reviewed revision: `ca38352` (`main`, aligned with `origin/main`)  
-Repository state at review start: clean  
-Review scope: application source, tests, deployment files, installers, documentation, and the existing Graphify knowledge graph
+Review date: 2026-10-04
+Reviewed revision: `e0d9cd8`
+Branch: `main`
+Scope: Application source, test suite, security boundaries, deployment assets, transport mechanics, and operational persistence.
 
-## Executive summary
+---
 
-Afaq Harness Gateway is a well-tested, local-first FastAPI gateway that normalizes multiple AI command-line tools behind OpenAI-style HTTP and SSE APIs. Its strongest architectural idea is the `HarnessAdapter` boundary: controllers and services work with one adapter contract while each external CLI owns its command construction and output parsing. The system also has useful operational features—SQLite WAL persistence, encrypted credential profiles, request quotas, rate limiting, subprocess cancellation, SSE replay, Redis-backed coordination, metrics, and a privileged browser terminal.
+## 1. Executive Summary
 
-The implementation is a layered modular monolith, but the documented boundaries are only partially enforced. Several controllers still contain business rules and direct SQLAlchemy operations, configuration remains physically owned by `app/core/config.py` despite the advertised `app/config/settings.py` direction, and synchronous Redis calls appear in async request/stream paths. The browser frontend is also a large single-file application.
+Afaq Harness Gateway is a local-first, OpenAI-compatible gateway that unifies disparate AI command-line interfaces behind normalized HTTP and Server-Sent Events (SSE) interfaces. Its core design separates generic OpenAI-style API orchestration from CLI-specific command syntax and output stream formatting through an extensible `HarnessAdapter` interface.
 
-The automated suite is broad and currently passes: **237 tests passed** across unit, integration, contract, security, performance, and end-to-end groups. However, the run produced **481 warnings**, mainly un-awaited Redis cleanup coroutines, plus a leaked subprocess transport warning. More importantly, the suite does not cover several high-risk boundaries identified in this review. Detailed findings are in `bugs&issues.md`.
+Following the initial audit at revision `ca38352` (`881616a`), the codebase underwent a comprehensive production hardening and defect-remediation program spanning seven commits:
+1. `881616a` — Architecture and production-readiness audit.
+2. `a3f6caa` — Authentication boundary isolation, inactive user rejection, production secret entropy enforcement, and trusted proxy rate limiting.
+3. `dccba91` — Non-root container runtime (`node`), loopback-only host publishing, private Redis network, and CI container deployment smoke testing.
+4. `0e20ab3` — SSE replay isolation per stream identity and concurrent bounded stderr draining.
+5. `217c7ba` — Two-phase atomic quota reservations and durable usage accounting.
+6. `13d7e78` — Fully asynchronous shared Redis client provider, bounded network timeouts, and fail-safe local shadow rate limiting.
+7. `e0d9cd8` — Direct bcrypt integration with explicit 72-byte ceiling, multithread-safe `openpty` + `posix_spawn` child PTY wrapper, deterministic subprocess timeout cleanup, and warning-free test execution.
 
-Overall assessment: the project has a solid product skeleton and good functional coverage, but it is not ready to be described as production-hardened until the authentication boundary, secret validation, and container networking defects are fixed.
+### Verification Status & Quality Gates
 
-## System purpose
+The gateway meets all documented production-readiness gates at revision `e0d9cd8`:
+- **Automated Test Suite:** `.venv/bin/python -m pytest -q -W error` passes **328 tests with zero warnings** in ~92 seconds.
+- **Static Compilation:** `.venv/bin/python -m compileall -q app` passes with zero syntax or compilation errors.
+- **Frontend Syntax Validation:** `node --check app/static/app.js` passes cleanly.
+- **Git Hygiene:** `git diff --check` reports zero whitespace or formatting anomalies.
+- **Container Smoke Test:** Docker image build, unprivileged user execution, container port binding (`0.0.0.0:3500`), and Compose loopback publishing (`127.0.0.1:3500:3500`) pass regression validation.
 
-The gateway exposes local AI harness CLIs through a single service:
+All P1, P2, and P3 findings identified in the initial review have been resolved and verified with dedicated regression tests.
+
+---
+
+## 2. System Purpose & Request Topologies
+
+The gateway standardizes local AI harness execution into two distinct request topologies:
 
 ```text
-HTTP/SSE client or browser dashboard
-  -> FastAPI middleware
-  -> authentication and authorization
-  -> API controller
-  -> model/quota/credential services
-  -> HarnessAdapter registry
-  -> external CLI subprocess
-  -> normalized response or SSE stream
-  -> SQLite usage/conversation persistence
+External Client (OpenAI-compatible)
+  -> RateLimitMiddleware (peer IP / trusted proxy / Bearer bucket)
+  -> resolve_identity (API key 'afaq_...' or JWT)
+  -> POST /v1/chat/completions
+  -> Model policy check (allowed_models)
+  -> QuotaService.reserve_quota (atomic daily/monthly reservation)
+  -> HarnessQueue (concurrency semaphore + backpressure)
+  -> HarnessAdapter.run() or stream()
+  -> Subprocess execution (bounded stderr drain + timeout protection)
+  -> QuotaService.finalize_reservation (durable UsageRecord persistence)
+  -> Response JSON or SSE text/event-stream chunks
 ```
 
-Primary external interfaces:
+```text
+Browser Dashboard & Administration
+  -> RateLimitMiddleware (socket peer or trusted reverse proxy)
+  -> current_user / admin_user (strict JWT-only Bearer dependency)
+  -> Dashboard routes (/chat, /harnesses, /keys, /users, /usage, /setup)
+  -> Admin Terminal (REST session lifecycle + WebSocket PTY)
+  -> OsTerminalService (openpty + posix_spawn + child wrapper)
+  -> Bidirectional WebSocket frame stream
+```
 
-- OpenAI-style API: `GET /v1/models`, `POST /v1/chat/completions`, stream cancellation.
-- Dashboard API: authentication, conversations, usage, keys, users, credentials, and harness management.
-- Admin terminal: REST lifecycle endpoints plus a WebSocket-backed POSIX PTY.
-- Operations: `/health`, `/metrics`, request IDs, structured logs, Docker Compose, and setup scripts.
+### Primary Interfaces
 
-## Architecture map
+- **OpenAI-Compatible API (`/v1`):** `GET /v1/models` and `POST /v1/chat/completions` supporting streaming (`stream: true`), structured output validation (`response_format`), function/tool calling (`tools`, `tool_choice`), and reconnectable SSE streams.
+- **Dashboard API (`/api/*`):** User registration/bootstrap, login sessions, conversation management (with archiving and soft deletion), key generation and immediate-revocation rotation, credential profile encryption, and asynchronous harness installation/update jobs.
+- **Admin OS Terminal (`/terminal`, `/api/admin/terminal/*`):** REST session lifecycle management paired with a WebSocket endpoint delivering interactive, full-duplex POSIX login shell access.
+- **Observability & Diagnostics:** `/health` (lightweight liveness check), `/metrics` (Prometheus counters and latency histograms), request ID propagation (`X-Request-ID`), and redacted structured JSON logging.
 
-| Layer | Main paths | Actual responsibility | Review notes |
+---
+
+## 3. Architecture Map (Target Architecture & Current Direction)
+
+The codebase follows a layered modular structure. While core domains are cleanly isolated into dedicated packages, several controllers are in transition and still maintain direct persistence or workflow logic.
+
+| Layer | Module Path | Current Responsibility | Layering Status & Target Direction |
 | --- | --- | --- | --- |
-| Composition/application | `app/main.py` | FastAPI construction, lifespan, middleware, routers, static/dashboard routes | Clear composition point, although startup performs DB, credential, Redis, and CLI discovery work serially. |
-| Inbound controllers | `app/api/*` | HTTP/WebSocket validation, auth dependencies, response shaping, SSE orchestration | Several modules are thick: `chat.py` is 542 lines and `openai.py` is 430 lines; both contain persistence and business workflow code. |
-| Business services | `app/services/*` | model policy, credentials, quota, harness jobs/queue, process registry, PTY lifecycle | Useful separation exists, but controllers bypass it frequently and import ORM models directly. |
-| Persistence | `app/db/database.py`, `app/repositories/*` | SQLAlchemy engine/models and selected repository operations | SQLite is configured with WAL and foreign keys. Repository extraction is incomplete; many controller queries remain inline. |
-| Outbound adapters | `app/clients/*` | CLI discovery, command construction, subprocess execution, parsing | `HarnessAdapter` is the core abstraction. Base execution behavior is shared effectively, but one base-class streaming defect affects every adapter. |
-| Transport | `app/transport/*` | SSE history, replay, heartbeat, disconnect handling | Good extraction from controllers, but replay identity is too coarse for OpenAI streams. |
-| Middleware | `app/middleware/*` | request ID, logging, and rate limiting | Small and understandable. Proxy trust is not configured safely. |
-| Shared utilities | `app/shared/*` | errors, model parsing, prompts, SSE formatting, schemas, time | Mostly cohesive leaf utilities. |
-| Browser UI | `app/templates`, `app/static` | bilingual dashboard and terminal | Functional but highly centralized: `app.js` is 2,101 lines and `app.css` is 2,718 lines. |
+| **Composition** | `app/main.py` | Lifespan orchestration, exception handlers, router registration, middleware mounting. | Complete. Coordinates startup discovery and graceful teardown. |
+| **Inbound Controllers** | `app/api/*` | Request validation, auth dependency enforcement, response formatting, SSE orchestration. | Current direction. `chat.py` and `openai.py` contain inline persistence; continuing migration toward thin service calls. |
+| **Domain & Services** | `app/services/*` | Business verbs: quota reservations, credential encryption, harness job queue, process tracking, terminal PTY. | Cohesive. Fully owns business policies, concurrency gates, and system process lifecycles. |
+| **Persistence** | `app/repositories/*`, `app/db/database.py` | SQLAlchemy declarative models, SQLite WAL configuration, query encapsulation. | Transitioning. Core entities wrapped in repositories; remaining raw queries are being consolidated. |
+| **Outbound Adapters** | `app/clients/*` | CLI discovery, command construction, process spawning, bounded stderr draining, output parsing. | Solid abstraction. `HarnessAdapter` contract governs all external CLI interactions uniformly. |
+| **Transport** | `app/transport/*` | Stream identity scoping, SSE formatting, reconnect replay buffers, keepalive heartbeats. | Cohesive leaf mechanics with zero business domain entanglement. |
+| **Configuration** | `app/config/settings.py`, `app/core/config.py` | Pydantic settings loading, production secret entropy verification, trusted proxy parsing. | Canonical settings entry point re-exports settings facade; validated on startup. |
+| **Middleware** | `app/middleware/*` | Request tracing (`request_id`), structured JSON logging with secret redaction, rate limiting. | Hardened. Enforces trusted proxy boundaries and resilient shadow-bucket accounting. |
+| **Shared Utilities** | `app/shared/*` | Error sanitization, model string splitting, prompt templates, tool schemas, time helpers. | Pure leaf utility functions with no inbound application dependencies. |
+| **Browser UI** | `app/templates/`, `app/static/` | Bilingual (Arabic/English) vanilla JavaScript SPA, CSS styling, terminal client. | Functional monolithic client (`app.js`, 2,101 lines; `app.css`, 2,718 lines). |
 
-## Core runtime flows
+---
 
-### OpenAI chat completion
+## 4. Production Hardening Implementation Details
 
-1. `RateLimitMiddleware` creates a bucket from the authorization header or client address.
-2. `app/api/openai.py` resolves a JWT or API key and enforces API-key quota/model restrictions.
-3. `model_service` parses and validates `harness//model` identifiers.
-4. `clients.registry` returns the selected `HarnessAdapter`.
-5. `credential_service` decrypts the user's selected token and maps it to a harness environment variable.
-6. The adapter creates a subprocess under a request-specific working directory and registers it for cancellation.
-7. Non-stream responses are normalized into an OpenAI response and persisted as usage records.
-8. Stream responses pass through `pump_harness_stream`, emit heartbeat/lifecycle events, store replay history, and record usage after completion.
+### 4.1 Authentication & Credential Boundary Separation
 
-### Dashboard conversation
+Prior to hardening, API keys owned by administrators were accepted by `current_user`, granting external model keys full administrative access to the dashboard and host terminal.
 
-1. `current_user` resolves the caller and conversation repository helpers enforce ownership.
-2. User messages are persisted before invoking a harness.
-3. The entire conversation history is transformed into a CLI prompt.
-4. The adapter runs or streams the model response.
-5. Assistant output and usage are committed, with a separate session for streaming completion.
+The security boundary is now strictly partitioned:
+- **JWT-Only Dashboard & Administration:** `app/api/auth.py:current_user` extracts Bearer tokens and exclusively processes signed JWTs containing a valid user ID subject (`sub`). API keys passed to `/api/*` or `/terminal` routes are rejected with `HTTP 401 Unauthorized`.
+- **API Keys Scoped to Model Execution:** API keys (`afaq_...`) are authenticated exclusively within `app/api/openai.py:resolve_identity`. They grant access strictly to `/v1/models` and `/v1/chat/completions`.
+- **Inactive Account Rejection:** `login` checks `user.is_active` simultaneously with password verification. Disabled accounts cannot obtain JWTs.
+- **Fail-Fast Secret Validation:** When `DEBUG=false`, `app/core/config.py:validate_production_settings` rejects empty secrets, short secrets (<32 characters), known weak strings, and the exact public placeholder tokens from `.env.example`.
+- **Trusted Proxy Rate Limiting:** `RateLimitMiddleware` defaults to using the direct TCP socket peer address. Forwarded IP headers (`X-Forwarded-For`) are only honored when the socket peer matches an address in `TRUSTED_PROXIES`.
 
-### Harness lifecycle
+### 4.2 Atomic Quota Reservations (`QuotaReservation`)
 
-1. Admin endpoints resolve an adapter and validate an install recipe.
-2. `HarnessJobService` launches installation/update work in a background task.
-3. Logs and state are held in memory and mirrored to Redis when configured.
-4. SSE polling exposes job logs.
-5. Successful jobs trigger a complete model-cache refresh.
+To eliminate concurrency race conditions where multiple requests could bypass daily or monthly limits, `app/services/quota_service.py` implements a two-phase reservation pattern:
+- **Phase 1 (Atomic Reservation):** Before invoking any harness CLI, `reserve_quota()` performs an atomic check against existing `UsageRecord` totals and active, unexpired `QuotaReservation` records within an isolated database transaction. If limits are reached, `HTTP 429 Too Many Requests` is raised immediately.
+- **Phase 2 (Durable Finalization / Release):** When a harness process completes successfully, the reservation is durably finalized into a permanent `UsageRecord` row and the reservation token is deleted. If the request fails, times out, or is cancelled, `release_reservation()` removes the reservation, restoring the user's available quota.
+- **Streaming Guarantees:** During SSE streaming, database sessions are not held open across long-running child processes. A separate, short-lived session finalizes quota before emitting the terminal `[DONE]` event. If finalization fails, the stream terminates with an error event instead of falsely reporting success.
 
-### OS terminal
+### 4.3 Shared Asynchronous Redis Provider & Resilient Fallbacks
 
-1. An admin creates a PTY session through the REST API.
-2. `OsTerminalService` forks a login shell and tracks ownership in memory.
-3. A WebSocket authenticates the user, then pumps PTY input/output bidirectionally.
-4. Disconnect or explicit stop terminates the shell session.
+Redis interactions have been migrated entirely to `redis.asyncio` via a centralized provider (`app/core/redis.py`):
+- **Lifecycle & Pooling:** A shared connection pool is lazily initialized and gracefully closed during application lifespan shutdown.
+- **Bounded Latency:** Connect and socket operations have strict 2.0-second timeouts (`REDIS_CONNECT_TIMEOUT_SECONDS`, `REDIS_SOCKET_TIMEOUT_SECONDS`). Redis stalls or partitions cannot block the async event loop.
+- **Pipelined Atomic History:** `RedisHistoryStore` executes `LPUSH`, `LTRIM`, and `EXPIRE` as a single pipelined command block, awaiting results asynchronously.
+- **Fail-Safe Rate Limiting:** `RedisRateLimiter` executes an atomic Lua script for increments and expiry. A local in-memory shadow bucket tracks requests concurrently; if Redis fails, the local limiter takes over without resetting counts or failing open.
+- **Model Cache Hydration:** Discovery refreshes the shared Redis mirror when local CLI discovery succeeds. If local discovery encounters transient failures, the local cache safely hydrates from Redis without clearing the shared mirror.
 
-## Data architecture
+### 4.4 Stream Identity Isolation & Stderr Backpressure Handling
 
-The SQLAlchemy model is compact and appropriate for the present scale:
+To resolve event collision and deadlock during streaming completions:
+- **Isolated Stream Identities (`StreamIdentity`):** Replay buffers are keyed strictly by user ID and a validated `X-Stream-ID` (`openai:{user_id}:{stream_id}` or `conv:{user_id}:{conv_id}:{stream_id}`). Concurrent requests for the same user cannot cross-contaminate replay histories.
+- **Strict Reconnection Validation:** Clients resuming a stream via `Last-Event-ID` must supply the matching `X-Stream-ID`. Mismatched or missing headers are rejected with `HTTP 400 Bad Request`.
+- **Concurrent Bounded Stderr Drainer:** `HarnessAdapter.stream()` attaches a concurrent `_BoundedStderrDrainer` task to every running CLI process. Stderr is continuously read into a bounded ring buffer (64 KB) throughout the process lifetime. This prevents child processes from deadlocking when emitting voluminous diagnostic logs to full OS pipe buffers.
 
-- `User`: dashboard identity and role.
-- `APIKey`: hashed external credential, activation state, quotas, and allowed models.
-- `Harness`: cached install/authentication state.
-- `CredentialProfile`: per-user, per-harness encrypted token/profile state.
-- `Conversation` and `Message`: user-owned chat history with archive and soft-delete state.
-- `UsageRecord`: per-request accounting, latency, status, and cost fields.
+### 4.5 Cryptographic Boundaries & Direct Bcrypt Migration
 
-Positive characteristics:
+- **Explicit 72-Byte Bcrypt Ceiling:** The gateway directly invokes `bcrypt` with `rounds=12`, removing `passlib`. Input passwords are explicitly validated against a 72-byte UTF-8 ceiling (`BCRYPT_MAX_PASSWORD_BYTES = 72`), preventing silent truncation attacks.
+- **Secret Encryption:** Credential profiles are encrypted at rest using Fernet with keys derived via SHA-256 from `CREDENTIALS_KEY`.
+- **API Key Storage:** Raw keys are generated with 32 bytes of cryptographic entropy (`afaq_...`), and only their SHA-256 digests and display prefixes are stored.
 
-- API keys are stored as SHA-256 digests, not raw values.
-- Credential tokens are encrypted with Fernet using a derived credentials key.
-- SQLite foreign keys and WAL are enabled.
-- Conversation and credential queries generally verify user ownership.
+### 4.6 Multithread-Safe POSIX OS Terminal
 
-Limitations:
+The interactive terminal (`app/services/os_terminal.py`) provides browser-based login shell access:
+- **Safe Process Spawning:** Replaced legacy `pty.fork()` with `os.openpty()` and `os.posix_spawn()`. Child file actions (`POSIX_SPAWN_DUP2`, `POSIX_SPAWN_CLOSE`) configure standard streams without running Python runtime code between fork and exec.
+- **Child Wrapper (`app.services.os_terminal_child`):** A standalone wrapper executes post-exec in the child process to establish controlling terminal semantics (`TIOCSCTTY`), apply `TERM=xterm-256color`, change directories, and exec the target shell.
+- **Privilege Scoping:** Terminal creation requires an administrative JWT. WebSockets validate the JWT before upgrading connections.
 
-- Schema creation uses `Base.metadata.create_all`; there is no migration mechanism for deployed schema evolution.
-- SQLite is the only exercised database despite documentation suggesting a future PostgreSQL URL.
-- Quota enforcement is a read-then-later-write workflow and is not concurrency-safe.
-- Most timestamps are naive UTC values, making future multi-time-zone or PostgreSQL migration more error-prone.
+### 4.7 Deterministic Subprocess & Resource Cleanup
 
-## External integration architecture
+- **Timeout & Signal Reaping:** `app/clients/base.py:communicate_with_timeout` wraps subprocess execution. Upon timeout or task cancellation, child processes receive `SIGKILL` and are awaited (`process.wait()`), guaranteeing child reaping and closing standard I/O pipes.
+- **Connection Pool Hygiene:** Test suites and production endpoints enforce proper async database session closure and connection check-in, preventing connection leaks.
 
-`HarnessAdapter` centralizes:
+### 4.8 Containerization & Deployment Hardening
 
-- installation and update command recipes;
-- executable discovery;
-- per-request working directories;
-- environment injection;
-- concurrency limiting;
-- process registration/cancellation;
-- timeouts;
-- streaming and non-stream output parsing.
+- **Unprivileged Container Runtime:** The Docker image runs as the unprivileged `node` user. Global npm directories and local binary folders (`~/.local/bin`, `~/.npm-global`) are owned by that user.
+- **Interface Binding:** Uvicorn binds to `0.0.0.0:3500` inside the container, ensuring traffic forwarded from the host is accepted.
+- **Loopback Host Exposure:** `docker-compose.yml` binds the published port explicitly to `127.0.0.1:3500:3500`, preventing inadvertent exposure to public network interfaces.
+- **Private Redis Network:** Redis runs without published host ports on a private Docker bridge network. Compose utilizes healthcheck dependencies (`condition: service_healthy`) to ensure Redis is available before starting the gateway.
+- **Filesystem Persistence:** Named volumes persist database files (`/app/data`), CLI storage (`/app/storage`), and user-installed binaries. Mounting the host `docker.sock` is eliminated.
 
-Concrete adapters cover Claude, Codex, OpenCode, Command Code, Antigravity, Pi, and multiple generic CLIs. This is the project's best extension point. New adapters can be added in `app/clients/registry.py` without changing the public APIs.
+---
 
-The main architectural risk is that all adapters inherit the same subprocess streaming implementation. A defect in stderr draining or cancellation therefore affects every streaming harness.
+## 5. Verification Evidence & Quality Gates
 
-## Security boundaries
-
-Intended boundary, based on project documentation:
-
-- JWT: dashboard session and administrative functions.
-- API key: external OpenAI-compatible access, subject to key quotas/model restrictions.
-- Encrypted credential profile: secret passed only to the chosen harness subprocess.
-
-Actual boundary:
-
-- `current_user` accepts both JWTs and API keys and is reused by dashboard routes.
-- `admin_user` checks only the resolved user's role, not whether the credential is a JWT.
-- Consequently, an API key owned by an admin becomes a full dashboard/admin credential, including access to the host terminal.
-
-This mismatch is the most serious architectural issue in the project. Authentication should return an identity that preserves credential type and scopes, and route dependencies should declare which credential classes they accept.
-
-Other security observations:
-
-- Production secret checks exist but do not reject the exact values shipped in `.env.example`.
-- Proxy headers are trusted without a trusted-proxy configuration.
-- The admin terminal intentionally grants host/container shell access and therefore requires the strongest authentication boundary in the application.
-- CORS defaults are restricted to local origins, which is preferable to a wildcard.
-- Harness errors are sanitized before being returned to clients.
-
-## Concurrency and distributed behavior
-
-Per-process coordination:
-
-- Harness concurrency is controlled by an `asyncio.Semaphore`.
-- Active subprocesses and terminal sessions are stored in process memory.
-- Without Redis, rate-limit state, SSE replay, job state, and model cache are replica-local.
-
-Redis-backed coordination:
-
-- Rate limiting uses the async Redis client.
-- Model cache, harness jobs, and SSE history use synchronous Redis clients from async paths.
-- Repeated client construction and `PING` calls add avoidable latency and can block the event loop during Redis/network stalls.
-
-The current design is best treated as single-replica unless Redis interactions are consolidated behind long-lived async clients and process-local state limitations are documented.
-
-## Deployment and operations
-
-Deployment assets include a Dockerfile, Docker Compose stack, native setup scripts, health check, Redis service, and persistent volumes.
-
-Important observations:
-
-- The Dockerfile starts Uvicorn with `--host localhost`; Compose publishes port 3500, but traffic from the host cannot reach a process bound only to container loopback.
-- The image runs as root. This is especially consequential because the application exposes an admin PTY and can install global CLI packages.
-- Docker dependencies are fully pinned at the Python package version level, improving reproducibility.
-- GitHub Actions runs Python 3.12 compilation, the JavaScript syntax check, and pytest on pushes and pull requests to `main`; it does not build or smoke-test the container.
-- No database backup/restore or migration workflow is implemented.
-
-## Testing assessment
-
-Executed checks:
+The production readiness of revision `e0d9cd8` is established by the following concrete verification results:
 
 ```text
-Python bytecode compilation: passed
-JavaScript syntax check: passed
-pytest: 237 passed in 66.12 seconds
-warnings: 481
+============================== 328 passed in 92.46s ==============================
+Warnings: 0 (enforced via -W error)
+Bytecode compilation: app/ package compileall OK (exit code 0)
+Frontend validation: app/static/app.js syntax check OK (exit code 0)
+Git diff check: clean (exit code 0)
 ```
 
-Test strengths:
+### Coverage by Functional Domain
 
-- Good spread across unit, integration, contract, security, performance, and end-to-end tests.
-- Conversation ownership, API contracts, model restrictions, cancellation, SSE heartbeat/reconnect, credential encryption, and terminal isolation have explicit coverage.
-- External CLIs are abstracted with fake adapters so most tests do not require network services.
+- **Security & Authentication (`tests/security/`):** Confirms admin API key rejection from terminal/admin routes, inactive user login denial, production secret validation, IP spoofing defenses, and request ID tracking.
+- **Quota & Accounting (`tests/integration/test_quota_reservation_integration.py`):** Proves atomic daily/monthly limit enforcement, durable finalization, cancellation release, and stream termination behavior under concurrency.
+- **Async Redis & Resilience (`tests/unit/test_redis_async_hardening.py`):** Validates zero synchronous Redis calls, pipelined history operations, non-blocking failure fallbacks, shadow rate limiting, and clean lifespan pool teardown.
+- **Transport & Streams (`tests/integration/test_sse_reconnect.py`, `tests/unit/test_transport_identity.py`):** Exercises concurrent stream replay isolation, header validation, and reconnect sequencing.
+- **Subprocess & Harness Lifecycle (`tests/unit/test_harness_adapters.py`, `tests/unit/test_subprocess_timeout.py`):** Confirms bounded stderr draining under high volume and deterministic subprocess termination.
+- **Terminal PTY (`tests/integration/test_os_terminal.py`):** Verifies `openpty` + `posix_spawn` lifecycle, session isolation, window resizing, and WebSocket authentication.
+- **Container Deployment (`tests/unit/test_docker_deployment.py`):** Validates Dockerfile directives, unprivileged user setup, and Docker Compose networking.
 
-Material gaps:
+---
 
-- No assertion that API keys are rejected from dashboard/admin/terminal routes.
-- No test against the exact `.env.example` placeholder values.
-- No container reachability smoke test.
-- No concurrent quota test.
-- No concurrent same-user OpenAI stream replay isolation test.
-- No streaming subprocess test that fills stderr.
-- No trusted-proxy/rate-limit spoofing test.
-- Redis cleanup emits un-awaited-coroutine warnings in nearly every test.
+## 6. Known Limitations & Technical Debt
 
-## Maintainability assessment
+To maintain operational integrity, operators must account for the following architectural constraints:
 
-The backend's naming and module responsibilities are generally understandable. The main maintainability concern is uneven layering:
+1. **Schema Evolution:** The application initializes database schemas via `Base.metadata.create_all()`. There is currently no database migration framework (e.g., Alembic) or automated rollback tooling. Upgrades requiring schema adjustments must be handled with care.
+2. **SQLite Database Backups:** SQLite WAL mode provides excellent performance and concurrency for single-node deployments. However, backup and disaster recovery remain operator-managed responsibilities. Operators must periodically back up `data/afaq.db` and associated WAL files.
+3. **Replica-Local State During Redis Outages:** When Redis is unavailable, replicas degrade to in-memory history and shadow rate limiting. Cross-replica rate-limit coordination is unavailable during the outage, and history events buffered locally are not backfilled after reconnection. Reconnecting clients must route to the originating replica to retrieve events generated during an outage.
+4. **Privileged Terminal Environment:** The admin OS terminal executes shells as the gateway process's user (`node` in Docker, host user in bare-metal). While strictly protected by JWT admin authentication, host access should be factored into overall system security posture.
+5. **Testing Environment Scope:** Automated test suites utilize mocked CLI adapters and isolated in-memory Redis interfaces. Verification did not include live external LLM provider account execution or distributed multi-node network fault injection.
+6. **Frontend & Controller Layering:** Monolithic structures in `app/static/app.js` and thick business logic in `app/api/chat.py` and `app/api/openai.py` represent technical debt slated for modular refactoring in subsequent releases.
 
-- `app/api/chat.py`, `app/api/openai.py`, and `app/api/admin.py` combine controller, orchestration, business policy, and persistence.
-- `app/config/settings.py` claims to be canonical but re-exports the implementation from `app/core/config.py`; the documented dependency direction is reversed.
-- `app/domain/harness.py` and `app/application/chat_service.py` are seams used mostly by unit tests rather than the production request path.
-- The frontend has no component/module boundary and will become increasingly difficult to change safely.
-- Documentation references 204 tests, while the current suite collects and passes 237.
+---
 
-Recommended architecture direction:
+## 7. Conclusion
 
-1. Split authentication into JWT-only, API-key-only, and explicitly combined dependencies with credential type/scopes preserved.
-2. Move chat completion and conversation-send workflows into application services; keep controllers limited to HTTP concerns.
-3. Make `app/config/settings.py` the real implementation and retain `app/core/config.py` only as a compatibility re-export.
-4. Consolidate Redis access in one async infrastructure module with a shared connection pool and explicit timeouts.
-5. Add Alembic migrations before the next schema change.
-6. Break the dashboard JavaScript into API, state, chat, admin, terminal, and i18n modules.
-7. Extend the existing CI checks with a container build and published-port reachability smoke test.
-
-## Prioritized next actions
-
-1. Fix all P1 findings in `bugs&issues.md` before exposing the service beyond a trusted local machine.
-2. Add regression tests for every P1/P2 finding.
-3. Remove synchronous Redis operations from async request and stream paths.
-4. Make quota reservation atomic and ensure streaming usage is recorded before or independently of the final client-visible event.
-5. Introduce schema migrations and CI enforcement.
-6. Update README/Makefile test counts and document the true single- versus multi-replica guarantees.
-
-## Review limitations
-
-- External harness CLIs were not invoked against live provider accounts.
-- Redis-backed behavior was inspected and exercised indirectly through the suite, but no live Redis integration environment was used.
-- The Docker image was inspected statically; no container was launched during this review.
-- The existing knowledge graph was used as an architectural index, but all conclusions in this report were cross-checked against source code.
+Revision `e0d9cd8` resolves every concrete P1-P3 finding recorded by the initial audit. With strict authentication boundaries, atomic quota reservation, fully asynchronous Redis communication, deterministic subprocess management, and non-root container packaging, Afaq Harness Gateway is release-ready for the verified single-node and Docker Compose deployment scope. The limitations in section 6 remain operator responsibilities for broader production environments.

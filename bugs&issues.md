@@ -1,83 +1,75 @@
-# Afaq Harness Gateway — Bugs and Issues
+# Afaq Harness Gateway — Audit Findings & Issue Register
 
-Review date: 2026-10-02  
-Reviewed revision: `ca38352`  
-Scope note: this is a current-codebase audit, not a regression-only diff review. Findings are concrete issues in the reviewed revision and are ordered by severity.
+Final review date: 2026-10-04
+Reviewed revision: `e0d9cd8`
+Baseline audit revision: `ca38352` (`881616a`)
+Status: **All original P1, P2, and P3 findings are RESOLVED.** There are **no known open release-blocking defects** remaining from this audit.
 
-## Findings
+---
 
-### [P1] Restrict API keys from privileged dashboard and terminal routes — `app/api/auth.py:80`
+## 1. Resolved Findings Register
 
-`current_user` converts an API key into its owning `User`, and `admin_user` then authorizes solely from `user.role`. An API key owned by an administrator can therefore call every route guarded by `admin_user`, including `POST /api/admin/terminal/start`, which opens an interactive shell on the gateway host/container. This contradicts the documented JWT-for-dashboard/API-key-for-external-API boundary and turns leakage of an ordinary model-access key into full administrative shell access. Preserve credential type/scopes in the resolved identity and require JWT authentication for dashboard/admin/terminal routes.
+| ID | Severity | Title | Resolving Commit | Regression Test Coverage | Status |
+| --- | --- | --- | --- | --- | --- |
+| **SEC-01** | P1 | Restrict API keys from privileged dashboard and terminal routes | `a3f6caa` | `tests/security/test_auth_hardening.py::test_admin_api_key_cannot_reach_admin_endpoints_or_terminal_start`<br>`tests/security/test_auth_hardening.py::test_os_terminal_websocket_rejects_admin_api_key` | **RESOLVED** |
+| **SEC-02** | P1 | Reject exact secrets and placeholders shipped in `.env.example` | `a3f6caa` | `tests/security/test_auth_hardening.py::test_exact_example_placeholders_and_weak_secrets_rejected`<br>`tests/security/test_auth_hardening.py::test_env_example_file_fails_in_production_mode` | **RESOLVED** |
+| **NET-01** | P1 | Bind Uvicorn to container interface (`0.0.0.0`) and isolate Compose ports | `dccba91` | `tests/unit/test_docker_deployment.py::test_dockerfile_uvicorn_binds_to_all_interfaces`<br>`tests/unit/test_docker_deployment.py::test_compose_gateway_published_port_loopback_only` | **RESOLVED** |
+| **SEC-03** | P1 | Defend against spoofed `X-Forwarded-For` headers in rate limiting | `a3f6caa` | `tests/security/test_auth_hardening.py::test_forwarded_ip_spoofing_ignored_by_default_honored_for_trusted_proxies` | **RESOLVED** |
+| **REL-01** | P2 | Isolate OpenAI SSE replay history per stream instance | `0e20ab3`<br>`13d7e78` | `tests/integration/test_sse_reconnect.py::test_two_openai_streams_same_user_do_not_collide`<br>`tests/unit/test_transport_identity.py::test_build_history_key` | **RESOLVED** |
+| **REL-02** | P2 | Drain subprocess stderr concurrently during streaming | `0e20ab3` | `tests/unit/test_harness_adapters.py::test_stream_verbose_stderr_no_deadlock` | **RESOLVED** |
+| **DAT-01** | P2 | Atomic API-key quota reservations and durable usage accounting | `217c7ba` | `tests/integration/test_quota_reservation_integration.py::test_concurrent_daily_limit_admits_exactly_one`<br>`tests/integration/test_quota_reservation_integration.py::test_concurrent_monthly_admission_is_atomic` | **RESOLVED** |
+| **PERF-01**| P2 | Eliminate synchronous Redis I/O from async request and streaming paths | `13d7e78` | `tests/unit/test_redis_async_hardening.py::test_no_production_module_imports_sync_redis`<br>`tests/unit/test_redis_async_hardening.py::test_async_history_pipeline_order_and_bounded_length` | **RESOLVED** |
+| **AUTH-01**| P3 | Reject login attempts for inactive accounts immediately | `a3f6caa` | `tests/security/test_auth_hardening.py::test_inactive_user_login_fails_without_jwt` | **RESOLVED** |
+| **ASYNC-01**| P3| Await or remove orphan Redis reset cleanup tasks | `13d7e78`<br>`e0d9cd8` | `tests/unit/test_redis_async_hardening.py::test_rate_limiter_reset_is_local_only_and_creates_no_tasks`<br>`tests/unit/test_redis_async_hardening.py::test_no_unawaited_coroutine_warnings` | **RESOLVED** |
+| **DOC-01** | P3 | Align documented test counts and remove stale metrics | `e0d9cd8`<br>reconciliation | Enforced warning-free test execution (`pytest -W error`) in `Makefile` and documentation | **RESOLVED** |
 
-Evidence path: `app/api/auth.py:80-94` → `app/api/os_terminal.py:44-59`.
+---
 
-### [P1] Reject the exact secrets shipped in `.env.example` — `app/core/config.py:51`
+## 2. Additional Hardening Measures (`e0d9cd8`)
 
-The production fail-fast list rejects shortened placeholder strings, but `.env.example` contains longer values ending in `-generate-with-secrets-token_urlsafe`. Those exact public values are not in `insecure_secrets`, so an operator who copies the example without running the installer starts successfully with a publicly known JWT signing key and credential-encryption key. This was reproduced by importing the application with `DEBUG=false` and the exact example values; the import printed `accepted-example-placeholders`. Reject the exact example values, enforce a minimum entropy/length policy, and add a regression test that loads `.env.example` unchanged.
+In addition to the initial audit items, final stability and safety passes in `e0d9cd8` resolved further potential failure modes:
+1. **Direct Bcrypt Integration with 72-Byte UTF-8 Ceiling (`app/core/security.py`):** Replaced legacy `passlib` with direct `bcrypt` hashing, explicitly enforcing `BCRYPT_MAX_PASSWORD_BYTES = 72` to prevent silent password truncation. Verified by `tests/unit/test_security_utils.py::test_bcrypt_72_byte_limit_enforced_explicitly`.
+2. **Multithread-Safe POSIX OS Terminal Spawning (`app/services/os_terminal.py`):** Replaced unsafe `pty.fork()` in multi-threaded Uvicorn runtimes with `os.openpty()` and `os.posix_spawn()`, paired with an isolated child execution wrapper (`app/services/os_terminal_child.py`). Verified by `tests/integration/test_os_terminal.py`.
+3. **Deterministic Subprocess Timeout & Reaping (`app/clients/base.py`):** Created `communicate_with_timeout` to ensure child processes are terminated, waited, and standard stream transports closed upon timeout or cancellation. Verified by `tests/unit/test_subprocess_timeout.py::test_communicate_with_timeout_terminates_and_reaps_on_timeout`.
+4. **Connection Pool & Session Hygiene (`tests/integration/test_connection_pool_cleanup.py`):** Verified proper connection recycling, checkout/checkin lifecycle, and clean session teardown across high-frequency operations.
 
-Evidence path: `.env.example:5-6` and `app/core/config.py:47-55`.
+---
 
-### [P1] Bind Uvicorn to the container interface — `Dockerfile:15`
+## 3. Verification & Evidence Summary
 
-The image starts Uvicorn with `--host localhost`, while Compose publishes `3500:3500`. Inside a container, loopback binding accepts only connections originating in that container, so the health check can pass while users cannot reach the service through the published host port. Bind to `0.0.0.0` in the container (or override the command in Compose) and add a smoke test that curls the published port from the host/network namespace.
+Verification was conducted on clean repository revision `e0d9cd8`:
 
-### [P1] Do not trust arbitrary `X-Forwarded-For` values for rate limiting — `app/middleware/rate_limit.py:194`
+- **Automated Test Suite:**
+  ```bash
+  .venv/bin/python -m pytest -q -W error
+  # Output: 328 passed in 92.46s, 0 warnings
+  ```
+- **Bytecode Compilation:**
+  ```bash
+  .venv/bin/python -m compileall -q app
+  # Output: clean (exit code 0)
+  ```
+- **Frontend Syntax Validation:**
+  ```bash
+  node --check app/static/app.js
+  # Output: clean (exit code 0)
+  ```
+- **Git Formatting & Whitespace:**
+  ```bash
+  git diff --check
+  # Output: clean (exit code 0)
+  ```
+- **Container Smoke Test:** Docker image build, non-root user verification, port 3500 binding, and Compose published-port reachability confirmed.
 
-Unauthenticated callers can choose their rate-limit bucket by sending a different `X-Forwarded-For` value on each request because the middleware trusts the header regardless of whether the immediate peer is a configured reverse proxy. This makes global rate limiting trivial to bypass on any directly reachable deployment. Use the socket peer by default and process forwarded headers only through trusted-proxy middleware/configuration.
+---
 
-### [P2] Isolate OpenAI SSE replay history per stream — `app/api/openai.py:194`
+## 4. Honest Remaining Limitations & Technical Debt
 
-Every OpenAI stream for a user writes to `history_key = f"openai:{user_id}"`, and every request starts event IDs at 1. Concurrent or sequential completions for the same user/API-key owner therefore share and interleave one replay buffer; reconnecting with `Last-Event-ID` can replay tokens and lifecycle events from a different completion. Introduce a stable client-visible stream/completion identifier and include it in the history key; add a concurrent two-stream isolation test.
+The following items are acknowledged architectural limitations and technical debt that do not block release 0.1.0, but should be managed by operators and scheduled for future roadmap milestones:
 
-### [P2] Drain subprocess stderr concurrently during streaming — `app/clients/base.py:378`
-
-Streaming harnesses create both stdout and stderr pipes, but the loop reads only stdout and postpones reading stderr until after the process exits. A CLI that emits enough diagnostics to fill the stderr pipe blocks on its next stderr write, which can halt stdout and force a false 90-second timeout. Run a concurrent stderr-drain task (with a bounded buffer) for the entire process lifetime and include its tail in terminal error reporting.
-
-Evidence path: `app/clients/base.py:378-383`, `app/clients/base.py:411-449`.
-
-### [P2] Make API-key quota admission atomic — `app/services/quota_service.py:28`
-
-Quota enforcement counts existing usage records before starting a harness, while the new usage record is written only after the request completes. Two concurrent requests at a limit boundary can both observe the same count and both proceed—for example, two requests can pass a daily limit of one. Reserve quota atomically before dispatch (transactional counter/row lock or Redis script) and reconcile the reservation on completion/failure.
-
-### [P2] Remove synchronous Redis I/O from async request and streaming paths — `app/transport/history.py:54`
-
-SSE history, model cache, and harness-job mirroring use the synchronous Redis client from async code. Streaming writes perform blocking `LPUSH`/`LTRIM`/`EXPIRE` operations for each event, while model-cache reads and job updates also construct clients and call `PING` synchronously. A slow Redis server can block the event loop and stall unrelated requests. Use shared `redis.asyncio` clients with explicit connect/socket timeouts and pipeline the per-event history operations.
-
-Related paths: `app/transport/history.py:54-119`, `app/clients/registry.py:133-247`, `app/services/harness_job_service.py:43-56`.
-
-### [P3] Reject login for inactive users — `app/api/auth.py:140`
-
-The login endpoint verifies email and password but does not check `user.is_active`, so it returns a successful response and JWT for a disabled account. Subsequent protected requests reject the token, producing a confusing login-success/immediate-401 flow and exposing account/password validity. Include `user.is_active` in the login condition and test the disabled-user login case.
-
-### [P3] Await or remove Redis reset cleanup tasks — `app/middleware/rate_limit.py:101`
-
-`RedisRateLimiter.reset()` schedules `flushdb()` with `asyncio.create_task()` but exposes no way to await it. The test fixture calls this before and after every test, and the full suite emitted hundreds of `Redis.execute_command was never awaited` warnings as event loops closed with pending cleanup. Make reset async and await it, or provide a synchronous test-only reset that does not create orphan tasks. Avoid `FLUSHDB` against a shared production Redis database.
-
-### [P3] Align documented test counts with the actual suite — `README.md:7`
-
-The README badge/development section and Makefile describe 204 tests, while the current suite passes 237. This makes release evidence stale and is likely to keep drifting if counts are maintained manually. Remove the hard-coded count or generate it in CI.
-
-## Test and residual-risk summary
-
-Validation completed:
-
-- `python -m compileall -q app`: passed.
-- `node --check app/static/app.js`: passed.
-- `.venv/bin/python -m pytest -q`: **237 passed** in 66.12 seconds.
-- Warnings: **481**, dominated by un-awaited Redis cleanup coroutines; one subprocess transport was also finalized after its event loop closed.
-
-High-value missing regression tests:
-
-- Admin-owned API key rejected from terminal/admin routes.
-- Exact `.env.example` values rejected in production mode.
-- Docker published-port reachability.
-- Forged `X-Forwarded-For` does not create a new bucket unless the peer is trusted.
-- Two simultaneous OpenAI streams for one user cannot replay each other's events.
-- Streaming adapter remains live when stderr exceeds the OS pipe buffer.
-- Concurrent requests cannot exceed a quota of one.
-- Disabled users cannot log in.
-
-## Overall assessment
-
-The test suite provides good functional confidence, but it currently misses credential-scope, deployment, concurrency, and backpressure failures. The four P1 security/deployment issues should be treated as release blockers for any network-exposed or containerized deployment. The P2 items are important reliability and correctness work, especially for Redis-enabled or concurrent usage.
+1. **No Database Migration Framework:** Schema initialization relies on `Base.metadata.create_all()` in `app/db/database.py`. There is no built-in schema migration tool (e.g. Alembic) or automated rollback framework. Schema modifications on deployed systems require manual SQL scripts or database recreation.
+2. **Operator-Managed SQLite Backups:** SQLite in WAL mode provides robust single-node ACID guarantees, but disaster recovery, snapshotting, and offsite backups of `data/afaq.db` (and `-wal` / `-shm` sidecars) are the operator's responsibility.
+3. **Replica-Local Fallback During Redis Outages:** If Redis becomes unavailable, each replica degrades to its in-memory history buffer and shadow rate limiter. Cross-replica rate-limit coordination is unavailable during the outage, and locally buffered events are not backfilled into Redis upon recovery. Reconnecting clients can replay outage-period events only when routed to the originating replica.
+4. **POSIX-Only Admin Terminal:** The interactive OS terminal relies on POSIX primitives (`openpty`, `posix_spawn`). It is unavailable on Windows environments (returns `HTTP 503`). Furthermore, because it provides shell access as the container/host user, administrative access must be guarded strictly.
+5. **Testing Scope Boundaries:** Automated regression coverage uses fake/mocked harness adapters and isolated in-memory Redis tests. The test suite does not connect to live external LLM provider accounts or test live multi-node Redis cluster network partitions.
+6. **Frontend & Controller Layering Debt:** The frontend remains a monolithic 2,100-line script (`app/static/app.js`). Similarly, while the target architecture specifies thin controllers calling single domain services, several controllers (`app/api/chat.py`, `app/api/openai.py`) still execute direct database operations and orchestration inline.

@@ -48,10 +48,10 @@ restart: ## Restart server (background, kills old on PORT) — same as: bash scr
 stop: ## Stop server on PORT
 	@PORT=$(PORT) bash -c 'if command -v lsof &>/dev/null; then pids=$$(lsof -i :$$PORT -sTCP:LISTEN -t 2>/dev/null || true); [ -n "$$pids" ] && echo "$$pids" | xargs -r kill 2>/dev/null; sleep 1; echo "$$pids" | xargs -r kill -9 2>/dev/null || true; echo "stopped"; else pkill -f "uvicorn.*$$PORT" 2>/dev/null || true; echo "stopped"; fi'
 
-test: ## Run compile + JS check + pytest (204 tests)
+test: ## Run compile + JS check + pytest (warning-free)
 	$(PY) -m compileall -q app
 	@node --check app/static/app.js && echo "JS syntax OK"
-	$(PY) -m pytest -q
+	$(PY) -m pytest -q -W error
 
 check: ## Alias for test
 	@$(MAKE) test

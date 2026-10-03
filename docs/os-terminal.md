@@ -9,8 +9,8 @@ resize, signal forwarding, and live stdin/stdout.
 
 A single page at `/terminal` (sidebar link 06) that opens a real
 login shell in the user's browser. The shell runs as the gateway
-process's own user (root inside the default Docker image, your user
-on a bare host). Type any command, hit Enter, see output. `vim`
+process's own user (unprivileged user `node` inside the Docker image,
+your user on a bare host). Type any command, hit Enter, see output. `vim`
 works. `tmux` works. `htop` works.
 
 That's all it is. No banner, no pre-loaded command, no harness auth
@@ -22,9 +22,11 @@ The terminal endpoints are admin-only. Non-admins get `403`. This is
 deliberate: opening a shell to the gateway host is a trusted operation.
 Every start/stop is logged with the user id, terminal id, and shell path.
 
-The WebSocket upgrade carries the same `Authorization: Bearer <jwt>`
-header as the rest of the dashboard. Browsers forward headers on the WS
-upgrade automatically.
+The browser client supplies the same JWT used by the dashboard through the
+WebSocket query parameter (`?token=<jwt>`), because browser WebSocket APIs
+cannot set a custom `Authorization` header. Programmatic clients may use the
+query parameter, an Authorization header, a cookie, or the supported
+subprotocol form. API keys are rejected; the token must be a valid admin JWT.
 
 ## Endpoints
 
@@ -50,7 +52,7 @@ Response `200 OK`:
 ```
 
 Returns `503` with `{"error": {"code": "terminal_unavailable", ...}}`
-on hosts without `pty.openpty` (Windows).
+on hosts without `openpty` and `posix_spawn` (e.g. Windows).
 
 ### `POST /api/admin/terminal/{terminal_id}/stop`
 
@@ -111,8 +113,8 @@ back to `/bin/bash`. To use a different shell:
   `SHELL=...` in `docker-compose.yml`.
 - **Bare host / dev:** `SHELL=/bin/zsh .venv/bin/python -m uvicorn ...`.
 
-The shell runs as the user that started the gateway (root inside the
-default container image, your own user on a bare host).
+The shell runs as the user that started the gateway (unprivileged
+user `node` inside the container image, your own user on a bare host).
 
 ## Limitations
 

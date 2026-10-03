@@ -14,19 +14,21 @@ Client
   -> normalized response
 ```
 
-## Layer Map (target: controller → service → repository/client)
+## Layer Map (Target Architecture & Current Direction)
 
-| Layer | Location | Rule |
-| --- | --- | --- |
-| `controllers` (inbound) | `app/api/*` | Thin: parse request → call **one** service → shape response. No business rules, no SQL. |
-| `services` | `app/services/*` | Business verbs: `quota_service`, `harness_job_service`, `harness_queue`, `process_registry`, `model_service`, `credential_service`. Depend on interfaces, never on HTTP/SQL. |
-| `repositories` | `app/repositories/*` + `app/db/database.py` ORM | Only place that knows DB/SQL. `conversation_repository`, `usage_repository`. |
-| `clients` (outbound) | `app/clients/*` | Hide harness CLIs behind `HarnessAdapter` (`base.py`). Registry + `MODEL_CACHE` in `clients/registry.py` (with Redis mirror). |
-| `models` | `app/models/harness.py` | Serializable shapes `HarnessModel`/`HarnessResult` (single source; split DTO only when wire shape differs). |
-| `transport` | `app/transport/*` | Wire mechanics: `history.py` (SSE replay, Redis fallback) + `stream.py` (heartbeat). No business meaning. |
-| `config` | `app/config/settings.py` (facade `app/core/config.py`) | Env + DI composition root. |
-| `middleware` | `app/middleware/*` | `rate_limit` (Redis/in-memory), `request_id`, `logging` (JSON, redacted). |
-| `shared` | `app/shared/*` | Leaf utilities (`model_utils`, `prompt_utils`, `sse`, `time`, `errors`, `structured_output`) — no app imports. |
+The layer map represents the target architectural direction. While new capabilities adhere strictly to this structure, several inbound controllers (`chat.py`, `openai.py`) still contain legacy inline persistence, session management, and multi-step orchestration that are being iteratively refactored into domain services.
+
+| Layer | Location | Rule | Current Status |
+| --- | --- | --- | --- |
+| `controllers` (inbound) | `app/api/*` | Thin: parse request → call **one** service → shape response. No business rules, no SQL. | Current direction; `chat.py` and `openai.py` contain inline persistence. |
+| `services` | `app/services/*` | Business verbs: `quota_service`, `harness_job_service`, `harness_queue`, `process_registry`, `model_service`, `credential_service`, `os_terminal`. Depend on interfaces, never on HTTP/SQL. | Established; owns business rules, concurrency limits, and process lifecycle. |
+| `repositories` | `app/repositories/*` + `app/db/database.py` ORM | Only place that knows DB/SQL. `auth_repository`, `conversation_repository`, `usage_repository`. | In transition; entities encapsulated, inline controller queries moving here. |
+| `clients` (outbound) | `app/clients/*` | Hide harness CLIs behind `HarnessAdapter` (`base.py`). Registry + `MODEL_CACHE` in `clients/registry.py` (with Redis mirror). | Unified contract governing CLI execution, discovery, and output parsing. |
+| `models` | `app/models/harness.py` | Serializable shapes `HarnessModel`/`HarnessResult` (single source; split DTO only when wire shape differs). | Stable domain models. |
+| `transport` | `app/transport/*` | Wire mechanics: `identity.py` (stream identity isolation), `history.py` (SSE replay, Redis fallback), `stream.py` (heartbeat). No business meaning. | Cohesive leaf mechanics with zero business logic. |
+| `config` | `app/config/settings.py` (facade `app/core/config.py`) | Env + DI composition root, secret validation, trusted proxy parsing. | Validated settings facade with production fail-fast checks. |
+| `middleware` | `app/middleware/*` | `rate_limit` (Redis/in-memory with shadow bucket), `request_id`, `logging` (JSON, redacted). | Hardened; enforces proxy trust boundaries. |
+| `shared` | `app/shared/*` | Leaf utilities (`model_utils`, `prompt_utils`, `sse`, `time`, `errors`, `structured_output`) — no app imports. | Pure leaf utilities. |
 
 `app/domain/harness.py` exposes `HarnessPort` Protocol + `ChatService` (used by unit tests; controllers currently resolve via `clients/registry.get_adapter` — deliberate seam for future DIP injection). `app/harnesses/registry.py` is a backwards-compatible facade re-exporting `app/clients/*`.
 
@@ -35,20 +37,57 @@ Client
 | Component | Responsibility |
 | --- | --- |
 | `app/main.py` | FastAPI app, lifespan (`init_db` → `harvest_env_credentials` → `refresh_models`), exception → `error_payload` mapping, page routes, health |
-| `app/api/auth.py` | Bootstrap, login, JWT + API-key `current_user` (with `last_used_at` update) |
-| `app/api/openai.py` | `GET /v1/models`, `POST /v1/chat/completions` (tools, response_format, SSE `event:`/`id:`/`retry:`, `Last-Event-ID` replay, cancel) |
+| `app/api/auth.py` | Bootstrap, login, strict JWT-only `current_user` and `admin_user` dependencies |
+| `app/api/openai.py` | `GET /v1/models`, `POST /v1/chat/completions` (tools, response_format, isolated SSE stream identity, `Last-Event-ID` replay, cancel) |
 | `app/api/chat.py` | Dashboard conversations/messages (CRUD, soft-delete/restore, search, pagination), streaming with heartbeat + cancel |
 | `app/api/admin.py` | Harness status/health, `refresh`, `install`/`update` jobs (allow-listed `npm install -g`), users, keys + rotation |
 | `app/api/credentials.py` | Credential profiles (encrypted, per-harness `profile_name`, `check` → `status`) |
 | `app/api/usage.py` | Filtered usage listing (`from`/`to`, harness/model, pagination) |
+| `app/api/os_terminal.py` | OS Terminal REST lifecycle endpoints and authenticated WebSocket proxy |
 | `app/api/metrics.py` | Prometheus `/metrics` (or `501` when client not installed) |
-| `app/clients/*` | `HarnessAdapter` + concrete `Claude/Codex/OpenCode/CommandCode/Generic` + queued `run`/`stream` |
-| `app/db/database.py` + `app/repositories/*` | SQLite WAL engine, models (`User`, `APIKey`, `Harness`, `CredentialProfile`, `Conversation`, `Message`, `UsageRecord`), queries |
+| `app/clients/*` | `HarnessAdapter` + concrete adapters (`claude`, `codex`, `opencode`, `commandcode`, `agy`, `pi`, generic) + queued `run`/`stream` |
+| `app/db/database.py` + `app/repositories/*` | SQLite WAL engine, models (`User`, `APIKey`, `Harness`, `CredentialProfile`, `Conversation`, `Message`, `UsageRecord`, `QuotaReservation`), queries |
 | `app/static/` + `app/templates/` | Bilingual dashboard |
 
 ## Authentication Boundaries
 
-Dashboard requests use a JWT returned by `POST /api/auth/login`. External OpenAI-compatible requests use an API key created through `POST /api/admin/keys`. The chat endpoint accepts either credential type, while API-key usage is recorded against the key when applicable.
+The gateway strictly partitions authentication between internal dashboard operations and external model consumption:
+
+- **JWT-Only Dashboard & Administration:** Protected dashboard routes—including conversations, harness management, user/key management—and the OS terminal (`/terminal`, `/api/admin/terminal/*`) require a signed JWT issued via `POST /api/auth/login`. Public login/bootstrap/setup-status endpoints are the intentional exceptions. Authentication dependencies (`current_user`, `admin_user`) reject API keys with `HTTP 401 Unauthorized`.
+- **API Keys Scoped to OpenAI Routes:** External clients authenticate to `/v1/models` and `/v1/chat/completions` using Bearer API keys (`afaq_...`). API keys cannot authenticate to dashboard or administrative endpoints. JWTs are also accepted on `/v1/*` routes to support web-based chat and integration testing.
+- **Inactive User Enforcement:** Inactive accounts (`user.is_active == False`) are rejected at the login endpoint and cannot obtain access tokens.
+- **Production Secret Validation:** When `DEBUG=false`, `app/core/config.py` enforces fail-fast validation rejecting weak secrets, values under 32 characters, and the public placeholder secrets from `.env.example`.
+- **Trusted Proxy IP Resolution:** `RateLimitMiddleware` resolves client IP from direct socket peers by default. `X-Forwarded-For` headers are only parsed when the immediate peer IP is listed in `TRUSTED_PROXIES`.
+
+## Password Security & Bcrypt Boundary
+
+Password hashing is implemented directly via `bcrypt` in `app/core/security.py`, eliminating legacy dependencies and deprecation warnings:
+- **Explicit 72-Byte UTF-8 Ceiling:** Passwords are explicitly validated against `BCRYPT_MAX_PASSWORD_BYTES = 72`. Attempting to hash a password exceeding 72 UTF-8 bytes raises a `ValueError` immediately, preventing silent truncation attacks.
+- **Verification Safety:** Password verification safely returns `False` for passwords exceeding 72 bytes or malformed hashes, with zero library warnings.
+
+## Atomic Quota Reservations (`QuotaReservation`) & DB Session Ownership
+
+To prevent concurrent requests from exceeding daily or monthly limits, `app/services/quota_service.py` implements atomic two-phase reservations:
+- **Two-Phase Reservation Pattern:**
+  1. *Reservation Phase:* Before starting a harness process, `reserve_quota()` atomically calculates existing usage plus active reservations within an isolated database transaction. If limits are reached, the request is rejected with `HTTP 429 Too Many Requests`.
+  2. *Finalization Phase:* When the harness finishes successfully, `finalize_reservation()` writes the permanent `UsageRecord` and removes the reservation token within a single atomic commit.
+  3. *Release Phase:* If a request fails, times out, or is cancelled, `release_reservation()` removes the reservation token, restoring available quota.
+- **Streaming DB-Session Ownership:** Long-running harness CLI streaming and SSE loops do not hold database connections open. Independent, short-lived sessions are acquired strictly for the initial reservation and terminal finalization.
+- **Streaming Finalization Guard:** If usage finalization fails at the end of an SSE stream, the gateway suppresses the `data: [DONE]` event and emits a terminal `event: error` chunk, preventing the client from incorrectly assuming durable success.
+
+## Subprocess Timeout, Reaping & Stderr Draining
+
+Harness CLI execution is protected by deterministic subprocess management in `app/clients/base.py`:
+- **Deterministic Timeout & Cleanup (`communicate_with_timeout`):** When a subprocess exceeds `run_timeout` or the calling task is cancelled, the helper kills the process (`process.kill()`), awaits process termination bounded by a cleanup timeout (`asyncio.wait_for(process.communicate(), timeout=2.0)` or `process.wait()`), and closes stdout/stderr transports. This eliminates un-reaped zombie processes and leaked transport warnings.
+- **Concurrent Bounded Stderr Draining:** During streaming runs, `_BoundedStderrDrainer` reads the child's stderr continuously into a bounded 64 KB ring buffer. This prevents child processes from deadlocking when emitting voluminous diagnostic logs to full OS pipe buffers.
+
+## OS Terminal PTY Architecture
+
+The `/terminal` dashboard feature provides an interactive login shell in the browser (`app/services/os_terminal.py`):
+- **Multithread-Safe Spawning:** Replaced legacy `pty.fork()` with `os.openpty()` and `os.posix_spawn()`. Standard file actions (`POSIX_SPAWN_DUP2`, `POSIX_SPAWN_CLOSE`) attach the slave PTY file descriptor to child stdin/stdout/stderr without running Python application code between fork and exec in the parent runtime.
+- **Child Process Wrapper (`app.services.os_terminal_child`):** A lightweight standalone wrapper runs post-exec in the child process, acquires controlling terminal ownership (`TIOCSCTTY`), sets environment variables (`TERM=xterm-256color`, `AFAQ_TERMINAL=1`), enters the requested working directory, and executes the login shell.
+- **POSIX-Only:** Terminal functionality requires POSIX primitives (`openpty`, `posix_spawn`) and is unavailable on Windows (returns `HTTP 503`).
+- **Access Boundary:** Shell creation is restricted to administrative users authenticated via JWT.
 
 ## Model Cache
 
@@ -66,7 +105,7 @@ A centralized async Redis provider (`app/core/redis.py`) manages connection pool
 - **Narrow Exception Handling:** Catches specific Redis and timeout exceptions (`RedisError`, `RedisTimeoutError`, `ConnectionError`, `asyncio.TimeoutError`, `OSError`) to trigger graceful degradation with structured warnings.
 - **SSE History:** `RedisHistoryStore` pipelines `LPUSH` + `LTRIM` + `EXPIRE` atomically per event and awaits execution. Replays use awaited async `LRANGE`. Propagated through stream identity, process registry, and SSE controllers without fire-and-forget tasks.
 - **Harness Job Mirroring:** Harness job status sync and deletion are awaited async calls. The service lock is released prior to all network I/O to avoid head-of-line blocking.
-- **Rate Limiter:** `RedisRateLimiter` executes an atomic Lua script (`INCR` + conditional `EXPIRE`) to prevent key leaks without race conditions. A local shadow bucket remains active on every request, ensuring that a Redis outage does not reset effective counts or grant burst allowances. `reset()` is strictly local-only (never issues `FLUSHDB`, never schedules orphan coroutines, never makes network calls). Targeted key cleanup (`rl:*` only) is available via explicit awaited helper.
+- **Rate Limiter:** `RedisRateLimiter` executes an atomic Lua script (`INCR` + conditional `EXPIRE`) to prevent key leaks without race conditions. A local shadow bucket remains active on every request, ensuring that a Redis outage does not reset effective counts or grant burst allowances. `reset()` is strictly local-only (never issues `FLUSHDB`, never schedules orphan coroutines, never makes network calls).
 
 ### Single- vs Multi-Replica Guarantees & Fallback Limitations
 
@@ -80,12 +119,4 @@ The public format is `harness//model` when no separate provider is used. OpenCod
 
 ## Persistence
 
-SQLite (WAL: `journal_mode=WAL`, `synchronous=NORMAL`, 64 MB cache, 5 s `busy_timeout` in `app/db/database.py:13`) stores users, hashed API keys, conversations (with `archived`/`deleted_at` + restore), messages, harness records (`last_checked_at`), credential profiles, and usage records. The default is `data/afaq.db`; override with `DATABASE_URL` (e.g., `postgresql+asyncpg` when `database is locked` appears — repositories are already isolated).
-
-## Current Boundaries & Recent Hardening
-
-- **Jobs:** `POST /harnesses/{name}/install` / `update` now create a `HarnessJob` (`app/services/harness_job_service.py`) with allow-listed `npm install -g` check, background `adapter.install()` streaming, async non-blocking Redis mirror + TTL, and `GET /jobs/{id}` + `/jobs/{id}/stream` (`event: log/done`).
-- **Credentials:** `app/services/credential_service.py` encrypts tokens via `app/core/security.encrypt_secret` (Fernet derived from `CREDENTIALS_KEY`) and injects per-harness env (`ANTHROPIC_API_KEY`, etc.) at `run`/`stream` time; `lifespan` harvests `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/… into default profiles for the first admin.
-- **Queue & backpressure:** `app/services/harness_queue.py` (`Semaphore(5)`, 30 s wait → `429`) wraps `HarnessAdapter.run/stream` so 512 MB hosts handle 20+ concurrent callers without OOM.
-- **Streaming & History:** `transport/history` + `transport/stream` + `transport/identity` own `id:`/`retry:`/`Last-Event-ID`/`X-Stream-ID` collision-free replay, bounded history isolation per user/conversation/stream, `: keepalive`, and concurrent bounded stderr draining (`_BoundedStderrDrainer` in `HarnessAdapter.stream`); controllers emit `start|token|usage|tool_call|tool_result|done|error|cancel` with `X-Request-ID` / `X-Stream-ID` / `X-RateLimit-Limit`. All Redis operations in the stream path are fully async and pipelined.
-- **Observability:** structured JSON logs (`request_id`, redacted `authorization`), `X-Request-ID` echo, sanitized `harness_error` (`app/shared/errors.py`), Prometheus at `/metrics`, and fast `/health` (no `list_models` call).
+SQLite (WAL: `journal_mode=WAL`, `synchronous=NORMAL`, 64 MB cache, 5 s `busy_timeout` in `app/db/database.py:13`) stores users, hashed API keys, conversations (with `archived`/`deleted_at` + restore), messages, harness records (`last_checked_at`), credential profiles, usage records, and quota reservations. The default is `data/afaq.db`; override with `DATABASE_URL`.

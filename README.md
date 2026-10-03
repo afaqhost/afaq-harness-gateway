@@ -3,7 +3,7 @@
 Afaq Harness Gateway is a local OpenAI-compatible gateway for command-line AI tools. It exposes a single HTTP API for chat completions and model discovery, while keeping each CLI integration behind a dedicated harness adapter.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Tests: 204 passing](https://img.shields.io/badge/tests-204%20passing-brightgreen)](#development-checks)
+[![Tests: passing](https://img.shields.io/badge/tests-passing-brightgreen)](#development-checks)
 [![Python: 3.12](https://img.shields.io/badge/python-3.12-blue)](requirements.txt)
 
 ## What It Provides
@@ -94,13 +94,13 @@ The service listens on port `3500` with a `HEALTHCHECK` (`/health`). Compose run
 ## Development Checks
 
 ```bash
-make check          # compileall + node --check + pytest -q (204 tests, ~55s)
+make check          # compileall + node --check + pytest -q -W error (warning-free)
 # or granular:
-python -m compileall -q app
+.venv/bin/python -m compileall -q app
 node --check app/static/app.js
-.venv/bin/python -m pytest -q          # no external services required
+.venv/bin/python -m pytest -q -W error          # warning-free; no external services required
 # optional: Redis-backed mode
-# REDIS_URL=redis://localhost:6379/0 REDIS_ENABLED=true .venv/bin/python -m pytest -q
+# REDIS_URL=redis://localhost:6379/0 REDIS_ENABLED=true .venv/bin/python -m pytest -q -W error
 make health         # curl /health
 make setup-status   # check if bootstrap needed
 ```
@@ -109,9 +109,9 @@ make setup-status   # check if bootstrap needed
 
 ```
 app/
-  api/            # controllers — thin: parse request → call one service → shape response
+  api/            # controllers — moving toward thin request/response adapters
   services/       # business logic (quota, harness jobs, queue, process registry)
-  repositories/   # data access — only place that knows DB/SQL
+  repositories/   # extracted data access; some legacy controller SQL remains
   clients/        # outbound adapters — hide harness CLIs behind HarnessAdapter
   models/         # serializable data shapes (HarnessModel/HarnessResult)
   transport/      # SSE/history streaming mechanics

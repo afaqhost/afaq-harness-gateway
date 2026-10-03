@@ -24,7 +24,7 @@ jobs:
       - name: JS syntax check
         run: node --check app/static/app.js
       - name: Pytest
-        run: python -m pytest -q
+        run: python -m pytest -q -W error
       - name: Create temporary .env for Compose
         run: |
           python3 -c "import secrets; open('.env', 'w').write(f'SECRET_KEY={secrets.token_urlsafe(48)}\nCREDENTIALS_KEY={secrets.token_urlsafe(48)}\n')"

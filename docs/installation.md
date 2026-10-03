@@ -122,6 +122,16 @@ The service is published as `http://127.0.0.1:3500` with a `HEALTHCHECK` (`/heal
 
 Installing harnesses from the dashboard runs each adapter's approved recipe **inside the `afaq-gateway` container** via `app/clients/*` adapters — `npm install -g` (`opencode-ai`, `@openai/codex`, `@anthropic-ai/claude-code`, `command-code`) or the official Antigravity installer script (`agy`, binary → `/home/node/.local/bin`) — and streams logs via `GET /api/admin/harnesses/{name}/jobs/{id}/stream` (SSE, `event: log|done`). On the host you can also run `make install-agy` / `agy update`, or the npm command from `docs/harnesses.md`, then press *Refresh*.
 
+## Production Notes & Hardening
+
+Before deploying the gateway to a production or network-reachable environment:
+
+- **Authentication Scope:** API keys (`afaq_...`) cannot authenticate protected dashboard, user management, key management, or terminal routes. API keys are restricted to `/v1/*` OpenAI endpoints. Protected `/api/*` and `/terminal` routes require a signed JWT obtained via `/api/auth/login`; login/bootstrap/setup-status remain public by design.
+- **Admin OS Terminal:** The browser terminal (`/terminal`) is a privileged tool that opens an interactive login shell inside the container (as user `node`) or on the host. It is strictly admin-only, requires JWT authentication, and is supported only on POSIX systems (`openpty` + `posix_spawn`).
+- **Secrets:** Always generate strong, distinct secrets for `SECRET_KEY` and `CREDENTIALS_KEY` (e.g. `secrets.token_urlsafe(48)`). Never use identical secrets or example placeholders; when `DEBUG=false`, the server fails fast and refuses to start if secrets are weak or known defaults.
+- **Backups & Upgrades:** Always create a backup of the `data/` directory (SQLite database and WAL files) and named Docker volumes before upgrading. Database tables are auto-created at startup via `Base.metadata.create_all`; there is currently no automated database migration or rollback framework (e.g., Alembic).
+- **Network Exposure & Reverse Proxy:** `docker-compose.yml` intentionally binds the published port exclusively to loopback (`127.0.0.1:3500`). For remote exposure, place the gateway behind a TLS-terminating reverse proxy (Nginx, Caddy, Traefik). Enable WebSocket upgrades for `/terminal`, disable buffering and allow long read timeouts for SSE, and set `TRUSTED_PROXIES` to the proxy's IP so client rate limiting cannot be spoofed via forged `X-Forwarded-For` headers.
+
 ## Stop and Restart
 
 For a foreground local process, press `Ctrl+C`. Restart with the same Uvicorn command. Model discovery runs once during each server startup; use the dashboard's **Refresh models** action to refresh it without restarting.
@@ -129,8 +139,9 @@ For a foreground local process, press `Ctrl+C`. Restart with the same Uvicorn co
 ## Reverse proxy (optional)
 
 If you put the gateway behind nginx, Caddy, or Traefik for TLS
-termination, make sure your proxy forwards WebSocket upgrades — both
-the SSE chat stream and the new `OS Terminal` page use them.
+termination, make sure your proxy forwards WebSocket upgrades for the
+`OS Terminal` page. SSE chat streams use ordinary long-lived HTTP responses;
+disable proxy buffering and allow a suitably long read timeout for them.
 
 - **nginx:** set `proxy_http_version 1.1;`, `proxy_set_header Upgrade $http_upgrade;`, `proxy_set_header Connection "upgrade";`, and `proxy_read_timeout 86400;` on the gateway location.
 - **Caddy 2.7+ / Traefik:** `Upgrade` is detected automatically — no extra config.

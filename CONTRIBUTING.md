@@ -28,15 +28,15 @@ Open `http://127.0.0.1:3500/setup` on a fresh database — the wizard creates th
 ## Checks Before Sending a PR
 
 ```bash
-make check          # compileall + node --check + pytest -q (204 tests, ~55s)
+make check          # compileall + node --check + pytest -q -W error (warning-free)
 # or:
-python -m compileall -q app
+.venv/bin/python -m compileall -q app
 node --check app/static/app.js
-.venv/bin/python -m pytest -q
+.venv/bin/python -m pytest -q -W error
 ```
 
-- Keep controllers thin (`app/api/*` → one service call), business logic in `app/services/*`,
-  data access only in `app/repositories/*`, external CLIs behind `app/clients/*` (see `DESIGN.md` and `docs/architecture.md`).
+- Architecture direction: move towards thin controllers (`app/api/*` → one service call), business logic in `app/services/*`,
+  data access in `app/repositories/*`, external CLIs behind `app/clients/*` (see `DESIGN.md` and `docs/architecture.md`).
 - Leaf utilities in `app/shared/*` must not import from `app/services`, `app/api`, etc.
 - Prefer small, behavior-preserving commits: `refactor(scope): what moved + why`.
 - Never commit `.env`, `data/`, `storage/`, or real keys. Tests use in-memory SQLite and do not need real harness binaries.

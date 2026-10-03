@@ -100,8 +100,9 @@ async def terminal_status(terminal_id: str, user: User = Depends(admin_user)):
 async def terminal_ws(websocket: WebSocket, terminal_id: str):
     """Bidirectional PTY pump over WebSocket.
 
-    Auth: Bearer JWT or API key via `?token=<token>` query parameter (standard
-    for browser WebSockets), Authorization header, cookie, or subprotocol.
+    Auth: JWT via `?token=<token>` query parameter (standard for browser
+    WebSockets), Authorization header, cookie, or subprotocol. API keys are
+    intentionally rejected.
     """
     user = await _authenticate_ws(websocket)
     if user is None:
@@ -190,9 +191,9 @@ async def terminal_ws(websocket: WebSocket, terminal_id: str):
 async def _authenticate_ws(websocket: WebSocket) -> User | None:
     """Resolve a User from query parameter, Authorization header, cookie, or subprotocol.
 
-    Mirrors `app.api.auth.current_user` (which accepts query param ?token= or ?access_token=)
-    so standard browser WebSockets can authenticate (browsers cannot send custom headers
-    during WebSocket upgrade handshake).
+    Uses the same JWT identity boundary as `app.api.auth.current_user` while
+    accepting query parameters so standard browser WebSockets can authenticate
+    (browsers cannot send custom headers during the upgrade handshake).
     """
     from app.core.security import decode_jwt_subject, extract_bearer_token
     from app.db import database as db_mod
