@@ -123,6 +123,9 @@ Complete every applicable item in the repository pull-request template. A PR is
 ready for review when it is focused, documented, warning-free, tested, and does
 not weaken an existing security or architecture boundary.
 
+Maintainers preparing a version should follow the [release guide](docs/releases.md)
+and start from [the release template](.github/RELEASE_TEMPLATE.md).
+
 ## Review expectations
 
 Reviewers check correctness first, then security, ownership of database and

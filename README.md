@@ -10,6 +10,11 @@ management, API keys, usage, users, and an administrator-only terminal.
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Python: 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](requirements.txt)
+[![Release: beta](https://img.shields.io/badge/release-0.1.0--beta.1-orange.svg)](CHANGELOG.md)
+
+> **Beta status:** The current release is `0.1.0-beta.1`. Core workflows are
+> tested, but APIs, configuration, and database structures may still change
+> before the first stable release. Back up application data before upgrading.
 
 ## What you can do
 
@@ -127,6 +132,7 @@ For a non-local deployment:
 | [OS terminal](docs/os-terminal.md) | Terminal operation and security model |
 | [Contributing](CONTRIBUTING.md) | Development workflow and pull requests |
 | [Agent rules](AGENTS.md) | Repository-wide rules for humans and coding agents |
+| [Release guide](docs/releases.md) | Versioning, release notes, and update checklist |
 
 FastAPI also serves interactive API documentation at `/docs` and `/redoc` while
 the gateway is running.

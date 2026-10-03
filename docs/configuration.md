@@ -5,7 +5,7 @@ Configuration is loaded from `.env` through `pydantic-settings`. Start from `.en
 | Variable | Default | Description |
 | --- | --- | --- |
 | `APP_NAME` | `Afaq Harness Gateway` | Application display name |
-| `VERSION` | `0.1.0` | Application version returned by `/health` |
+| `VERSION` | `0.1.0-beta.1` | Application version shown in the dashboard and returned by `/health` |
 | `HOST` | `localhost` | Default host setting |
 | `PORT` | `3500` | Default application port |
 | `DEBUG` | `false` | Debug setting exposed to application configuration |

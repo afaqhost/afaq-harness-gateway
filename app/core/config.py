@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     app_name: str = "Afaq Harness Gateway"
-    version: str = "0.1.0"
+    version: str = "0.1.0-beta.1"
     host: str = "localhost"
     port: int = 3500
     debug: bool = False

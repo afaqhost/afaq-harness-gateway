@@ -105,7 +105,7 @@ curl http://127.0.0.1:3500/health
 Expected response shape:
 
 ```json
-{"status":"ok","service":"Afaq Harness Gateway","version":"0.1.0"}
+{"status":"ok","service":"Afaq Harness Gateway","version":"0.1.0-beta.1"}
 ```
 
 After logging in, create an API key in the dashboard and use [api.md](api.md) to test an external request.

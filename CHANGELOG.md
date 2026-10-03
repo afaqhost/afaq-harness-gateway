@@ -6,13 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.1] - 2026-10-04
+
 ### Added
 - Dashboard links to the GitHub Releases page and repository issue chooser.
 - Complete administrator user management: create, edit, reset password, change role, activate/deactivate, and delete with owned-data cleanup and self-lockout protection.
-
-## [0.1.0] - 2026-10-04
-
-### Added
 - **OpenAI-Compatible Gateway:** Standardized `/v1/models` and `/v1/chat/completions` supporting streaming (SSE), JSON schema structured output validation, and function/tool calling.
 - **Harness CLI Adapters:** Extensible adapter architecture supporting Claude Code, OpenAI Codex, OpenCode, Command Code, Google Antigravity (`agy`), Pi, and generic command-line models.
 - **Bilingual Web Dashboard:** Arabic and English web interface for chat, model browsing, API key management with immediate rotation, and encrypted credential storage.
@@ -30,4 +28,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Direct Bcrypt Integration:** Migrated from legacy hashing wrappers to direct `bcrypt` hashing with an explicit 72-byte UTF-8 ceiling (`BCRYPT_MAX_PASSWORD_BYTES = 72`) to eliminate silent truncation.
 - **Multithread-Safe PTY Spawning:** Replaced `pty.fork()` with `os.openpty()` + `os.posix_spawn()` and a dedicated child process wrapper (`app.services.os_terminal_child`), preventing fork deadlocks in multi-threaded Uvicorn runtimes.
 - **Deterministic Subprocess & Pipe Cleanup:** Implemented `communicate_with_timeout` and concurrent bounded stderr draining (`_BoundedStderrDrainer`) to prevent OS pipe buffer deadlocks and leaked file descriptors.
-- **Clean Quality Gates:** Warning-free automated test suite passing 328 tests under `pytest -W error`.
+- **Clean Quality Gates:** Warning-free automated test suite passing 331 tests under `pytest -W error`.
