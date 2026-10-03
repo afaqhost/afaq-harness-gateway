@@ -8,12 +8,13 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import desc, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
 from app.core.config import settings
-from app.core.security import extract_bearer_token, hash_api_key
+from app.core.security import extract_bearer_token
+from app.db import database
 from app.db.database import APIKey, Conversation, Message, User, get_db
 from app.harnesses.registry import get_adapter
 from app.repositories.auth_repository import get_active_api_key_by_raw
@@ -21,7 +22,6 @@ from app.repositories.conversation_repository import (
     fetch_conversation_summary,
     get_conversation_or_404 as repo_get_conversation_or_404,
 )
-from app.repositories.usage_repository import record_usage
 from app.services import credential_service, quota_service
 from app.services.model_service import (
     select_model_for_conversation,
@@ -43,11 +43,25 @@ from app.shared.time import utcnow
 logger = logging.getLogger("afaq")
 
 
-async def _resolve_api_key(authorization: str | None, db: AsyncSession) -> APIKey | None:
+async def _resolve_api_key(
+    authorization: str | None,
+    db: AsyncSession,
+    x_api_key: str | None = None,
+    expected_user_id: int | None = None,
+) -> APIKey | None:
     raw = extract_bearer_token(authorization)
-    if not raw or not raw.startswith("afaq_"):
-        return None
-    return await get_active_api_key_by_raw(db, raw)
+    if not (raw and raw.startswith("afaq_")):
+        if x_api_key and x_api_key.startswith("afaq_"):
+            raw = x_api_key
+        else:
+            return None
+    key = await get_active_api_key_by_raw(db, raw)
+    if key is not None and expected_user_id is not None and key.user_id != expected_user_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": {"code": "forbidden", "message": "API key does not belong to authenticated user"}},
+        )
+    return key
 
 router = APIRouter()
 
@@ -152,11 +166,10 @@ async def create_conversation(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
-    api_key = await _resolve_api_key(authorization, db)
+    api_key = await _resolve_api_key(authorization, db, x_api_key, expected_user_id=user.id)
     allowed = api_key.allowed_models if api_key else None
-    if api_key:
-        await quota_service.enforce_quota(db, api_key)
     model = select_model_for_new_conversation(payload.model, allowed_models=allowed)
     title = payload.title or "New chat"
     conv = Conversation(user_id=user.id, title=title, model=model)
@@ -164,6 +177,7 @@ async def create_conversation(
     await db.commit()
     await db.refresh(conv)
     return await _conversation_to_out(conv, db)
+
 
 
 @router.get("/conversations/{conv_id}", response_model=ConversationDetail)
@@ -242,6 +256,7 @@ async def send_message(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
     conv = await _get_conversation_or_404(conv_id, user, db)
     content = payload.content.strip()
@@ -250,89 +265,107 @@ async def send_message(
     if len(content) > 20000:
         raise HTTPException(400, "Message too long (max 20000 chars)")
 
-    api_key = await _resolve_api_key(authorization, db)
+    api_key = await _resolve_api_key(authorization, db, x_api_key, expected_user_id=user.id)
     allowed = api_key.allowed_models if api_key else None
-    if api_key:
-        await quota_service.enforce_quota(db, api_key)
 
     model = select_model_for_conversation(payload.model, conv.model, allowed_models=allowed)
-    if model != conv.model:
-        conv.model = model
-
-    is_first = (await db.execute(select(Message).where(Message.conversation_id == conv.id).limit(1))).scalar_one_or_none() is None
-    _maybe_update_title(conv, content, is_first)
-    conv.updated_at = utcnow()
-
-    user_msg = Message(conversation_id=conv.id, role="user", content=content)
-    db.add(user_msg)
-    await db.commit()
-    await db.refresh(user_msg)
-    await db.refresh(conv)
-
-    history = (await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))).scalars().all()
-    prompt = _history_to_prompt(history)
-
     harness_name, model_name = _validate_model_or_400(model)
     adapter = get_adapter(harness_name)
 
-    # request_id for non-stream cancel support
-    request_id = f"chat:{conv.id}:{uuid.uuid4().hex[:8]}"
-    # credential env injection
-    env = await credential_service.get_env_for_harness(db, user.id, harness_name)
-    # Note: payload.stream is intentionally ignored here — streaming is served via /messages/stream
-    started = time.monotonic()
+    reservation = None
+    if api_key:
+        reservation = await quota_service.reserve_quota(api_key=api_key)
+    reservation_token = reservation.token if reservation else None
+    can_release_reservation = True
+
     try:
-        result_h = await adapter.run(prompt, model_name, request_id=request_id, env=env)
-        # metrics
-        if HARNESS_CALLS:
-            try:
-                HARNESS_CALLS.labels(harness=harness_name, model=model).inc()
-                if HARNESS_LATENCY:
-                    HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
-            except (OSError, RuntimeError) as exc:
-                import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
-    except HTTPException:
-        raise
-    except RuntimeError as exc:
-        logger.error("harness_error harness=%s model=%s error=%s", harness_name, model_name, str(exc))
-        sanitized = sanitize_harness_error(exc)
-        status = 504 if "timed out" in str(exc).lower() or "timeout" in str(exc).lower() else 502
-        err_text = f"⚠️ {sanitized}"
-        err_msg = Message(conversation_id=conv.id, role="assistant", content=err_text)
-        db.add(err_msg)
+        if model != conv.model:
+            conv.model = model
+
+        is_first = (await db.execute(select(Message).where(Message.conversation_id == conv.id).limit(1))).scalar_one_or_none() is None
+        _maybe_update_title(conv, content, is_first)
         conv.updated_at = utcnow()
+
+        user_msg = Message(conversation_id=conv.id, role="user", content=content)
+        db.add(user_msg)
         await db.commit()
-        raise HTTPException(status_code=status, detail={"error": {"code": "harness_error", "message": sanitized}})
+        await db.refresh(user_msg)
+        await db.refresh(conv)
 
-    assistant_msg = Message(conversation_id=conv.id, role="assistant", content=result_h.text or "(no response)")
-    db.add(assistant_msg)
-    conv.updated_at = utcnow()
+        history = (await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))).scalars().all()
+        prompt = _history_to_prompt(history)
 
-    usage = {
-        "prompt_tokens": result_h.prompt_tokens or len(prompt.split()),
-        "completion_tokens": result_h.completion_tokens or len((result_h.text or "").split()),
-        "cached_tokens": result_h.cached_tokens or 0,
-    }
-    usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
-    await record_usage(
-        db,
-        user_id=user.id,
-        api_key_id=None,
-        harness=harness_name,
-        model=model,
-        prompt_tokens=usage["prompt_tokens"],
-        completion_tokens=usage["completion_tokens"],
-        cached_tokens=usage["cached_tokens"],
-        total_tokens=usage["total_tokens"],
-        latency_ms=int((time.monotonic() - started) * 1000),
-    )
-    await db.refresh(assistant_msg)
-    await db.refresh(conv)
-    return {
-        "conversation": (await _conversation_to_out(conv, db)).model_dump(),
-        "message": MessageOut.model_validate(assistant_msg).model_dump(),
-        "usage": usage,
-    }
+        # request_id for non-stream cancel support
+        request_id = f"chat:{conv.id}:{uuid.uuid4().hex[:8]}"
+        # credential env injection
+        env = await credential_service.get_env_for_harness(db, user.id, harness_name)
+        # Note: payload.stream is intentionally ignored here — streaming is served via /messages/stream
+        started = time.monotonic()
+        try:
+            result_h = await adapter.run(prompt, model_name, request_id=request_id, env=env)
+            # metrics
+            if HARNESS_CALLS:
+                try:
+                    HARNESS_CALLS.labels(harness=harness_name, model=model).inc()
+                    if HARNESS_LATENCY:
+                        HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
+                except (OSError, RuntimeError) as exc:
+                    import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
+        except HTTPException:
+            raise
+        except RuntimeError as exc:
+            logger.error("harness_error harness=%s model=%s error=%s", harness_name, model_name, str(exc))
+            sanitized = sanitize_harness_error(exc)
+            status = 504 if "timed out" in str(exc).lower() or "timeout" in str(exc).lower() else 502
+            err_text = f"⚠️ {sanitized}"
+            err_msg = Message(conversation_id=conv.id, role="assistant", content=err_text)
+            db.add(err_msg)
+            conv.updated_at = utcnow()
+            await db.commit()
+            raise HTTPException(status_code=status, detail={"error": {"code": "harness_error", "message": sanitized}})
+
+        # Harness completed successfully! Once finalization begins, disable cleanup release.
+        can_release_reservation = False
+
+        assistant_msg = Message(conversation_id=conv.id, role="assistant", content=result_h.text or "(no response)")
+        db.add(assistant_msg)
+        conv.updated_at = utcnow()
+        # Explicitly commit message state on request session db
+        await db.commit()
+        await db.refresh(assistant_msg)
+        await db.refresh(conv)
+
+        usage = {
+            "prompt_tokens": result_h.prompt_tokens or len(prompt.split()),
+            "completion_tokens": result_h.completion_tokens or len((result_h.text or "").split()),
+            "cached_tokens": result_h.cached_tokens or 0,
+        }
+        usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
+        rec = await quota_service.finalize_reservation(
+            token=reservation_token,
+            user_id=user.id,
+            api_key_id=api_key.id if api_key else None,
+            harness=harness_name,
+            model=model,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            cached_tokens=usage["cached_tokens"],
+            total_tokens=usage["total_tokens"],
+            latency_ms=int((time.monotonic() - started) * 1000),
+        )
+        if rec is None:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": {"code": "quota_finalization_failed", "message": "Failed to finalize usage accounting."}},
+            )
+        return {
+            "conversation": (await _conversation_to_out(conv, db)).model_dump(),
+            "message": MessageOut.model_validate(assistant_msg).model_dump(),
+            "usage": usage,
+        }
+    finally:
+        if reservation_token and can_release_reservation:
+            await quota_service.release_reservation(reservation_token)
 
 
 @router.post("/conversations/{conv_id}/messages/stream")
@@ -343,6 +376,7 @@ async def stream_message(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     x_stream_id: str | None = Header(default=None, alias="X-Stream-ID"),
 ):
@@ -385,24 +419,33 @@ async def stream_message(
     if len(content) > 20000:
         raise HTTPException(400, "Message too long")
 
-    api_key = await _resolve_api_key(authorization, db)
+    api_key = await _resolve_api_key(authorization, db, x_api_key, expected_user_id=user.id)
     allowed = api_key.allowed_models if api_key else None
-    if api_key:
-        await quota_service.enforce_quota(db, api_key)
 
     model = select_model_for_conversation(payload.model, conv.model, allowed_models=allowed)
     harness_name, model_name = _validate_model_or_400(model)
     adapter = get_adapter(harness_name)
 
-    if model != conv.model:
-        conv.model = model
-    is_first = (await db.execute(select(Message).where(Message.conversation_id == conv.id).limit(1))).scalar_one_or_none() is None
-    _maybe_update_title(conv, content, is_first)
-    conv.updated_at = utcnow()
-    user_msg = Message(conversation_id=conv.id, role="user", content=content)
-    db.add(user_msg)
-    await db.flush()
-    await db.commit()
+    reservation = None
+    if api_key:
+        reservation = await quota_service.reserve_quota(api_key=api_key)
+    reservation_token = reservation.token if reservation else None
+    api_key_id = api_key.id if api_key else None
+
+    try:
+        if model != conv.model:
+            conv.model = model
+        is_first = (await db.execute(select(Message).where(Message.conversation_id == conv.id).limit(1))).scalar_one_or_none() is None
+        _maybe_update_title(conv, content, is_first)
+        conv.updated_at = utcnow()
+        user_msg = Message(conversation_id=conv.id, role="user", content=content)
+        db.add(user_msg)
+        await db.flush()
+        await db.commit()
+    except Exception:
+        if reservation_token:
+            await quota_service.release_reservation(reservation_token)
+        raise
 
     history = (await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))).scalars().all()
     prompt = _history_to_prompt(history)
@@ -412,13 +455,13 @@ async def stream_message(
     stream_env = await credential_service.get_env_for_harness(db, user.id, harness_name)
 
     async def event_stream():
-        from app.db.database import SessionLocal
         from app.transport.stream import pump_harness_stream, store_and_format_sse
 
         collected: list[str] = []
         started = time.monotonic()
         cancelled = False
         seq = 1
+        can_release_reservation = True
 
         # helper to yield and store in history
         def _store_and_yield(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
@@ -460,6 +503,9 @@ async def stream_message(
             if not collected:
                 raise RuntimeError("Harness returned empty response — لا يوجد رد من الموديل. جرب موديل آخر مثل opencode/big-pickle")
 
+            # Harness completed successfully! Once finalization begins, disable cleanup release.
+            can_release_reservation = False
+
             # usage before done
             full_text = "".join(collected)
             usage_data = {
@@ -477,32 +523,39 @@ async def stream_message(
                         HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
                 except (OSError, RuntimeError) as exc:
                     import logging; logging.getLogger("afaq").warning("metrics_best_effort error=%s", exc)
-            yield _store_and_yield("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
-            seq += 1
 
-            # also show token done as event: done with [DONE]
-            yield _store_and_yield("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
-            seq += 1
-
-            async with SessionLocal() as session:
+            # 1. Persist the assistant message with a normal dedicated message session
+            async with database.SessionLocal() as session:
                 msg = Message(conversation_id=conv.id, role="assistant", content=full_text)
                 session.add(msg)
                 conv2 = await session.get(Conversation, conv.id)
                 if conv2:
                     conv2.updated_at = utcnow()
-                await record_usage(
-                    session,
-                    user_id=user.id,
-                    api_key_id=None,
-                    harness=harness_name,
-                    model=model,
-                    prompt_tokens=len(prompt.split()),
-                    completion_tokens=len(full_text.split()),
-                    total_tokens=len(prompt.split()) + len(full_text.split()),
-                    latency_ms=int((time.monotonic() - started) * 1000),
-                    auto_commit=False,
-                )
                 await session.commit()
+
+            # 2. Finalize quota separately in its dedicated session
+            finalized_rec = await quota_service.finalize_reservation(
+                token=reservation_token,
+                user_id=user.id,
+                api_key_id=api_key_id,
+                harness=harness_name,
+                model=model,
+                prompt_tokens=len(prompt.split()),
+                completion_tokens=len(full_text.split()),
+                total_tokens=len(prompt.split()) + len(full_text.split()),
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )
+            if finalized_rec is None:
+                logger.error("stream_finalization_failed conv_id=%s token=%s", conv.id, reservation_token)
+                yield _store_and_yield("error", {"code": "quota_finalization_failed", "message": "Failed to finalize usage accounting."}, id_val=seq)
+                return
+
+            # 3. Only then emit terminal events
+            yield _store_and_yield("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
+            seq += 1
+
+            yield _store_and_yield("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
+            seq += 1
         except RuntimeError as exc:
             msg_lower = str(exc).lower()
             is_killed = "exit code -9" in msg_lower or "exit code -15" in msg_lower or "killed" in msg_lower
@@ -513,7 +566,7 @@ async def stream_message(
             logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
             sanitized = sanitize_harness_error(exc)
             try:
-                async with SessionLocal() as session:
+                async with database.SessionLocal() as session:
                     err_text = f"⚠️ {sanitized}"
                     msg = Message(conversation_id=conv.id, role="assistant", content=err_text)
                     session.add(msg)
@@ -525,6 +578,9 @@ async def stream_message(
                 import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
             err = {"code": "harness_error", "message": sanitized, "type": "harness_error"}
             yield _store_and_yield("error", err, id_val=seq)
+        finally:
+            if reservation_token and can_release_reservation:
+                await quota_service.release_reservation(reservation_token)
 
     return StreamingResponse(
         event_stream(),

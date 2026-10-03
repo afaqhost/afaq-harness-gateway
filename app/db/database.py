@@ -127,6 +127,21 @@ class UsageRecord(Base):
     status: Mapped[str] = mapped_column(String(30), default="success")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
+class QuotaReservation(Base):
+    """Temporary reservation table for atomic API-key quota admission.
+
+    Created dynamically on existing installations via Base.metadata.create_all().
+    Active reservations (expires_at > utcnow()) count towards daily/monthly limits
+    alongside completed UsageRecord rows. Expired reservations do not count and
+    are cleaned up best-effort.
+    """
+    __tablename__ = "quota_reservations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    api_key_id: Mapped[int] = mapped_column(ForeignKey("api_keys.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
         yield session

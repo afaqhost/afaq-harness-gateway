@@ -7,15 +7,13 @@ import uuid
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.security import decode_jwt_subject, extract_bearer_token, hash_api_key
-from app.db.database import APIKey, User, get_db
+from app.core.security import decode_jwt_subject, extract_bearer_token
+from app.db.database import APIKey, get_db
 from app.harnesses.registry import all_adapters, cached_models, get_adapter
 from app.repositories.auth_repository import get_active_api_key_by_raw, get_active_user_by_id
-from app.repositories.usage_repository import record_usage
 from app.services import credential_service, quota_service
 try:
     from app.api.metrics import HARNESS_CALLS, HARNESS_LATENCY
@@ -192,11 +190,12 @@ async def chat_completions(
                 },
             )
 
-    # Enforce per-key quota and allowed_models if using API key
+    # Enforce allowed_models if using API key, validate model, then atomically reserve quota
+    reservation = None
+    api_key = None
     if key_id is not None:
         api_key = await db.get(APIKey, key_id)
         if api_key:
-            await quota_service.enforce_quota(db, api_key)
             if not is_model_allowed(request_payload.model, api_key.allowed_models):
                 raise HTTPException(
                     status_code=403,
@@ -210,28 +209,38 @@ async def chat_completions(
     except KeyError:
         raise HTTPException(400, f"Unknown harness: {harness_name}")
 
+    if key_id is not None and api_key:
+        reservation = await quota_service.reserve_quota(api_key=api_key)
+
     prompt = _build_openai_prompt(request_payload.messages)
     completion_id = _completion_id()
+    reservation_token = reservation.token if reservation else None
 
     if request_payload.stream:
         stream_id = identity.stream_id if identity else completion_id
         hist_key = identity.history_key if identity else f"openai:{user_id}:{stream_id}"
         return StreamingResponse(
-            _stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request, hist_key, request_payload),
+            _stream_response(
+                adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request, hist_key, request_payload, reservation_token=reservation_token
+            ),
             media_type="text/event-stream",
             headers={"X-Request-ID": completion_id, "X-Stream-ID": stream_id},
         )
 
-    return await _non_stream_response(adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request, request_payload)
+    return await _non_stream_response(
+        adapter, prompt, model, request_payload.model, completion_id, user_id, key_id, harness_name, db, request, request_payload, reservation_token=reservation_token
+    )
 
 
 async def _stream_response(
-    adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request, history_key: str | None = None, request_payload: ChatRequest | None = None
+    adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request, history_key: str | None = None, request_payload: ChatRequest | None = None, reservation_token: str | None = None
 ):
     started = time.monotonic()
     collected: list[str] = []
+    can_release_reservation = True
 
     async def event_stream():
+        nonlocal can_release_reservation
         from app.transport.stream import pump_harness_stream, store_and_format_sse
 
         h_key = history_key or f"openai:{user_id}:{completion_id}"
@@ -303,6 +312,9 @@ async def _stream_response(
             if not collected and not had_tool_call:
                 raise RuntimeError("Harness returned empty response — لا يوجد رد من الموديل. جرب موديل آخر مثل opencode/big-pickle")
 
+            # Harness completed successfully! Once finalization begins, disable cleanup release.
+            can_release_reservation = False
+
             usage_data = {
                 "prompt_tokens": len(prompt.split()),
                 "completion_tokens": len("".join(collected).split()),
@@ -317,13 +329,9 @@ async def _stream_response(
                         HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
                 except (OSError, RuntimeError) as exc:
                     import logging; logging.getLogger("afaq").warning("metrics_best_effort error=%s", exc)
-            yield _store("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
-            seq += 1
 
-            yield _store("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
-
-            await record_usage(
-                db,
+            finalized_rec = await quota_service.finalize_reservation(
+                token=reservation_token,
                 user_id=user_id,
                 api_key_id=key_id,
                 harness=harness_name,
@@ -333,6 +341,15 @@ async def _stream_response(
                 total_tokens=len(prompt.split()) + len("".join(collected).split()),
                 latency_ms=int((time.monotonic() - started) * 1000),
             )
+            if finalized_rec is None:
+                logger.error("stream_finalization_failed completion_id=%s token=%s", completion_id, reservation_token)
+                yield _store("error", {"code": "quota_finalization_failed", "message": "Failed to finalize usage accounting."}, id_val=seq)
+                return
+
+            yield _store("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
+            seq += 1
+
+            yield _store("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
         except RuntimeError as exc:
             msg_lower = str(exc).lower()
             is_killed = "exit code -9" in msg_lower or "exit code -15" in msg_lower or "killed" in msg_lower
@@ -345,8 +362,12 @@ async def _stream_response(
             err = {"code": "harness_error", "message": sanitized, "type": "harness_error"}
             yield _store("error", err, id_val=seq)
 
-    async for chunk in event_stream():
-        yield chunk
+    try:
+        async for chunk in event_stream():
+            yield chunk
+    finally:
+        if reservation_token and can_release_reservation:
+            await quota_service.release_reservation(reservation_token)
 
 
 @router.post("/chat/completions/{completion_id}/cancel")
@@ -363,106 +384,122 @@ async def cancel_completion(completion_id: str, request: Request, authorization:
     raise HTTPException(status_code=404, detail={"error": {"code": "not_found", "message": "No in-flight stream"}})
 
 
-async def _non_stream_response(adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request, request_payload: ChatRequest | None = None):
+async def _non_stream_response(
+    adapter, prompt: str, model: str, request_model: str, completion_id: str, user_id: int, key_id, harness_name: str, db: AsyncSession, request: Request, request_payload: ChatRequest | None = None, reservation_token: str | None = None
+):
     started = time.monotonic()
     # env injection
     env = await credential_service.get_env_for_harness(db, user_id, harness_name)
     # structured output handling: prepare to validate after run
     fmt = request_payload.response_format if request_payload else None
+    can_release_reservation = True
     try:
-        result = await adapter.run(prompt, model, request_id=completion_id, env=env)
-        if HARNESS_CALLS:
-            try:
-                HARNESS_CALLS.labels(harness=harness_name, model=request_model).inc()
-                if HARNESS_LATENCY:
-                    HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
-            except (OSError, RuntimeError) as exc:
-                import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
-        # structured output validation with one retry
-        if fmt is not None:
-            from app.shared.structured_output import validate_json_response
-
-            validated = validate_json_response(result.text, fmt)
-            if validated is None:
-                # retry once with suffix
-                try:
-                    retry_prompt = prompt + "\n\nRespond with valid JSON only."
-                    result_retry = await adapter.run(retry_prompt, model, request_id=completion_id + "-retry", env=env)
-                    validated2 = validate_json_response(result_retry.text, fmt)
-                    if validated2 is None:
-                        raise HTTPException(status_code=502, detail={"error": {"code": "malformed_output", "message": "Model did not return valid JSON for response_format"}})
-                    result = result_retry
-                except HTTPException:
-                    raise
-                except (OSError, RuntimeError, ValueError) as exc:
-                    import logging; logging.getLogger("afaq").warning("retry_failed error=%s", exc)
-                    raise HTTPException(status_code=502, detail={"error": {"code": "malformed_output", "message": "Model did not return valid JSON for response_format"}})
-            else:
-                # if validated, keep result but ensure text is JSON dump of validated
-                pass
-    except HTTPException:
-        raise
-    except RuntimeError as exc:
-        logger.error("harness_error harness=%s model=%s error=%s", harness_name, model, str(exc))
-        sanitized = sanitize_harness_error(exc)
-        status = 504 if "timed out" in str(exc).lower() or "timeout" in str(exc).lower() else 502
-        raise HTTPException(status_code=status, detail={"error": {"code": "harness_error", "message": sanitized}})
-    usage = {
-        "prompt_tokens": result.prompt_tokens or len(prompt.split()),
-        "completion_tokens": result.completion_tokens or len(result.text.split()),
-        "total_tokens": 0,
-        "cached_tokens": result.cached_tokens,
-    }
-    usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
-    await record_usage(
-        db,
-        user_id=user_id,
-        api_key_id=key_id,
-        harness=harness_name,
-        model=request_model,
-        prompt_tokens=usage["prompt_tokens"],
-        completion_tokens=usage["completion_tokens"],
-        cached_tokens=usage["cached_tokens"],
-        total_tokens=usage["total_tokens"],
-        latency_ms=int((time.monotonic() - started) * 1000),
-    )
-
-    # tool_calls handling for non-stream
-    if request_payload and request_payload.tools:
-        tool_calls = None
-        # try to parse result.text as tool JSON
         try:
-            maybe = json.loads(result.text) if result.text else None
-            if isinstance(maybe, dict) and ("tool" in maybe or "tool_call" in maybe or "function" in maybe):
-                tc_raw = maybe.get("tool") or maybe.get("tool_call") or maybe
-                if isinstance(tc_raw, dict):
-                    # if tc_raw is like {"id":..., "function": {"name":..., "arguments":...}}
-                    if "function" in tc_raw:
-                        func = tc_raw["function"]
-                        tc_id = tc_raw.get("id", "call_1")
-                        tool_calls = [{"id": str(tc_id), "type": "function", "function": {"name": func.get("name", "unknown"), "arguments": func.get("arguments", "") if isinstance(func.get("arguments"), str) else json.dumps(func.get("arguments", ""))}}]
-                    elif "name" in tc_raw:
-                        tool_calls = [{"id": tc_raw.get("id", "call_1"), "type": "function", "function": {"name": tc_raw["name"], "arguments": tc_raw.get("arguments", "") if isinstance(tc_raw.get("arguments"), str) else json.dumps(tc_raw.get("arguments", ""))}}]
-        except (ValueError, TypeError, KeyError) as exc:
-            import logging; logging.getLogger("afaq").warning("tool_parse_failed error=%s", exc)
-        if tool_calls is None and isinstance(result.raw, dict) and "tool_call" in result.raw:
-            tc = result.raw["tool_call"]
-            tool_calls = [{"id": tc.get("id", "call_1"), "type": "function", "function": tc.get("function", {"name": "unknown", "arguments": ""})}]
-        if tool_calls is not None:
-            return {
-                "id": completion_id,
-                "object": "chat.completion",
-                "created": int(time.time()),
-                "model": request_model,
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": None, "tool_calls": tool_calls}, "finish_reason": "tool_calls"}],
-                "usage": usage,
-            }
+            result = await adapter.run(prompt, model, request_id=completion_id, env=env)
+            if HARNESS_CALLS:
+                try:
+                    HARNESS_CALLS.labels(harness=harness_name, model=request_model).inc()
+                    if HARNESS_LATENCY:
+                        HARNESS_LATENCY.labels(harness=harness_name).observe(int((time.monotonic() - started) * 1000))
+                except (OSError, RuntimeError) as exc:
+                    import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
+            # structured output validation with one retry
+            if fmt is not None:
+                from app.shared.structured_output import validate_json_response
 
-    return {
-        "id": completion_id,
-        "object": "chat.completion",
-        "created": int(time.time()),
-        "model": request_model,
-        "choices": [{"index": 0, "message": {"role": "assistant", "content": result.text}, "finish_reason": "stop"}],
-        "usage": usage,
-    }
+                validated = validate_json_response(result.text, fmt)
+                if validated is None:
+                    # retry once with suffix
+                    try:
+                        retry_prompt = prompt + "\n\nRespond with valid JSON only."
+                        result_retry = await adapter.run(retry_prompt, model, request_id=completion_id + "-retry", env=env)
+                        validated2 = validate_json_response(result_retry.text, fmt)
+                        if validated2 is None:
+                            raise HTTPException(status_code=502, detail={"error": {"code": "malformed_output", "message": "Model did not return valid JSON for response_format"}})
+                        result = result_retry
+                    except HTTPException:
+                        raise
+                    except (OSError, RuntimeError, ValueError) as exc:
+                        import logging; logging.getLogger("afaq").warning("retry_failed error=%s", exc)
+                        raise HTTPException(status_code=502, detail={"error": {"code": "malformed_output", "message": "Model did not return valid JSON for response_format"}})
+                else:
+                    # if validated, keep result but ensure text is JSON dump of validated
+                    pass
+        except HTTPException:
+            raise
+        except RuntimeError as exc:
+            logger.error("harness_error harness=%s model=%s error=%s", harness_name, model, str(exc))
+            sanitized = sanitize_harness_error(exc)
+            status = 504 if "timed out" in str(exc).lower() or "timeout" in str(exc).lower() else 502
+            raise HTTPException(status_code=status, detail={"error": {"code": "harness_error", "message": sanitized}})
+
+        # Harness completed successfully! Once finalization begins, disable cleanup release.
+        can_release_reservation = False
+
+        usage = {
+            "prompt_tokens": result.prompt_tokens or len(prompt.split()),
+            "completion_tokens": result.completion_tokens or len(result.text.split()),
+            "total_tokens": 0,
+            "cached_tokens": result.cached_tokens,
+        }
+        usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
+        rec = await quota_service.finalize_reservation(
+            token=reservation_token,
+            user_id=user_id,
+            api_key_id=key_id,
+            harness=harness_name,
+            model=request_model,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            cached_tokens=usage["cached_tokens"],
+            total_tokens=usage["total_tokens"],
+            latency_ms=int((time.monotonic() - started) * 1000),
+        )
+        if rec is None:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": {"code": "quota_finalization_failed", "message": "Failed to finalize usage accounting."}},
+            )
+
+        # tool_calls handling for non-stream
+        if request_payload and request_payload.tools:
+            tool_calls = None
+            # try to parse result.text as tool JSON
+            try:
+                maybe = json.loads(result.text) if result.text else None
+                if isinstance(maybe, dict) and ("tool" in maybe or "tool_call" in maybe or "function" in maybe):
+                    tc_raw = maybe.get("tool") or maybe.get("tool_call") or maybe
+                    if isinstance(tc_raw, dict):
+                        # if tc_raw is like {"id":..., "function": {"name":..., "arguments":...}}
+                        if "function" in tc_raw:
+                            func = tc_raw["function"]
+                            tc_id = tc_raw.get("id", "call_1")
+                            tool_calls = [{"id": str(tc_id), "type": "function", "function": {"name": func.get("name", "unknown"), "arguments": func.get("arguments", "") if isinstance(func.get("arguments"), str) else json.dumps(func.get("arguments", ""))}}]
+                        elif "name" in tc_raw:
+                            tool_calls = [{"id": tc_raw.get("id", "call_1"), "type": "function", "function": {"name": tc_raw["name"], "arguments": tc_raw.get("arguments", "") if isinstance(tc_raw.get("arguments"), str) else json.dumps(tc_raw.get("arguments", ""))}}]
+            except (ValueError, TypeError, KeyError) as exc:
+                import logging; logging.getLogger("afaq").warning("tool_parse_failed error=%s", exc)
+            if tool_calls is None and isinstance(result.raw, dict) and "tool_call" in result.raw:
+                tc = result.raw["tool_call"]
+                tool_calls = [{"id": tc.get("id", "call_1"), "type": "function", "function": tc.get("function", {"name": "unknown", "arguments": ""})}]
+            if tool_calls is not None:
+                return {
+                    "id": completion_id,
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": request_model,
+                    "choices": [{"index": 0, "message": {"role": "assistant", "content": None, "tool_calls": tool_calls}, "finish_reason": "tool_calls"}],
+                    "usage": usage,
+                }
+
+        return {
+            "id": completion_id,
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": request_model,
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": result.text}, "finish_reason": "stop"}],
+            "usage": usage,
+        }
+    finally:
+        if reservation_token and can_release_reservation:
+            await quota_service.release_reservation(reservation_token)
