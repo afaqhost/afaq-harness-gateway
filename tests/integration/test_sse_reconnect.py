@@ -44,11 +44,14 @@ def isolate_in_memory_history():
         process_registry._history = orig_registry_history
 
 
-@pytest.fixture(autouse=True)
-def clear_history():
-    process_registry.clear()
+import pytest_asyncio
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clear_history():
+    await process_registry.clear()
     yield
-    process_registry.clear()
+    await process_registry.clear()
 
 
 @pytest.mark.asyncio
@@ -429,7 +432,7 @@ async def test_in_memory_fallback_writer_and_reader_share_state(client, user_hea
 
     user_info = (await client.get("/api/auth/me", headers=user_headers)).json()
     expected_key = f"conv:{user_info['id']}:{conv_id}:{sid}"
-    assert process_registry.has_history(expected_key), "Writer must have populated history for the key"
+    assert await process_registry.has_history(expected_key), "Writer must have populated history for the key"
 
     # Reconnect must find the history and succeed with 200 (not 404) and replay events
     recon = await client.post(
@@ -440,7 +443,7 @@ async def test_in_memory_fallback_writer_and_reader_share_state(client, user_hea
     assert recon.status_code == 200
     assert recon.headers.get("X-Stream-ID") == sid
     assert "event: token" in recon.text
-    replayed = process_registry.get_replay(expected_key, 1)
+    replayed = await process_registry.get_replay(expected_key, 1)
     assert len(replayed) > 0
 
 

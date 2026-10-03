@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     trusted_proxies: str = ""
     redis_url: str = ""  # e.g. redis://localhost:6379/0 — empty = in-memory fallback
     redis_enabled: bool = False  # set True when REDIS_URL is set and redis is available
+    redis_connect_timeout_seconds: float = 2.0  # connect timeout for Redis
+    redis_socket_timeout_seconds: float = 2.0  # socket/read timeout for Redis
     sse_heartbeat_seconds: int = 15
     sse_retry_ms: int = 3000
     default_system_prompt: str = ""  # transparent passthrough: no injected SYSTEM block unless client sends one. Keeps harness as direct model API.

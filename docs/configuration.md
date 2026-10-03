@@ -27,6 +27,17 @@ Configuration is loaded from `.env` through `pydantic-settings`. Start from `.en
 | `SSE_RETRY_MS` | `3000` | SSE `retry:` field (milliseconds) |
 | `REDIS_URL` | `""` | `redis://host:6379/0` for multi-replica rate limit/history/jobs; empty → in-memory fallback |
 | `REDIS_ENABLED` | `false` | Auto-enabled when `REDIS_URL` is set; set explicitly if needed |
+| `REDIS_CONNECT_TIMEOUT_SECONDS` | `2.0` | Bounded connect timeout (seconds) for the shared async Redis client |
+| `REDIS_SOCKET_TIMEOUT_SECONDS` | `2.0` | Bounded socket read/write timeout (seconds) for the shared async Redis client |
+
+## Redis & Multi-Replica Configuration
+
+When `REDIS_ENABLED` is true and `REDIS_URL` is configured:
+- A shared async Redis client pool (`redis.asyncio`) is lazily instantiated with bounded connect and socket timeouts.
+- **Failures & Timeouts:** Narrow Redis exceptions (`RedisError`, `RedisTimeoutError`, `ConnectionError`, `asyncio.TimeoutError`, `OSError`) trigger immediate non-blocking fallback to local in-memory stores.
+- **Rate Limiting Continuity:** The local shadow bucket remains synchronized with every request, preventing rate limit resets or burst bypasses during a Redis outage; enforcement never fails open.
+- **History Fallback:** In-memory fallback buffers replay events during an outage; locally buffered events are not automatically reconciled back into Redis upon recovery.
+- **Single-Replica Mode:** When Redis is disabled or unconfigured, the application runs entirely on local in-memory fallback stores (history buffer, model cache, job state, rate limiter) without degradation.
 
 ## Secret Generation
 

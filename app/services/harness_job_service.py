@@ -40,21 +40,7 @@ class HarnessJob:
         }
 
 
-def _get_redis():
-    try:
-        from app.core.config import get_settings
-
-        s = get_settings()
-        if not s.redis_enabled or not s.redis_url:
-            return None
-        import redis as sync_redis  # type: ignore
-
-        client = sync_redis.from_url(s.redis_url, decode_responses=True)
-        client.ping()
-        return client
-    except (ImportError, OSError, RuntimeError) as exc:
-        logger.warning("redis_unavailable_fallback error=%s", exc)
-        return None
+from app.core.redis import REDIS_EXCEPTIONS, get_redis_client
 
 
 def _job_key(job_id: str) -> str:
@@ -68,17 +54,20 @@ def _job_to_json(job: HarnessJob) -> str:
 def _json_to_job(data: str) -> HarnessJob | None:
     try:
         d = json.loads(data)
+        if not isinstance(d, dict):
+            logger.warning("invalid_job_payload_type type=%s", type(d).__name__)
+            return None
         return HarnessJob(
-            id=d.get("id", ""),
-            harness=d.get("harness", ""),
-            stage=d.get("stage", "pending"),
+            id=str(d.get("id", "")),
+            harness=str(d.get("harness", "")),
+            stage=str(d.get("stage", "pending")),
             logs=list(d.get("logs", [])),
             exit_code=d.get("exit_code"),
             created_at=float(d.get("created_at", time.monotonic())),
             updated_at=float(d.get("updated_at", time.monotonic())),
         )
-    except (ImportError, OSError, RuntimeError) as exc:
-        logger.warning("redis_unavailable_fallback error=%s", exc)
+    except (json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
+        logger.warning("malformed_job_json error=%s", exc)
         return None
 
 
@@ -148,20 +137,20 @@ class HarnessJobService:
             logger.warning("job_cancel_best_effort_failed job_id=%s error=%s", job_id, exc)
         return True
 
-    def _redis_sync(self, job: HarnessJob) -> None:
+    async def _redis_sync(self, job: HarnessJob) -> None:
         try:
-            rc = _get_redis()
+            rc = await get_redis_client()
             if rc:
-                rc.set(_job_key(job.id), _job_to_json(job), ex=self._ttl)
-        except (OSError, RuntimeError) as exc:
+                await rc.set(_job_key(job.id), _job_to_json(job), ex=self._ttl)
+        except REDIS_EXCEPTIONS as exc:
             logger.warning("job_sync_best_effort_failed error=%s", exc)
 
-    def _redis_delete(self, job_id: str) -> None:
+    async def _redis_delete(self, job_id: str) -> None:
         try:
-            rc = _get_redis()
+            rc = await get_redis_client()
             if rc:
-                rc.delete(_job_key(job_id))
-        except (OSError, RuntimeError) as exc:
+                await rc.delete(_job_key(job_id))
+        except REDIS_EXCEPTIONS as exc:
             logger.warning("job_sync_best_effort_failed error=%s", exc)
 
     async def _run_adapter(self, job: HarnessJob, adapter: HarnessAdapter, mode: str):
@@ -172,7 +161,7 @@ class HarnessJobService:
         try:
             job.stage = "running"
             job.updated_at = time.monotonic()
-            self._redis_sync(job)
+            await self._redis_sync(job)
             gen = adapter.install(on_process=_register) if mode == "install" else adapter.update(on_process=_register)
             cancelled_by_user = False
             async for event in gen:
@@ -192,7 +181,7 @@ class HarnessJobService:
                 else:
                     job.stage = stage
                 job.updated_at = time.monotonic()
-                self._redis_sync(job)
+                await self._redis_sync(job)
                 # small yield to allow streaming
                 await asyncio.sleep(0)
             # if a cancel was issued the adapter's kill path may not have set exit_code;
@@ -209,7 +198,7 @@ class HarnessJobService:
             if job.stage not in ("completed", "failed"):
                 job.stage = "completed" if job.exit_code in (None, 0) else "failed"
             job.updated_at = time.monotonic()
-            self._redis_sync(job)
+            await self._redis_sync(job)
             # Successful install/update: notify the wiring so it can refresh the
             # in-memory model cache in the same process. We do this here (inside
             # the same try block as the streaming generator) instead of after the
@@ -226,7 +215,7 @@ class HarnessJobService:
             if len(job.logs) < self._max_logs:
                 job.logs.append(f"error: {e}")
             job.updated_at = time.monotonic()
-            self._redis_sync(job)
+            await self._redis_sync(job)
         finally:
             await self._unregister_process(job.id)
         # schedule cleanup after TTL (fire and forget)
@@ -236,13 +225,13 @@ class HarnessJobService:
         await asyncio.sleep(self._ttl)
         async with self._lock:
             self._jobs.pop(job_id, None)
-        self._redis_delete(job_id)
+        await self._redis_delete(job_id)
 
     async def start_install(self, adapter: HarnessAdapter) -> HarnessJob:
         job = HarnessJob(harness=adapter.name, stage="pending")
         async with self._lock:
             self._jobs[job.id] = job
-        self._redis_sync(job)
+        await self._redis_sync(job)
         # run in background
         asyncio.create_task(self._run_adapter(job, adapter, "install"))
         return job
@@ -251,7 +240,7 @@ class HarnessJobService:
         job = HarnessJob(harness=adapter.name, stage="pending")
         async with self._lock:
             self._jobs[job.id] = job
-        self._redis_sync(job)
+        await self._redis_sync(job)
         asyncio.create_task(self._run_adapter(job, adapter, "update"))
         return job
 
@@ -260,14 +249,14 @@ class HarnessJobService:
             job = self._jobs.get(job_id)
             if job:
                 return job
-        # fallback to Redis for cross-pod reads
+        # fallback to Redis for cross-pod reads without holding the lock
         try:
-            rc = _get_redis()
+            rc = await get_redis_client()
             if rc:
-                raw = rc.get(_job_key(job_id))
+                raw = await rc.get(_job_key(job_id))
                 if raw:
                     return _json_to_job(raw)
-        except (OSError, RuntimeError) as exc:
+        except REDIS_EXCEPTIONS as exc:
             logger.warning("job_sync_best_effort_failed error=%s", exc)
         return None
 
@@ -279,6 +268,8 @@ class HarnessJobService:
     async def clear(self):
         async with self._lock:
             self._jobs.clear()
+            self._cancelled.clear()
+            self._processes.clear()
 
 
 # singleton

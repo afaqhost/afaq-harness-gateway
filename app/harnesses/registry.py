@@ -19,6 +19,7 @@ from app.clients.registry import (
     all_adapters,
     cached_models,
     cached_models_clear,
+    clear_model_cache_mirror,
     get_adapter,
     refresh_models,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "refresh_models",
     "cached_models",
     "cached_models_clear",
+    "clear_model_cache_mirror",
     "get_adapter",
     "all_adapters",
 ]

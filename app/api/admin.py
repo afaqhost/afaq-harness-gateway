@@ -11,7 +11,7 @@ from app.api.auth import admin_user, current_user
 from app.clients.agy import INSTALL_SCRIPT_COMMAND
 from app.core.security import generate_api_key, hash_password
 from app.db.database import APIKey, Harness, User, get_db
-from app.harnesses.registry import all_adapters, cached_models, cached_models_clear, get_adapter, refresh_models
+from app.harnesses.registry import all_adapters, cached_models, cached_models_clear, clear_model_cache_mirror, get_adapter, refresh_models
 from app.services.harness_job_service import harness_job_service
 from app.shared.sse import sse_event
 from app.shared.time import utcnow
@@ -73,6 +73,7 @@ async def harnesses(user: User = Depends(current_user), db: AsyncSession = Depen
             row.last_checked_at = utcnow()
             if not installed and models:
                 cached_models_clear(adapter.name)
+                await clear_model_cache_mirror(adapter.name)
                 models = []
             any_changed = True
         result.append({"name": adapter.name, "display_name": adapter.display_name, "provider": adapter.provider or None, "installed": installed, "authenticated": is_auth, "models": [m.__dict__ for m in models], "install_recipe": adapter.install_recipe, "update_recipe": adapter.update_recipe, "last_checked_at": row.last_checked_at.isoformat() if row and row.last_checked_at else None})
@@ -234,6 +235,7 @@ async def uninstall_harness(name: str, _: User = Depends(admin_user), db: AsyncS
     except KeyError:
         raise HTTPException(404, detail={"error": {"code": "not_found", "message": "Harness not found"}})
     cached_models_clear(name)
+    await clear_model_cache_mirror(name)
     try:
         row = (await db.execute(select(Harness).where(Harness.name == name))).scalar_one_or_none()
         if row is not None:

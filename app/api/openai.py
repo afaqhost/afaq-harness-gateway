@@ -166,7 +166,8 @@ async def chat_completions(
 
     identity = None
     if request_payload.stream:
-        identity = resolve_stream_identity(
+        import inspect
+        identity = await resolve_stream_identity(
             endpoint="openai",
             user_id=user_id,
             stream_id=x_stream_id,
@@ -175,7 +176,9 @@ async def chat_completions(
         )
         if identity.is_reconnect:
             async def replay_event_stream():
-                for rp in process_registry.get_replay(identity.history_key, identity.last_event_id):  # type: ignore[arg-type]
+                replayed_res = process_registry.get_replay(identity.history_key, identity.last_event_id)  # type: ignore[arg-type]
+                replayed = await replayed_res if inspect.isawaitable(replayed_res) else replayed_res
+                for rp in replayed:
                     yield rp
 
             return StreamingResponse(
@@ -246,16 +249,16 @@ async def _stream_response(
         h_key = history_key or f"openai:{user_id}:{completion_id}"
         seq = 1
 
-        def _store(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
+        async def _store(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
             nonlocal seq
             target_id = id_val if id_val is not None else seq
-            payload = store_and_format_sse(h_key, event, data, target_id, retry)
+            payload = await store_and_format_sse(h_key, event, data, target_id, retry)
             seq = max(seq, target_id + 1)
             return payload
 
         # start lifecycle
         start_data = {"id": completion_id, "model": request_model, "created": int(time.time())}
-        yield _store("start", start_data)
+        yield await _store("start", start_data)
 
         cancelled = False
         had_tool_call = False
@@ -269,7 +272,7 @@ async def _stream_response(
                     continue
                 if item.is_cancelled:
                     cancelled = True
-                    yield _store("cancel", {"code": "cancelled", "message": "cancelled by client"})
+                    yield await _store("cancel", {"code": "cancelled", "message": "cancelled by client"})
                     break
 
                 # tool_call handling
@@ -289,10 +292,10 @@ async def _stream_response(
                         "model": request_model,
                         "choices": [{"index": 0, "delta": {"tool_calls": [{"id": tc["id"], "type": "function", "function": tc["function"]}]}, "finish_reason": None}],
                     }
-                    yield _store("tool_call", tool_chunk)
+                    yield await _store("tool_call", tool_chunk)
                     # stub tool_result
                     result_payload = {"tool_call_id": tc["id"], "status": "requires_action", "content": "requires_action"}
-                    yield _store("tool_result", result_payload)
+                    yield await _store("tool_result", result_payload)
                     continue
 
                 if not item.text:
@@ -305,7 +308,7 @@ async def _stream_response(
                     "model": request_model,
                     "choices": [{"index": 0, "delta": {"content": item.text}, "finish_reason": None}],
                 }
-                yield _store("token", chunk)
+                yield await _store("token", chunk)
 
             if cancelled:
                 return
@@ -343,24 +346,24 @@ async def _stream_response(
             )
             if finalized_rec is None:
                 logger.error("stream_finalization_failed completion_id=%s token=%s", completion_id, reservation_token)
-                yield _store("error", {"code": "quota_finalization_failed", "message": "Failed to finalize usage accounting."}, id_val=seq)
+                yield await _store("error", {"code": "quota_finalization_failed", "message": "Failed to finalize usage accounting."}, id_val=seq)
                 return
 
-            yield _store("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
+            yield await _store("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
             seq += 1
 
-            yield _store("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
+            yield await _store("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
         except RuntimeError as exc:
             msg_lower = str(exc).lower()
             is_killed = "exit code -9" in msg_lower or "exit code -15" in msg_lower or "killed" in msg_lower
             if cancelled or "cancel" in msg_lower or is_killed:
                 logger.info("stream_cancelled completion_id=%s error=%s", completion_id, str(exc))
-                yield _store("cancel", {"code": "cancelled", "message": "cancelled"}, id_val=seq)
+                yield await _store("cancel", {"code": "cancelled", "message": "cancelled"}, id_val=seq)
                 return
             logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
             sanitized = sanitize_harness_error(exc)
             err = {"code": "harness_error", "message": sanitized, "type": "harness_error"}
-            yield _store("error", err, id_val=seq)
+            yield await _store("error", err, id_val=seq)
 
     try:
         async for chunk in event_stream():

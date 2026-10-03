@@ -18,7 +18,7 @@ STREAM_ID_REGEX = re.compile(STREAM_ID_PATTERN)
 
 
 class StreamHistoryLookup(Protocol):
-    def has_history(self, key: str) -> bool:
+    async def has_history(self, key: str) -> bool:
         ...
 
 
@@ -86,7 +86,7 @@ def build_history_key(
         raise ValueError(f"Unknown endpoint: {endpoint}")
 
 
-def resolve_stream_identity(
+async def resolve_stream_identity(
     endpoint: Literal["openai", "conv"],
     user_id: int | str,
     stream_id: str | None,
@@ -120,7 +120,7 @@ def resolve_stream_identity(
     if stream_id is not None:
         sid = validate_stream_id(stream_id)
         key = build_history_key(endpoint, user_id, sid, resource_id=resource_id)
-        exists = bool(history.has_history(key))
+        exists = await history.has_history(key)
 
         # Requirement 7: Reject reuse of existing stream ID without Last-Event-ID
         if exists and parsed_last_id is None:

@@ -20,9 +20,9 @@ def seed_models():
 
 @pytest.fixture(autouse=True)
 def clear_registry():
-    process_registry.clear()
+    process_registry.clear_local()
     yield
-    process_registry.clear()
+    process_registry.clear_local()
 
 
 class SlowAdapter(HarnessAdapter):

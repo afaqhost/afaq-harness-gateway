@@ -45,6 +45,15 @@ async def lifespan(app: FastAPI):
         await os_terminal_service.shutdown()
     except Exception:
         pass
+    # Await shared Redis connection pool and client closure on shutdown
+    try:
+        from app.core.redis import REDIS_EXCEPTIONS, close_redis
+
+        await close_redis()
+    except REDIS_EXCEPTIONS as exc:
+        import logging
+
+        logging.getLogger("afaq").warning("redis_shutdown_failed error=%s", exc)
 
 app = FastAPI(title=settings.app_name, version=settings.version, description="OpenAI-compatible gateway for terminal AI harnesses", lifespan=lifespan)
 

@@ -8,89 +8,96 @@ Behavior identical: per-key deque(maxlen=100) of (seq, payload).
 from __future__ import annotations
 
 from collections import defaultdict, deque
+import logging
+
+from app.core.redis import REDIS_EXCEPTIONS, get_redis_client
+
+logger = logging.getLogger("afaq")
 
 
 class HistoryStore:
-    """In-memory fallback — same semantics as Redis variant."""
+    """In-memory history store — unconditionally async interface identical to RedisHistoryStore."""
 
     def __init__(self, maxlen: int = 100) -> None:
         self._store: dict[str, deque[tuple[int, str]]] = defaultdict(lambda: deque(maxlen=maxlen))
         self._maxlen = maxlen
 
-    def append(self, key: str, seq: int, payload: str) -> None:
+    async def append(self, key: str, seq: int, payload: str) -> None:
         self._store[key].append((seq, payload))
 
-    def replay(self, key: str, last_id: int) -> list[str]:
+    async def replay(self, key: str, last_id: int) -> list[str]:
         dq = self._store.get(key)
         if not dq:
             return []
         return [payload for seq, payload in dq if seq > last_id]
 
-    def get_history(self, key: str) -> deque[tuple[int, str]]:
-        return self._store.get(key, deque())
+    async def get_history(self, key: str) -> deque[tuple[int, str]]:
+        dq = self._store.get(key)
+        if dq is None:
+            return deque(maxlen=self._maxlen)
+        return deque(dq, maxlen=self._maxlen)
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         self._store.clear()
 
-    def exists(self, key: str) -> bool:
+    async def exists(self, key: str) -> bool:
         return key in self._store and len(self._store[key]) > 0
 
-    def size(self, key: str | None = None) -> int:
+    async def size(self, key: str | None = None) -> int:
+        return self.local_size(key)
+
+    def local_size(self, key: str | None = None) -> int:
+        """Synchronous local-only size check."""
         if key is not None:
             return len(self._store.get(key, []))
         return sum(len(v) for v in self._store.values())
 
 
 class RedisHistoryStore:
-    """Redis-backed history — `LPUSH` + `LTRIM 100` + `LRANGE`.
+    """Redis-backed history using redis.asyncio — pipelined `LPUSH` + `LTRIM` + `EXPIRE`.
 
-    Falls back to in-memory `HistoryStore` if Redis is unavailable so tests
-    remain green without a running Redis.
+    Falls back to in-memory `HistoryStore` if Redis is unavailable.
     """
 
-    def __init__(self, redis_url: str, maxlen: int = 100) -> None:
+    def __init__(self, redis_url: str | None = None, maxlen: int = 100, ttl: int = 3600, client=None) -> None:
         self._maxlen = maxlen
+        self._ttl = ttl
         self._fallback = HistoryStore(maxlen=maxlen)
-        self._client = None
-        self._available = False
-        try:
-            import redis.asyncio as redis  # type: ignore
-
-            # sync client for now (history is sync in current call sites)
-            import redis as sync_redis  # type: ignore
-
-            self._client = sync_redis.from_url(redis_url, decode_responses=True)
-            # probe
-            self._client.ping()
-            self._available = True
-        except (ImportError, OSError, RuntimeError) as exc:
-            import logging; logging.getLogger("afaq").warning("redis_fallback_init error=%s", exc)
-            self._client = None
-            self._available = False
+        self._custom_client = client
 
     def _key(self, key: str) -> str:
         return f"history:{key}"
 
-    def append(self, key: str, seq: int, payload: str) -> None:
-        if not self._available or self._client is None:
-            return self._fallback.append(key, seq, payload)
-        try:
-            rk = self._key(key)
-            # store as "seq|payload" to keep ordering and filtering by seq
-            self._client.lpush(rk, f"{seq}|{payload}")
-            self._client.ltrim(rk, 0, self._maxlen - 1)
-            self._client.expire(rk, 3600)
-        except (OSError, RuntimeError) as exc:
-            import logging; logging.getLogger("afaq").warning("redis_append_fallback error=%s", exc)
-            self._fallback.append(key, seq, payload)
+    async def _get_client(self):
+        if self._custom_client is not None:
+            return self._custom_client
+        return await get_redis_client()
 
-    def replay(self, key: str, last_id: int) -> list[str]:
-        if not self._available or self._client is None:
-            return self._fallback.replay(key, last_id)
+    async def append(self, key: str, seq: int, payload: str) -> None:
+        client = await self._get_client()
+        if client is None:
+            await self._fallback.append(key, seq, payload)
+            return
+
         try:
             rk = self._key(key)
-            items = self._client.lrange(rk, 0, -1)
-            # items are newest first (LPUSH), reverse to oldest first
+            pipe = client.pipeline(transaction=True)
+            pipe.lpush(rk, f"{seq}|{payload}")
+            pipe.ltrim(rk, 0, self._maxlen - 1)
+            pipe.expire(rk, self._ttl)
+            await pipe.execute()
+        except REDIS_EXCEPTIONS as exc:
+            logger.warning("redis_append_fallback error=%s", exc)
+            await self._fallback.append(key, seq, payload)
+
+    async def replay(self, key: str, last_id: int) -> list[str]:
+        client = await self._get_client()
+        if client is None:
+            return await self._fallback.replay(key, last_id)
+
+        try:
+            rk = self._key(key)
+            items = await client.lrange(rk, 0, -1)
             result: list[str] = []
             for item in reversed(items):
                 try:
@@ -100,16 +107,18 @@ class RedisHistoryStore:
                 except ValueError:
                     continue
             return result
-        except (OSError, RuntimeError) as exc:
-            import logging; logging.getLogger("afaq").warning("redis_history_fallback error=%s", exc)
-            return self._fallback.replay(key, last_id)
+        except REDIS_EXCEPTIONS as exc:
+            logger.warning("redis_history_fallback error=%s", exc)
+            return await self._fallback.replay(key, last_id)
 
-    def get_history(self, key: str) -> deque[tuple[int, str]]:
-        if not self._available or self._client is None:
-            return self._fallback.get_history(key)
+    async def get_history(self, key: str) -> deque[tuple[int, str]]:
+        client = await self._get_client()
+        if client is None:
+            return await self._fallback.get_history(key)
+
         try:
             rk = self._key(key)
-            items = self._client.lrange(rk, 0, -1)
+            items = await client.lrange(rk, 0, -1)
             dq: deque[tuple[int, str]] = deque(maxlen=self._maxlen)
             for item in reversed(items):
                 try:
@@ -118,35 +127,49 @@ class RedisHistoryStore:
                 except ValueError:
                     continue
             return dq
-        except (OSError, RuntimeError) as exc:
-            import logging; logging.getLogger("afaq").warning("redis_history_fallback error=%s", exc)
-            return self._fallback.get_history(key)
+        except REDIS_EXCEPTIONS as exc:
+            logger.warning("redis_history_fallback error=%s", exc)
+            return await self._fallback.get_history(key)
 
-    def clear(self) -> None:
-        self._fallback.clear()
-        if self._client:
-            try:
-                # best-effort flush history keys
-                for k in list(self._client.scan_iter("history:*")):
-                    self._client.delete(k)
-            except (OSError, RuntimeError) as exc:
-                import logging; logging.getLogger("afaq").warning("history_best_effort error=%s", exc)
+    async def clear(self) -> None:
+        await self._fallback.clear()
+        client = await self._get_client()
+        if client is None:
+            return
 
-    def exists(self, key: str) -> bool:
-        if not self._available or self._client is None:
-            return self._fallback.exists(key)
+        try:
+            keys: list[str] = []
+            async for k in client.scan_iter(match="history:*", count=100):
+                keys.append(k)
+                if len(keys) >= 100:
+                    await client.delete(*keys)
+                    keys.clear()
+            if keys:
+                await client.delete(*keys)
+        except REDIS_EXCEPTIONS as exc:
+            logger.warning("history_clear_failed error=%s", exc)
+
+    async def exists(self, key: str) -> bool:
+        client = await self._get_client()
+        if client is None:
+            return await self._fallback.exists(key)
+
         try:
             rk = self._key(key)
-            return bool(self._client.exists(rk))
-        except (OSError, RuntimeError) as exc:
-            import logging; logging.getLogger("afaq").warning("redis_exists_fallback error=%s", exc)
-            return self._fallback.exists(key)
+            return bool(await client.exists(rk))
+        except REDIS_EXCEPTIONS as exc:
+            logger.warning("redis_exists_fallback error=%s", exc)
+            return await self._fallback.exists(key)
 
-    def size(self, key: str | None = None) -> int:
+    async def size(self, key: str | None = None) -> int:
         if key is not None:
-            return len(self.get_history(key))
-        # approximate
-        return self._fallback.size(key)
+            hist = await self.get_history(key)
+            return len(hist)
+        return self._fallback.local_size(key)
+
+    def local_size(self, key: str | None = None) -> int:
+        """Synchronous local-only size check."""
+        return self._fallback.local_size(key)
 
 
 def get_history_store() -> HistoryStore | RedisHistoryStore:
@@ -155,10 +178,11 @@ def get_history_store() -> HistoryStore | RedisHistoryStore:
 
         s = get_settings()
         if s.redis_enabled and s.redis_url:
-            return RedisHistoryStore(s.redis_url)
-    except (OSError, RuntimeError) as exc:
-        import logging; logging.getLogger("afaq").warning("history_store_best_effort error=%s", exc)
-        pass
+            return RedisHistoryStore()
+    except REDIS_EXCEPTIONS as exc:
+        logger.warning("history_store_best_effort error=%s", exc)
+    except Exception as exc:
+        logger.warning("history_store_init_error error=%s", exc)
     return HistoryStore()
 
 

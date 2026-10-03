@@ -31,14 +31,18 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
         await session.rollback()
 
 
-@pytest.fixture(autouse=True)
-def isolate_external_redis(monkeypatch):
-    """Keep tests deterministic and prevent them from mutating a developer Redis."""
+@pytest_asyncio.fixture(autouse=True)
+async def isolate_external_redis(monkeypatch):
+    """Keep tests deterministic, prevent mutating developer Redis, and ensure clean async closure."""
+    from app.core.redis import close_redis, get_redis_provider
     from app.middleware.rate_limit import global_rate_limiter
     from app.services.process_registry import process_registry
     from app.transport.history import HistoryStore
 
     monkeypatch.setattr(settings, "redis_enabled", False)
+    monkeypatch.setattr(settings, "redis_url", "")
+    await close_redis()
+
     if hasattr(global_rate_limiter, "_available"):
         monkeypatch.setattr(global_rate_limiter, "_available", False)
 
@@ -48,6 +52,9 @@ def isolate_external_redis(monkeypatch):
         yield
     finally:
         process_registry._history = original_history
+        await close_redis()
+        provider = get_redis_provider()
+        provider._assert_no_live_pool_or_client()
 
 
 @pytest.fixture(autouse=True)
@@ -59,13 +66,13 @@ def reset_rate_limiter(isolate_external_redis):
     global_rate_limiter.reset()
 
 
-@pytest.fixture(autouse=True)
-def reset_process_registry():
+@pytest_asyncio.fixture(autouse=True)
+async def reset_process_registry(isolate_external_redis):
     from app.services.process_registry import process_registry
 
-    process_registry.clear()
+    await process_registry.clear()
     yield
-    process_registry.clear()
+    await process_registry.clear()
 
 
 @pytest_asyncio.fixture

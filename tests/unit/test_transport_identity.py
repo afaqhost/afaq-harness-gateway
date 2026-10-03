@@ -58,12 +58,13 @@ def test_build_history_key():
         build_history_key("unknown", 1, "s1")  # type: ignore[arg-type]
 
 
-def test_resolve_stream_identity_new():
+@pytest.mark.asyncio
+async def test_resolve_stream_identity_new():
     class DummyStore:
-        def has_history(self, key):
+        async def has_history(self, key):
             return False
 
-    ident = resolve_stream_identity(
+    ident = await resolve_stream_identity(
         endpoint="openai",
         user_id=1,
         stream_id=None,
@@ -77,13 +78,14 @@ def test_resolve_stream_identity_new():
     assert not ident.is_reconnect
 
 
-def test_resolve_stream_identity_missing_stream_id_on_reconnect():
+@pytest.mark.asyncio
+async def test_resolve_stream_identity_missing_stream_id_on_reconnect():
     class DummyStore:
-        def has_history(self, key):
+        async def has_history(self, key):
             return True
 
     with pytest.raises(HTTPException) as exc:
-        resolve_stream_identity(
+        await resolve_stream_identity(
             endpoint="openai",
             user_id=1,
             stream_id=None,
@@ -94,13 +96,14 @@ def test_resolve_stream_identity_missing_stream_id_on_reconnect():
     assert exc.value.detail["error"]["code"] == "missing_stream_id"
 
 
-def test_resolve_stream_identity_conflict():
+@pytest.mark.asyncio
+async def test_resolve_stream_identity_conflict():
     class DummyStore:
-        def has_history(self, key):
+        async def has_history(self, key):
             return True
 
     with pytest.raises(HTTPException) as exc:
-        resolve_stream_identity(
+        await resolve_stream_identity(
             endpoint="openai",
             user_id=1,
             stream_id="existing-id",
@@ -111,13 +114,14 @@ def test_resolve_stream_identity_conflict():
     assert exc.value.detail["error"]["code"] == "stream_id_conflict"
 
 
-def test_resolve_stream_identity_not_found():
+@pytest.mark.asyncio
+async def test_resolve_stream_identity_not_found():
     class DummyStore:
-        def has_history(self, key):
+        async def has_history(self, key):
             return False
 
     with pytest.raises(HTTPException) as exc:
-        resolve_stream_identity(
+        await resolve_stream_identity(
             endpoint="openai",
             user_id=1,
             stream_id="expired-id",
@@ -128,8 +132,9 @@ def test_resolve_stream_identity_not_found():
     assert exc.value.detail["error"]["code"] == "stream_not_found"
 
 
-def test_resolve_stream_identity_default_history():
-    ident = resolve_stream_identity(
+@pytest.mark.asyncio
+async def test_resolve_stream_identity_default_history():
+    ident = await resolve_stream_identity(
         endpoint="openai",
         user_id=1,
         stream_id=None,

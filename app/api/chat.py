@@ -385,7 +385,7 @@ async def stream_message(
     from app.services.process_registry import process_registry
     from app.transport.identity import resolve_stream_identity
 
-    identity = resolve_stream_identity(
+    identity = await resolve_stream_identity(
         endpoint="conv",
         user_id=user.id,
         stream_id=x_stream_id,
@@ -398,7 +398,8 @@ async def stream_message(
 
     if identity.is_reconnect:
         async def replay_event_stream():
-            for rp in process_registry.get_replay(identity.history_key, identity.last_event_id):  # type: ignore[arg-type]
+            replayed = await process_registry.get_replay(identity.history_key, identity.last_event_id)  # type: ignore[arg-type]
+            for rp in replayed:
                 yield rp
 
         return StreamingResponse(
@@ -464,16 +465,16 @@ async def stream_message(
         can_release_reservation = True
 
         # helper to yield and store in history
-        def _store_and_yield(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
+        async def _store_and_yield(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
             nonlocal seq
             target_id = id_val if id_val is not None else seq
-            payload = store_and_format_sse(history_key, event, data, target_id, retry)
+            payload = await store_and_format_sse(history_key, event, data, target_id, retry)
             seq = max(seq, target_id + 1)
             return payload
 
         # lifecycle: start
         start_data = {"id": str(conv.id), "model": model, "created": int(time.time()), "request_id": request_id}
-        yield _store_and_yield("start", start_data)
+        yield await _store_and_yield("start", start_data)
 
         # heartbeat + token loop via transport pump
         stream_iter = adapter.stream(prompt, model_name, request_id=request_id, env=stream_env).__aiter__()
@@ -484,7 +485,7 @@ async def stream_message(
                     continue
                 if item.is_cancelled:
                     cancelled = True
-                    yield _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled by client"})
+                    yield await _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled by client"})
                     break
                 if not item.text:
                     continue
@@ -496,7 +497,7 @@ async def stream_message(
                     "model": model,
                     "choices": [{"index": 0, "delta": {"content": item.text}, "finish_reason": None}],
                 }
-                yield _store_and_yield("token", chunk)
+                yield await _store_and_yield("token", chunk)
 
             if cancelled:
                 return
@@ -547,21 +548,21 @@ async def stream_message(
             )
             if finalized_rec is None:
                 logger.error("stream_finalization_failed conv_id=%s token=%s", conv.id, reservation_token)
-                yield _store_and_yield("error", {"code": "quota_finalization_failed", "message": "Failed to finalize usage accounting."}, id_val=seq)
+                yield await _store_and_yield("error", {"code": "quota_finalization_failed", "message": "Failed to finalize usage accounting."}, id_val=seq)
                 return
 
             # 3. Only then emit terminal events
-            yield _store_and_yield("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
+            yield await _store_and_yield("usage", usage_data, id_val=seq, retry=settings.sse_retry_ms)
             seq += 1
 
-            yield _store_and_yield("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
+            yield await _store_and_yield("done", "[DONE]", id_val=seq, retry=settings.sse_retry_ms)
             seq += 1
         except RuntimeError as exc:
             msg_lower = str(exc).lower()
             is_killed = "exit code -9" in msg_lower or "exit code -15" in msg_lower or "killed" in msg_lower
             if cancelled or "cancel" in msg_lower or is_killed:
                 logger.info("stream_cancelled request_id=%s error=%s", request_id, str(exc))
-                yield _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled"}, id_val=seq)
+                yield await _store_and_yield("cancel", {"code": "cancelled", "message": "cancelled"}, id_val=seq)
                 return
             logger.error("harness_stream_error harness=%s model=%s error=%s", harness_name, model, str(exc))
             sanitized = sanitize_harness_error(exc)
@@ -577,7 +578,7 @@ async def stream_message(
             except (OSError, RuntimeError) as exc:
                 import logging; logging.getLogger("afaq").warning("metrics_failed error=%s", exc)
             err = {"code": "harness_error", "message": sanitized, "type": "harness_error"}
-            yield _store_and_yield("error", err, id_val=seq)
+            yield await _store_and_yield("error", err, id_val=seq)
         finally:
             if reservation_token and can_release_reservation:
                 await quota_service.release_reservation(reservation_token)

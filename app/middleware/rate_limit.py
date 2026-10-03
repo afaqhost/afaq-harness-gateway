@@ -55,65 +55,99 @@ class InMemoryRateLimiter:
         return len(self._hits.get(key, []))
 
 
+LUA_INCR_EXPIRE = """
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('TTL', KEYS[1])
+return {current, ttl}
+"""
+
+
 class RedisRateLimiter:
-    """Redis sliding-window via INCR + EXPIRE (fallback to in-memory if Redis unavailable)."""
+    """Redis fixed-window counter with atomic expiry and a local shadow bucket."""
 
-    def __init__(self, redis_url: str) -> None:
+    def __init__(self, redis_url: str | None = None, client=None) -> None:
         self._url = redis_url
-        self._client = None
+        self._custom_client = client
         self._fallback = InMemoryRateLimiter()
-        self._available = False
-        try:
-            import redis.asyncio as redis  # type: ignore
 
-            self._client = redis.from_url(redis_url, decode_responses=True)
-            self._available = True
-        except (ImportError, OSError, RuntimeError) as exc:
-            logger.warning("redis_import_failed error=%s", exc)
-            self._client = None
-            self._available = False
+    async def _get_client(self):
+        if self._custom_client is not None:
+            return self._custom_client
+        from app.core.redis import get_redis_client
+
+        return await get_redis_client()
 
     def allow(self, key: str, limit: int, window_s: int) -> tuple[bool, int]:
-        # sync wrapper — for middleware dispatch we need async? Keep sync fallback for now.
-        # This method is called inside async dispatch but is sync; for Redis we need async variant.
-        # We expose async_allow and keep this as fallback.
+        # Synchronous fallback interface
         return self._fallback.allow(key, limit, window_s)
 
     async def async_allow(self, key: str, limit: int, window_s: int) -> tuple[bool, int]:
-        if not self._available or self._client is None:
-            return self._fallback.allow(key, limit, window_s)
+        # Always evaluate and record in local shadow bucket first.
+        # This guarantees fail-safe continuity: if Redis times out or fails later,
+        # the local bucket already contains all requests seen by this process replica.
+        local_allowed, local_retry = self._fallback.allow(key, limit, window_s)
+
+        client = await self._get_client()
+        if client is None:
+            return local_allowed, local_retry
+
         try:
-            # Use INCR with window key
+            from app.core.redis import REDIS_EXCEPTIONS
+
             redis_key = f"rl:{key}:{int(time.time() // window_s)}"
-            count = await self._client.incr(redis_key)
-            if count == 1:
-                await self._client.expire(redis_key, window_s)
-            if count > limit:
-                ttl = await self._client.ttl(redis_key)
-                retry = int(ttl) if ttl and ttl > 0 else window_s
-                return False, retry
+            # Execute atomic INCR + EXPIRE via Lua script
+            res = await client.eval(LUA_INCR_EXPIRE, 1, redis_key, window_s)
+            count, ttl = int(res[0]), int(res[1])
+
+            redis_allowed = (count <= limit)
+            redis_retry = max(1, ttl) if not redis_allowed else 0
+
+            # Combined decision: fallback/local shadowing cannot make enforcement more permissive
+            if not local_allowed or not redis_allowed:
+                return False, max(local_retry, redis_retry)
             return True, 0
-        except (OSError, RuntimeError) as exc:
-            logger.warning("redis_fallback error=%s", exc)
-            # fallback to in-memory on Redis error
-            return self._fallback.allow(key, limit, window_s)
+        except REDIS_EXCEPTIONS as exc:
+            logger.warning("redis_rate_limit_fallback error=%s", exc)
+            return local_allowed, local_retry
 
     def reset(self) -> None:
+        """Local-only reset. Never flushes Redis, schedules orphan tasks, or performs network I/O."""
         self._fallback.reset()
+
+    async def clear_redis_rate_limits(self) -> None:
+        """Explicit awaited test/admin helper to clear rl:* keys via SCAN+DELETE."""
+        client = await self._get_client()
+        if client is None:
+            return
+        try:
+            from app.core.redis import REDIS_EXCEPTIONS
+
+            keys: list[str] = []
+            async for k in client.scan_iter(match="rl:*", count=100):
+                keys.append(k)
+                if len(keys) >= 100:
+                    await client.delete(*keys)
+                    keys.clear()
+            if keys:
+                await client.delete(*keys)
+        except REDIS_EXCEPTIONS as exc:
+            logger.warning("redis_rate_limit_clear_failed error=%s", exc)
 
     def _size(self, key: str) -> int:
         return self._fallback._size(key)
 
 
 def _choose_limiter() -> RateLimiter:
-    # lazy chooser — uses Redis if configured and available, else in-memory
     try:
         from app.core.config import get_settings
 
         s = get_settings()
         if s.redis_enabled and s.redis_url:
-            return RedisRateLimiter(s.redis_url)  # type: ignore
-    except (OSError, RuntimeError) as exc:
+            return RedisRateLimiter()
+    except Exception as exc:
         logger.warning("rate_limit_chooser_failed error=%s", exc)
     return InMemoryRateLimiter()
 

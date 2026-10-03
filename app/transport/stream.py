@@ -37,7 +37,10 @@ class StreamItem:
         self.metadata = metadata or {}
 
 
-def replay_sse_events(history_key: str, last_event_id: str | None) -> tuple[list[str], int]:
+from app.core.redis import REDIS_EXCEPTIONS
+
+
+async def replay_sse_events(history_key: str, last_event_id: str | None) -> tuple[list[str], int]:
     """Return (replayed_chunks, next_seq) from history for Last-Event-ID."""
     if last_event_id is None:
         return [], 1
@@ -47,13 +50,13 @@ def replay_sse_events(history_key: str, last_event_id: str | None) -> tuple[list
         return [], 1
     from app.services.process_registry import process_registry
 
-    replayed = list(process_registry.get_replay(history_key, last_id))
-    hist = process_registry.get_history(history_key)
+    replayed = await process_registry.get_replay(history_key, last_id)
+    hist = await process_registry.get_history(history_key)
     seq = max(s for s, _ in hist) + 1 if hist else last_id + 1
-    return replayed, seq
+    return list(replayed), seq
 
 
-def store_and_format_sse(
+async def store_and_format_sse(
     history_key: str,
     event: str,
     data,
@@ -67,8 +70,8 @@ def store_and_format_sse(
         retry_ms = settings.sse_retry_ms
     payload = sse_event(event, data, id=seq, retry=retry_ms)
     try:
-        process_registry.append_history(history_key, seq, payload)
-    except (OSError, RuntimeError) as exc:
+        await process_registry.append_history(history_key, seq, payload)
+    except REDIS_EXCEPTIONS as exc:
         logger.warning("history_append_failed error=%s", exc)
     return payload
 
@@ -151,28 +154,29 @@ async def heartbeat_stream(
     heartbeat_interval = heartbeat_s if heartbeat_s is not None else settings.sse_heartbeat_seconds
     seq = 1
 
-    def _store(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
+    async def _store(event: str, data, id_val: int | None = None, retry: int | None = None) -> str:
         if retry is None:
             retry = settings.sse_retry_ms
         payload = sse_event(event, data, id=id_val, retry=retry)
         try:
-            history_store.append(history_key, id_val if id_val is not None else seq, payload)
-        except (OSError, RuntimeError, AttributeError) as exc:
-            import logging; logging.getLogger("afaq").warning("history_append_failed error=%s", exc)
+            await history_store.append(history_key, id_val if id_val is not None else seq, payload)
+        except REDIS_EXCEPTIONS as exc:
+            logger.warning("history_append_failed error=%s", exc)
         return payload
 
     # replay
     if last_event_id is not None:
         try:
             last_id = int(last_event_id)
-            for rp in history_store.replay(history_key, last_id):
+            replayed = await history_store.replay(history_key, last_id)
+            for rp in replayed:
                 yield rp
-            hist = history_store.get_history(history_key)
+            hist = await history_store.get_history(history_key)
             seq = _next_seq(hist) if hist else last_id + 1
         except ValueError:
             pass
 
-    yield _store("start", start_payload, id_val=seq, retry=settings.sse_retry_ms)
+    yield await _store("start", start_payload, id_val=seq, retry=settings.sse_retry_ms)
     seq += 1
 
     stream_iter = adapter.stream(prompt, model, request_id=request_id, env=env).__aiter__()
@@ -188,7 +192,7 @@ async def heartbeat_stream(
                 cancelled = True
                 if pending:
                     pending.cancel()
-                yield _store("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
+                yield await _store("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
                 break
             if pending is None:
                 pending = asyncio.create_task(stream_iter.__anext__())
@@ -205,7 +209,7 @@ async def heartbeat_stream(
             if await request.is_disconnected():
                 await process_registry.cancel(request_id)
                 cancelled = True
-                yield _store("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
+                yield await _store("cancel", {"code": "cancelled", "message": "cancelled by client"}, id_val=seq)
                 break
 
             # tool_call passthrough (kept for OpenAI path; chat path ignores)
@@ -224,7 +228,7 @@ async def heartbeat_stream(
                 "model": model,
                 "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
             }
-            yield _store("token", chunk, id_val=seq, retry=settings.sse_retry_ms)
+            yield await _store("token", chunk, id_val=seq, retry=settings.sse_retry_ms)
             seq += 1
 
         if cancelled:

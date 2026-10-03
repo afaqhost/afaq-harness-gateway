@@ -52,7 +52,27 @@ Dashboard requests use a JWT returned by `POST /api/auth/login`. External OpenAI
 
 ## Model Cache
 
-`refresh_models()` populates the in-memory model cache during FastAPI startup. `GET /v1/models` and `GET /api/admin/harnesses` read the cache and do not invoke CLI discovery. `POST /api/admin/harnesses/refresh`, used by the dashboard refresh button, rebuilds the cache.
+`refresh_models()` populates the local in-memory model cache (`MODEL_CACHE`) during FastAPI startup and background refresh:
+- **Authoritative Local Discovery:** When local discovery succeeds and returns models, it updates `MODEL_CACHE` and mirrors to Redis asynchronously.
+- **Fail-Safe Hydration:** If local discovery fails or yields no models (e.g. an adapter only installed on other replicas), the local cache hydrates from the shared Redis mirror.
+- **Non-Destructive Mirror:** Transient discovery errors or absent local tools do not delete the shared mirror.
+- **Non-Blocking Reads:** Request-time `cached_models()` serves the local hot cache synchronously without network I/O or Redis calls. `POST /api/admin/harnesses/refresh` rebuilds the cache and mirror.
+
+## Shared Async Redis & Multi-Replica Architecture
+
+A centralized async Redis provider (`app/core/redis.py`) manages connection pooling via `redis.asyncio`:
+- **Connection Lifecycle:** Lazy initialization; awaits graceful pool closure during FastAPI lifespan shutdown with narrow exception logging.
+- **Bounded Timeouts:** Configurable connect and socket timeouts (`REDIS_CONNECT_TIMEOUT_SECONDS`, `REDIS_SOCKET_TIMEOUT_SECONDS`, defaulting to 2.0s) prevent slow Redis instances from blocking the event loop.
+- **Narrow Exception Handling:** Catches specific Redis and timeout exceptions (`RedisError`, `RedisTimeoutError`, `ConnectionError`, `asyncio.TimeoutError`, `OSError`) to trigger graceful degradation with structured warnings.
+- **SSE History:** `RedisHistoryStore` pipelines `LPUSH` + `LTRIM` + `EXPIRE` atomically per event and awaits execution. Replays use awaited async `LRANGE`. Propagated through stream identity, process registry, and SSE controllers without fire-and-forget tasks.
+- **Harness Job Mirroring:** Harness job status sync and deletion are awaited async calls. The service lock is released prior to all network I/O to avoid head-of-line blocking.
+- **Rate Limiter:** `RedisRateLimiter` executes an atomic Lua script (`INCR` + conditional `EXPIRE`) to prevent key leaks without race conditions. A local shadow bucket remains active on every request, ensuring that a Redis outage does not reset effective counts or grant burst allowances. `reset()` is strictly local-only (never issues `FLUSHDB`, never schedules orphan coroutines, never makes network calls). Targeted key cleanup (`rl:*` only) is available via explicit awaited helper.
+
+### Single- vs Multi-Replica Guarantees & Fallback Limitations
+
+- **Single-Replica:** Fully functional with Redis disabled (`REDIS_ENABLED=false` or empty `REDIS_URL`). Uses local in-memory data structures for SSE replay history, model caching, job tracking, and rate limiting with zero external dependencies.
+- **Multi-Replica:** When Redis is available, provides cross-pod SSE replay, shared rate limit accounting across nodes, harness job visibility, and model cache hydration. In the event of Redis downtime, latency spikes, or network partitions, each replica degrades smoothly to local in-memory enforcement without blocking the event loop.
+- **History Fallback Limitation:** Events buffered in local memory during a Redis outage are not backfilled into Redis upon recovery. Reconnecting clients during an outage will only be able to replay events if routed to the replica that originated the stream.
 
 ## Model Identifiers
 
@@ -64,8 +84,8 @@ SQLite (WAL: `journal_mode=WAL`, `synchronous=NORMAL`, 64 MB cache, 5 s `busy_ti
 
 ## Current Boundaries & Recent Hardening
 
-- **Jobs:** `POST /harnesses/{name}/install` / `update` now create a `HarnessJob` (`app/services/harness_job_service.py`) with allow-listed `npm install -g` check, background `adapter.install()` streaming, Redis mirror + TTL, and `GET /jobs/{id}` + `/jobs/{id}/stream` (`event: log/done`).
+- **Jobs:** `POST /harnesses/{name}/install` / `update` now create a `HarnessJob` (`app/services/harness_job_service.py`) with allow-listed `npm install -g` check, background `adapter.install()` streaming, async non-blocking Redis mirror + TTL, and `GET /jobs/{id}` + `/jobs/{id}/stream` (`event: log/done`).
 - **Credentials:** `app/services/credential_service.py` encrypts tokens via `app/core/security.encrypt_secret` (Fernet derived from `CREDENTIALS_KEY`) and injects per-harness env (`ANTHROPIC_API_KEY`, etc.) at `run`/`stream` time; `lifespan` harvests `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/… into default profiles for the first admin.
 - **Queue & backpressure:** `app/services/harness_queue.py` (`Semaphore(5)`, 30 s wait → `429`) wraps `HarnessAdapter.run/stream` so 512 MB hosts handle 20+ concurrent callers without OOM.
-- **Streaming:** `transport/history` + `transport/stream` + `transport/identity` own `id:`/`retry:`/`Last-Event-ID`/`X-Stream-ID` collision-free replay, bounded history isolation per user/conversation/stream, `: keepalive`, and concurrent bounded stderr draining (`_BoundedStderrDrainer` in `HarnessAdapter.stream`); controllers emit `start|token|usage|tool_call|tool_result|done|error|cancel` with `X-Request-ID` / `X-Stream-ID` / `X-RateLimit-Limit`.
+- **Streaming & History:** `transport/history` + `transport/stream` + `transport/identity` own `id:`/`retry:`/`Last-Event-ID`/`X-Stream-ID` collision-free replay, bounded history isolation per user/conversation/stream, `: keepalive`, and concurrent bounded stderr draining (`_BoundedStderrDrainer` in `HarnessAdapter.stream`); controllers emit `start|token|usage|tool_call|tool_result|done|error|cancel` with `X-Request-ID` / `X-Stream-ID` / `X-RateLimit-Limit`. All Redis operations in the stream path are fully async and pipelined.
 - **Observability:** structured JSON logs (`request_id`, redacted `authorization`), `X-Request-ID` echo, sanitized `harness_error` (`app/shared/errors.py`), Prometheus at `/metrics`, and fast `/health` (no `list_models` call).

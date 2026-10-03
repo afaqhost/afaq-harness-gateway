@@ -117,26 +117,31 @@ class ProcessRegistry:
     def size(self) -> int:
         return len(self._map)
 
-    def clear(self) -> None:
-        # sync clear for tests (no lock needed in single-threaded test)
+    def clear_local(self) -> None:
+        """Synchronous local map cleanup for tests (does not touch history)."""
         self._map.clear()
         self._pending_cancel.clear()
-        try:
-            self._history.clear()  # type: ignore
-        except (AttributeError, OSError, RuntimeError) as exc:
-            logger.warning("history_clear_failed error=%s", exc)
 
-    def append_history(self, key: str, seq: int, payload: str) -> None:
-        self._history.append(key, seq, payload)
+    async def clear_history(self) -> None:
+        """Clear history store asynchronously."""
+        await self._history.clear()
 
-    def get_replay(self, key: str, last_id: int) -> list[str]:
-        return self._history.replay(key, last_id)
+    async def clear(self) -> None:
+        """Clear local maps and history store asynchronously."""
+        self.clear_local()
+        await self.clear_history()
 
-    def get_history(self, key: str) -> deque[tuple[int, str]]:
-        return self._history.get_history(key)
+    async def append_history(self, key: str, seq: int, payload: str) -> None:
+        await self._history.append(key, seq, payload)
 
-    def has_history(self, key: str) -> bool:
-        return self._history.exists(key)
+    async def get_replay(self, key: str, last_id: int) -> list[str]:
+        return await self._history.replay(key, last_id)
+
+    async def get_history(self, key: str) -> deque[tuple[int, str]]:
+        return await self._history.get_history(key)
+
+    async def has_history(self, key: str) -> bool:
+        return await self._history.exists(key)
 
     # for test introspection
     @property
