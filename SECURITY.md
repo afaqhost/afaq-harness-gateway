@@ -43,8 +43,8 @@ timeline within 7 days. We will credit reporters unless anonymity is requested.
 - **Credential Rotation:**
   - Rotate API keys via `POST /api/admin/keys/{id}/rotate`. The previous key hash is revoked immediately upon rotation.
 - **Project Support Actions:**
-  - Keep `GITHUB_ISSUES_TOKEN` server-side and scope it to the configured repository with only issue-creation access. The dashboard issue form is for ordinary bugs; use private vulnerability reporting for security defects.
-  - The administrator-only update action runs `git pull --ff-only` only from a clean checkout whose `origin` matches `GITHUB_REPOSITORY`. Review the configured remote as a code-execution trust boundary and restart the service after an update.
+  - The dashboard issue form opens GitHub's issue composer and requires no server-side GitHub token. It is for ordinary bugs; use private vulnerability reporting for security defects.
+  - The administrator-only update action runs `git pull --ff-only` only when tracked files are unchanged and `origin` matches `GITHUB_REPOSITORY`. Untracked files are preserved, and Git refuses conflicts. Review the configured remote as a code-execution trust boundary and restart the service after an update.
 
 ## What Is Out of Scope
 

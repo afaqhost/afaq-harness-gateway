@@ -15,7 +15,7 @@ from app.core.security import generate_api_key
 from app.db.database import APIKey, Harness, User, get_db
 from app.harnesses.registry import all_adapters, cached_models, cached_models_clear, clear_model_cache_mirror, get_adapter, refresh_models
 from app.services.harness_job_service import harness_job_service
-from app.services import issue_service, user_service
+from app.services import user_service
 from app.services.project_update_service import (
     ProjectUpdateConflictError,
     ProjectUpdateFailedError,
@@ -97,18 +97,6 @@ class KeyCreate(BaseModel):
     allowed_models: list[str] | None = None
 
 
-class IssueCreate(BaseModel):
-    title: str = Field(min_length=3, max_length=120)
-    body: str = Field(min_length=10, max_length=10_000)
-
-    @field_validator("title", "body", mode="before")
-    @classmethod
-    def strip_text(cls, value: object) -> str:
-        if not isinstance(value, str):
-            raise ValueError("Issue text must be a string")
-        return value.strip()
-
-
 @router.post("/project/update")
 async def update_project(_: User = Depends(admin_user)):
     try:
@@ -126,17 +114,6 @@ async def update_project(_: User = Depends(admin_user)):
         "commit": update.commit,
         "restart_required": update.updated,
     }
-
-
-@router.post("/project/issues", status_code=201)
-async def create_project_issue(issue: IssueCreate, _: User = Depends(current_user)):
-    try:
-        created = await issue_service.submit_project_issue(issue.title, issue.body)
-    except issue_service.IssueReportingUnavailableError as exc:
-        raise HTTPException(503, detail=error_payload("issue_reporting_unavailable", str(exc))) from exc
-    except issue_service.IssueSubmissionError as exc:
-        raise HTTPException(502, detail=error_payload("issue_submission_failed", str(exc), retryable=True)) from exc
-    return {"number": created.number, "url": created.url}
 
 @router.get("/harnesses")
 async def harnesses(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):

@@ -68,7 +68,10 @@ class ProjectUpdateService:
             raise ProjectUpdateUnavailableError("The Git origin does not match the configured repository")
 
     async def _require_clean_worktree(self) -> None:
-        status = await self._run_git("status", "--porcelain", "--untracked-files=normal")
+        # Untracked files do not change the checked-out revision and are safe to
+        # leave in place. Git itself will still refuse a pull if an incoming
+        # tracked path would overwrite one of them.
+        status = await self._run_git("status", "--porcelain", "--untracked-files=no")
         if status.exit_code != 0:
             raise ProjectUpdateUnavailableError("Git could not inspect the project worktree")
         if status.output.strip():

@@ -128,15 +128,15 @@ These endpoints accept dashboard JWTs only; API keys cannot use them.
 
 | Method | Endpoint | Access | Behavior |
 | --- | --- | --- | --- |
-| `POST` | `/api/admin/project/update` | Administrator | Verifies a clean Git checkout and the configured GitHub origin, then runs `git pull --ff-only`. A changed revision requires a service restart. |
-| `POST` | `/api/admin/project/issues` | Authenticated user | Creates a GitHub issue from `title` (3–120 characters) and `body` (10–10,000 characters) using the server-side `GITHUB_ISSUES_TOKEN`. |
+| `POST` | `/api/admin/project/update` | Administrator | Verifies that tracked files are clean and the GitHub origin is trusted, then runs `git pull --ff-only`. Untracked files are preserved. A changed revision requires a service restart. |
 
-Project update returns `409 project_update_conflict` for a dirty worktree,
+Project update returns `409 project_update_conflict` for tracked local changes,
 detached branch, or concurrent update. It returns `503
 project_update_unavailable` when the installation is not a Git checkout, Git is
-missing, or the origin does not match `GITHUB_REPOSITORY`. Issue submission
-returns `503 issue_reporting_unavailable` until a valid token is configured.
-Neither endpoint returns credentials or raw Git command output.
+missing, or the origin does not match `GITHUB_REPOSITORY`. The dashboard issue
+form opens GitHub's issue composer with the title and body prefilled; the user
+reviews and submits it using their own GitHub account. The update endpoint does
+not return credentials or raw Git command output.
 
 ## SSE Events & Reconnection
 

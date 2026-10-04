@@ -56,10 +56,21 @@ async def test_clean_checkout_fast_forwards_to_latest_commit(git_checkouts: tupl
 @pytest.mark.asyncio
 async def test_local_changes_block_project_update(git_checkouts: tuple[Path, Path]):
     _, checkout = git_checkouts
-    (checkout / "local.txt").write_text("not committed\n", encoding="utf-8")
+    (checkout / "version.txt").write_text("locally changed\n", encoding="utf-8")
 
     with pytest.raises(ProjectUpdateConflictError, match="local changes"):
         await ProjectUpdateService(checkout, "afaqhost/afaq-harness-gateway", 10).pull_latest()
+
+
+@pytest.mark.asyncio
+async def test_untracked_files_do_not_block_project_update(git_checkouts: tuple[Path, Path]):
+    _, checkout = git_checkouts
+    (checkout / "local.txt").write_text("not committed\n", encoding="utf-8")
+
+    update = await ProjectUpdateService(checkout, "afaqhost/afaq-harness-gateway", 10).pull_latest()
+
+    assert update.updated is False
+    assert (checkout / "local.txt").read_text(encoding="utf-8") == "not committed\n"
 
 
 @pytest.mark.asyncio

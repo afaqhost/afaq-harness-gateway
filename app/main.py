@@ -115,6 +115,7 @@ async def render_page(request: Request, page: str):
             "request": request,
             "app_name": settings.app_name,
             "app_version": settings.version,
+            "github_repository": settings.github_repository,
             "page": page,
         },
     )

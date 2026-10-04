@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
   <link rel="stylesheet" href="/static/app.css?v=20261004-project-actions-02">
 </head>
-<body data-page="{{ page }}">
+<body data-page="{{ page }}" data-github-repository="{{ github_repository }}" data-app-version="{{ app_version }}">
   <div id="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-top">
@@ -755,7 +755,7 @@ while (true) {
       <button type="button" class="modal-close" id="issue-modal-close" aria-label="Close">×</button>
       <p class="eyebrow" data-i18n="project">المشروع</p>
       <h2 data-i18n="issueDialogTitle">الإبلاغ عن مشكلة</h2>
-      <p class="issue-dialog-description muted" data-i18n="issueDialogDescription">أرسل المشكلة مباشرة إلى مستودع المشروع على GitHub.</p>
+      <p class="issue-dialog-description muted" data-i18n="issueDialogDescription">ستفتح صفحة GitHub مع تعبئة البيانات لتراجعها قبل النشر.</p>
       <p class="issue-security-note" data-i18n="issueSecurityNote">لا ترسل الثغرات الأمنية هنا؛ استخدم الإبلاغ الأمني الخاص في GitHub.</p>
       <label for="issue-title" data-i18n="issueTitleLabel">عنوان المشكلة</label>
       <input id="issue-title" required minlength="3" maxlength="120" autocomplete="off" data-i18n-placeholder="issueTitlePlaceholder" placeholder="وصف مختصر للمشكلة">

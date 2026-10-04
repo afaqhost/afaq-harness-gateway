@@ -25,8 +25,7 @@ Configuration is loaded from `.env` through `pydantic-settings`. Start from `.en
 | `HARNESS_QUEUE_MAX_WAIT` | `30` | Seconds to wait for a concurrency slot before `429` |
 | `SSE_HEARTBEAT_SECONDS` | `15` | SSE keepalive interval (`: keepalive` every N seconds) |
 | `SSE_RETRY_MS` | `3000` | SSE `retry:` field (milliseconds) |
-| `GITHUB_REPOSITORY` | `afaqhost/afaq-harness-gateway` | Trusted GitHub repository for project updates and dashboard issue submissions |
-| `GITHUB_ISSUES_TOKEN` | `""` | Optional server-side GitHub token capable of creating issues in `GITHUB_REPOSITORY`; empty disables direct issue submission |
+| `GITHUB_REPOSITORY` | `afaqhost/afaq-harness-gateway` | Trusted GitHub repository for project updates and the dashboard's prefilled issue link |
 | `PROJECT_UPDATE_TIMEOUT_SECONDS` | `120` | Maximum duration of the administrator-triggered `git pull --ff-only` operation |
 | `REDIS_URL` | `""` | `redis://host:6379/0` for multi-replica rate limit/history/jobs; empty → in-memory fallback |
 | `REDIS_ENABLED` | `false` | Auto-enabled when `REDIS_URL` is set; set explicitly if needed |
@@ -52,4 +51,6 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 
 Assign separate values to `SECRET_KEY` and `CREDENTIALS_KEY` in `.env`. Never include those values in a commit, issue, log, or client-side code.
 
-`GITHUB_ISSUES_TOKEN` is also secret and remains server-side. Grant it access only to the configured repository and only the permission needed to create issues. The dashboard issue form returns `503` until this token is configured.
+Issue reporting requires no server token. The dashboard opens GitHub's issue
+composer with prefilled details, and the signed-in GitHub user reviews and
+submits the report.
