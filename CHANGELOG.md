@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-10-04
+
+### Added
+- Administrator-controlled project updates via a verified fast-forward-only Git pull.
+- Dashboard issue form that opens GitHub's issue composer with prefilled details for review before publication.
+
+### Changed
+- Dashboard navigation now shows user management and the OS terminal only to administrators.
+- Authenticated users can view Harness installation status and available models without access to management controls.
+
+### Fixed
+- Untracked local files no longer block project updates; tracked local changes remain protected.
+
+### Security
+- Removed the server-side GitHub issue token requirement and restricted Harness refresh, job output, installation, update, and removal actions to administrators.
+
 ## [0.1.0-beta.1] - 2026-10-04
 
 ### Added
