@@ -46,4 +46,10 @@ jobs:
           exit 1
       - name: Tear down Compose
         if: always()
-        run: docker compose down -v --remove-orphans
+        run: |
+          if [ -f docker-compose.yml ]; then
+            # Compose parses env_file entries during teardown. An earlier failed
+            # step may have prevented CI from creating the temporary .env.
+            touch .env
+            docker compose down -v --remove-orphans
+          fi

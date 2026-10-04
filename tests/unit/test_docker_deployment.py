@@ -170,6 +170,12 @@ def test_ci_workflow_creates_env_before_compose_build(ci_workflow: dict):
         if "compose down" in run:
             teardown_step_idx = idx
             assert step.get("if") == "always()", "Teardown step must have if: always()"
+            assert "touch .env" in run, (
+                "Teardown must create .env if an earlier step failed before Compose setup"
+            )
+            assert run.index("touch .env") < run.index("compose down"), (
+                "Teardown must create .env before Compose parses the configuration"
+            )
 
     assert env_step_idx is not None, "Step creating .env was not found in CI workflow"
     assert build_step_idx is not None, "Step building Docker image was not found in CI workflow"
