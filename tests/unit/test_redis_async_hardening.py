@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError, RedisError, TimeoutError as RedisTimeoutError
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.clients.base import HarnessAdapter
 from app.clients.registry import MODEL_CACHE, cached_models, cached_models_clear, refresh_models
@@ -245,7 +246,7 @@ def test_model_cache_request_reads_are_local_and_non_blocking():
 
 
 @pytest.mark.asyncio
-async def test_model_cache_local_success_overrides_redis():
+async def test_model_cache_local_success_overrides_redis(test_engine):
     """Local discovery is authoritative when it succeeds, overriding stale Redis mirror and updating it."""
     fake_client = FakeAsyncRedis()
     provider = get_redis_provider()
@@ -267,7 +268,11 @@ async def test_model_cache_local_success_overrides_redis():
     new_models = [HarnessModel(id="dummy_harness//m_new", harness="dummy_harness", provider="dummy", name="m_new")]
     dummy_adapter.list_models = AsyncMock(return_value=new_models)
 
-    with patch("app.clients.registry.all_adapters", return_value=[dummy_adapter]):
+    test_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    with (
+        patch("app.clients.registry.all_adapters", return_value=[dummy_adapter]),
+        patch("app.db.database.SessionLocal", test_session_factory),
+    ):
         await refresh_models()
 
         # Local discovery wins over stale Redis
@@ -283,7 +288,7 @@ async def test_model_cache_local_success_overrides_redis():
 
 
 @pytest.mark.asyncio
-async def test_model_cache_local_failure_hydrates_from_redis_without_deleting_mirror():
+async def test_model_cache_local_failure_hydrates_from_redis_without_deleting_mirror(test_engine):
     """Transient local discovery failure hydrates from Redis mirror and does not delete the valid shared mirror."""
     fake_client = FakeAsyncRedis()
     provider = get_redis_provider()
@@ -304,7 +309,11 @@ async def test_model_cache_local_failure_hydrates_from_redis_without_deleting_mi
     dummy_adapter.is_installed.return_value = True
     dummy_adapter.list_models = AsyncMock(side_effect=RuntimeError("Transient CLI discovery timeout"))
 
-    with patch("app.clients.registry.all_adapters", return_value=[dummy_adapter]):
+    test_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    with (
+        patch("app.clients.registry.all_adapters", return_value=[dummy_adapter]),
+        patch("app.db.database.SessionLocal", test_session_factory),
+    ):
         await refresh_models()
 
         # Local cache is hydrated from shared Redis mirror
