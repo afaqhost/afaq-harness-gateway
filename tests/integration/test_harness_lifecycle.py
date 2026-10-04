@@ -124,12 +124,12 @@ async def test_install_rejects_unapproved_script_recipe(client, admin_headers):
 
 
 @pytest.mark.asyncio
-async def test_harnesses_list_exposes_recipes(client, user_headers):
+async def test_regular_user_harness_list_hides_admin_recipes(client, user_headers):
     resp = await client.get("/api/admin/harnesses", headers=user_headers)
     assert resp.status_code == 200
     agy = next(h for h in resp.json() if h["name"] == "agy")
-    assert agy["install_recipe"] == INSTALL_SCRIPT_COMMAND
-    assert agy["update_recipe"] == "agy update"
+    assert agy["install_recipe"] is None
+    assert agy["update_recipe"] is None
 
 
 @pytest.mark.asyncio
@@ -137,6 +137,20 @@ async def test_install_requires_admin(client, user_headers):
     # regular user should be forbidden
     resp = await client.post("/api/admin/harnesses/opencode/install", headers=user_headers)
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/admin/harnesses/opencode/jobs/example",
+        "/api/admin/harnesses/opencode/jobs/example/stream",
+    ],
+)
+async def test_regular_user_cannot_read_harness_job_details(client, user_headers, path):
+    response = await client.get(path, headers=user_headers)
+
+    assert response.status_code == 403
 
 
 @pytest.mark.asyncio

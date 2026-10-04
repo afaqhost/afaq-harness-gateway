@@ -110,9 +110,9 @@ app.include_router(metrics_router)
 
 async def render_page(request: Request, page: str):
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "app_name": settings.app_name,
             "app_version": settings.version,
             "github_repository": settings.github_repository,

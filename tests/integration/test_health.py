@@ -111,3 +111,10 @@ async def test_refresh_updates_health(client, admin_headers):
         assert resp.status_code == 200
         assert resp.json()["status"] == "refreshed"
         mock_refresh.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_regular_user_cannot_refresh_harness_models(client, user_headers):
+    response = await client.post("/api/admin/harnesses/refresh", headers=user_headers)
+
+    assert response.status_code == 403

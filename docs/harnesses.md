@@ -56,7 +56,10 @@ Models are loaded when the server starts. To refresh after installing a CLI, cha
 2. Select **Refresh models**.
 3. Return to **Chat** and choose the updated model list.
 
-The refresh endpoint is `POST /api/admin/harnesses/refresh` and requires dashboard authentication.
+The harness list is available to authenticated dashboard users so they can see
+installation state and available models. `POST /api/admin/harnesses/refresh`
+and all install, update, uninstall, and job-log endpoints require an
+administrator dashboard account.
 
 ## Adding a Harness
 

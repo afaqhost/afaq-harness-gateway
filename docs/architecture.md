@@ -40,7 +40,7 @@ The layer map represents the target architectural direction. While new capabilit
 | `app/api/auth.py` | Bootstrap, login, strict JWT-only `current_user` and `admin_user` dependencies |
 | `app/api/openai.py` | `GET /v1/models`, `POST /v1/chat/completions` (tools, response_format, isolated SSE stream identity, `Last-Event-ID` replay, cancel) |
 | `app/api/chat.py` | Dashboard conversations/messages (CRUD, soft-delete/restore, search, pagination), streaming with heartbeat + cancel |
-| `app/api/admin.py` | Harness status/health, `refresh`, `install`/`update` jobs, project updates, users, keys + rotation |
+| `app/api/admin.py` | Authenticated harness inventory/health; administrator-only refresh, install/update jobs, project updates, users, keys + rotation |
 | `app/api/credentials.py` | Credential profiles (encrypted, per-harness `profile_name`, `check` → `status`) |
 | `app/api/usage.py` | Filtered usage listing (`from`/`to`, harness/model, pagination) |
 | `app/api/os_terminal.py` | OS Terminal REST lifecycle endpoints and authenticated WebSocket proxy |

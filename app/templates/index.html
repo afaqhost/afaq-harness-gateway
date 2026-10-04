@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" sizes="48x48" href="/static/brand/favicon-48.png">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
-  <link rel="stylesheet" href="/static/app.css?v=20261004-project-actions-02">
+  <link rel="stylesheet" href="/static/app.css?v=20261004-admin-navigation-01">
 </head>
 <body data-page="{{ page }}" data-github-repository="{{ github_repository }}" data-app-version="{{ app_version }}">
   <div id="app-shell">
@@ -40,8 +40,8 @@
         <a class="nav-link" href="/harnesses" data-page="harnesses"><span class="nav-icon">02</span><span data-i18n="harnesses">الهارنسس</span></a>
         <a class="nav-link" href="/keys" data-page="keys"><span class="nav-icon">03</span><span data-i18n="apiKeys">مفاتيح API</span></a>
         <a class="nav-link" href="/usage" data-page="usage"><span class="nav-icon">04</span><span data-i18n="usage">الاستهلاك</span></a>
-        <a class="nav-link" href="/users" data-page="users"><span class="nav-icon">05</span><span data-i18n="users">المستخدمون</span></a>
-        <a class="nav-link" href="/terminal" data-page="terminal"><span class="nav-icon">06</span><span data-i18n="terminal">الترمنال</span></a>
+        <a class="nav-link" href="/users" data-page="users" data-admin-only hidden><span class="nav-icon">05</span><span data-i18n="users">المستخدمون</span></a>
+        <a class="nav-link" href="/terminal" data-page="terminal" data-admin-only hidden><span class="nav-icon">06</span><span data-i18n="terminal">الترمنال</span></a>
         <a class="nav-link" href="/documentation" data-page="documentation"><span class="nav-icon">07</span><span data-i18n="docs">التوثيق</span></a>
       </nav>
 
@@ -54,7 +54,7 @@
             </span>
           </div>
           <div class="project-card-actions">
-            <button class="project-action" id="project-update" type="button" hidden>
+            <button class="project-action" id="project-update" type="button" data-admin-only hidden>
               <span class="project-action-icon project-action-icon-update" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/></svg>
               </span>
@@ -265,7 +265,7 @@
         </div>
       </section>
 
-      <section id="harnesses" class="page hidden"><div class="section-heading"><div><p class="eyebrow">02 / <span data-i18n="harnesses">الهارنسس</span></p><h2 data-i18n="harnessTitle">الأدوات المتصلة</h2></div><button class="outline-button" id="refresh-harnesses"><span class="refresh-symbol">↻</span><span data-i18n="refresh">تحديث الموديلات</span></button></div><div id="harness-grid" class="harness-grid"></div></section>
+      <section id="harnesses" class="page hidden"><div class="section-heading"><div><p class="eyebrow">02 / <span data-i18n="harnesses">الهارنسس</span></p><h2 data-i18n="harnessTitle">الأدوات المتصلة</h2></div><button class="outline-button" id="refresh-harnesses" data-admin-only hidden><span class="refresh-symbol">↻</span><span data-i18n="refresh">تحديث الموديلات</span></button></div><div id="harness-grid" class="harness-grid"></div></section>
       <section id="keys" class="page hidden"><div class="section-heading"><div><p class="eyebrow">03 / API KEYS</p><h2 data-i18n="keyTitle">مفاتيح الوصول</h2></div><button id="new-key"><span>+</span><span data-i18n="createKey">إنشاء مفتاح</span></button></div><div id="keys-list" class="table-card"></div></section>
       <section id="usage" class="page hidden">
         <div class="section-heading">
@@ -348,7 +348,7 @@
         </div>
         <div id="usage-summary" class="usage-summary hidden"></div>
       </section>
-      <section id="users" class="page hidden">
+      <section id="users" class="page hidden" data-admin-only hidden>
         <div class="section-heading">
           <div>
             <p class="eyebrow">05 / <span data-i18n="users">المستخدمون</span></p>
@@ -359,7 +359,7 @@
         </div>
         <div id="users-list" class="table-card" aria-live="polite"></div>
       </section>
-      <section id="terminal" class="page hidden">
+      <section id="terminal" class="page hidden" data-admin-only hidden>
         <div class="terminal-page-header">
           <div>
             <p class="eyebrow">06 / <span data-i18n="terminal">الترمنال</span></p>
@@ -773,6 +773,6 @@ while (true) {
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
   <script src="/static/os_terminal.js?v=20260921-keypad-01"></script>
-  <script src="/static/app.js?v=20261004-project-actions-02"></script>
+  <script src="/static/app.js?v=20261004-admin-navigation-01"></script>
 </body>
 </html>

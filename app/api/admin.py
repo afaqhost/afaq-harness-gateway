@@ -118,6 +118,7 @@ async def update_project(_: User = Depends(admin_user)):
 @router.get("/harnesses")
 async def harnesses(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     rows = {h.name: h for h in (await db.execute(select(Harness))).scalars().all()}
+    is_admin = user.role == "admin"
     # also fetch credential profiles for this user to determine authenticated per harness
     from app.db.database import CredentialProfile
 
@@ -146,7 +147,19 @@ async def harnesses(user: User = Depends(current_user), db: AsyncSession = Depen
                 await clear_model_cache_mirror(adapter.name)
                 models = []
             any_changed = True
-        result.append({"name": adapter.name, "display_name": adapter.display_name, "provider": adapter.provider or None, "installed": installed, "authenticated": is_auth, "models": [m.__dict__ for m in models], "install_recipe": adapter.install_recipe, "update_recipe": adapter.update_recipe, "last_checked_at": row.last_checked_at.isoformat() if row and row.last_checked_at else None})
+        result.append(
+            {
+                "name": adapter.name,
+                "display_name": adapter.display_name,
+                "provider": adapter.provider or None,
+                "installed": installed,
+                "authenticated": is_auth,
+                "models": [m.__dict__ for m in models],
+                "install_recipe": adapter.install_recipe if is_admin else None,
+                "update_recipe": adapter.update_recipe if is_admin else None,
+                "last_checked_at": row.last_checked_at.isoformat() if row and row.last_checked_at else None,
+            }
+        )
     if any_changed:
         try:
             await db.commit()
@@ -198,7 +211,7 @@ async def harness_health(name: str, _: User = Depends(current_user), db: AsyncSe
     return {"name": name, "installed": installed, "models": len(models), "latency_ms": latency_ms, "authenticated": False}
 
 @router.post("/harnesses/refresh")
-async def refresh_harness_models(_: User = Depends(current_user)):
+async def refresh_harness_models(_: User = Depends(admin_user)):
     await refresh_models()
     return {"status": "refreshed"}
 
@@ -217,7 +230,7 @@ async def install_harness(name: str, _: User = Depends(admin_user)):
 
 
 @router.get("/harnesses/{name}/jobs/{job_id}")
-async def get_harness_job(name: str, job_id: str, _: User = Depends(current_user)):
+async def get_harness_job(name: str, job_id: str, _: User = Depends(admin_user)):
     # verify harness exists
     try:
         get_adapter(name)
@@ -230,7 +243,7 @@ async def get_harness_job(name: str, job_id: str, _: User = Depends(current_user
 
 
 @router.get("/harnesses/{name}/jobs/{job_id}/stream")
-async def stream_harness_job(name: str, job_id: str, _: User = Depends(current_user)):
+async def stream_harness_job(name: str, job_id: str, _: User = Depends(admin_user)):
     try:
         get_adapter(name)
     except KeyError:

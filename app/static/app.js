@@ -155,7 +155,14 @@ async function api(url, options = {}) {
   return resp.json();
 }
 
+let dashboardIsAdmin = false;
+
 function show(page, updateUrl = true) {
+  if ((page === 'users' || page === 'terminal') && !dashboardIsAdmin) {
+    page = 'chat';
+    history.replaceState({page}, '', '/chat');
+  }
+  document.body.dataset.page = page;
   document.querySelectorAll('.page').forEach((el) => el.classList.add('hidden'));
   const target = $(`#${page === 'documentation' ? 'docs' : page}`);
   if (!target) return;
@@ -1089,6 +1096,7 @@ async function loadHarnesses() {
   } catch(e){ $('#harness-grid').innerHTML = `<p class="error-message">${escapeHtml(e.message)}</p>`; }
 }
 async function refreshHarnesses(){
+  if (!dashboardIsAdmin) return;
   const b=$('#refresh-harnesses'); if(b) b.disabled=true;
   try{ await api('/api/admin/harnesses/refresh',{method:'POST'}); await loadHarnesses(); await loadModels(); }catch(e){ showToast(`${text('refreshError')}: ${e.message}`);}finally{ if(b) b.disabled=false; }
 }
@@ -1168,10 +1176,12 @@ function projectActionError(error){
   return keys[error.code] ? text(keys[error.code]) : error.message;
 }
 
-async function configureProjectActions(){
+async function configureDashboardAccess(){
   const user = await api('/api/auth/me');
-  const updateButton = $('#project-update');
-  if(updateButton) updateButton.hidden = user.role !== 'admin';
+  dashboardIsAdmin = user.role === 'admin';
+  document.querySelectorAll('[data-admin-only]').forEach((element)=>{
+    element.hidden = !dashboardIsAdmin;
+  });
 }
 
 async function updateProject(){
@@ -1935,10 +1945,11 @@ async function loadHarnessesEnhanced() {
       const badge = isInstalled ? `<span class="badge ok">${text('installed')}</span>` : `<span class="badge">${text('notInstalled')}</span>`;
       const models = h.models.slice(0,6).map(m=>`<span style="font:500 11px var(--font-mono);background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.18);color:var(--brand-primary);padding:3px 7px;border-radius:999px">${escapeHtml(m.id.split('/').pop())}</span>`).join('');
       const more = h.models.length>6?`<span style="font:500 11px var(--font-mono);color:var(--text-faint)">+${h.models.length-6}</span>`:'';
-      const btn = isInstalled
+      const controls = !dashboardIsAdmin ? '' : isInstalled
         ? `<button class="harness-btn success" disabled>✓ ${text('installed')}</button> <button class="harness-btn" data-harness-action="update" data-harness="${escapeHtml(h.name)}">${text('update')}</button> <button class="harness-btn danger" data-harness-action="uninstall" data-harness="${escapeHtml(h.name)}" title="${language==='ar'?'بعد حذف الـ CLI خارجياً، اضغط هنا لتحديث حالة البوابة':'After deleting the CLI externally, click to sync gateway state'}">${language==='ar'?'إزالة من البوابة':'Sync uninstall'}</button>`
         : `<button class="harness-btn primary" data-harness-action="install" data-harness="${escapeHtml(h.name)}">${text('install')}</button>`;
-      return `<div class="card ${isInstalled?'installed':''}" data-harness-card="${escapeHtml(h.name)}" data-install-recipe="${escapeHtml(h.install_recipe||'')}" data-update-recipe="${escapeHtml(h.update_recipe||'')}"><div><h3>${escapeHtml(h.display_name)}</h3><p>${escapeHtml(meta.desc[language]||meta.desc.en||h.provider||'')}</p><small class="mono" style="color:var(--text-faint)">${escapeHtml(h.install_recipe||'')}</small><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${models}${more}</div></div><small>${h.models.length} ${language==='ar'?'موديل':'models'} · <span class="mono">${escapeHtml(h.name)}</span></small><div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">${badge} ${btn}</div></div>`;
+      const recipe = dashboardIsAdmin ? `<small class="mono" style="color:var(--text-faint)">${escapeHtml(h.install_recipe||'')}</small>` : '';
+      return `<div class="card ${isInstalled?'installed':''}" data-harness-card="${escapeHtml(h.name)}"><div><h3>${escapeHtml(h.display_name)}</h3><p>${escapeHtml(meta.desc[language]||meta.desc.en||h.provider||'')}</p>${recipe}<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${models}${more}</div></div><small>${h.models.length} ${language==='ar'?'موديل':'models'} · <span class="mono">${escapeHtml(h.name)}</span></small><div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">${badge} ${controls}</div></div>`;
     }).join('');
   } catch(e){ const g=document.getElementById('harness-grid'); if(g) g.innerHTML = `<p class="error-message">${escapeHtml(e.message)}</p>`; }
 }
@@ -1993,7 +2004,7 @@ loadHarnesses = loadHarnessesEnhanced;
     return;
   }
   if(!token()){ location.href='/login'; return; }
-  await configureProjectActions();
+  await configureDashboardAccess();
   show(page,false);
   bindMainHarnessGrid();
   bindSetupEvents();
@@ -2140,6 +2151,7 @@ function bindMainHarnessGrid(){
   if (!mainGrid || mainGrid.dataset.bound) return;
   mainGrid.dataset.bound='1';
   mainGrid.addEventListener('click', async (e)=>{
+    if (!dashboardIsAdmin) return;
     const btn = e.target.closest('[data-harness-action]');
     if (!btn) return;
     const harness = btn.dataset.harness;
