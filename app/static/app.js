@@ -57,7 +57,8 @@ function resetThemeToAuto() {
 
 const translations = {
   ar: {
-    newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', usage: 'الاستهلاك', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', harnessSubtitle: 'تثبيت أدوات CLI وتحديثها ومراجعة الموديلات المتاحة.', keySubtitle: 'إنشاء مفاتيح الوصول وتعطيلها أو حذفها بأمان.', usageSubtitle: 'مراجعة استهلاك الموديلات والأداء وسجل الطلبات.', docsSubtitle: 'أمثلة ومرجع سريع لاستخدام واجهة API.', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', userSubtitle: 'إضافة الحسابات وتعديل الصلاحيات وتعطيل الوصول أو حذف المستخدم وبياناته.', addUser: 'إضافة مستخدم', editUser: 'تعديل المستخدم', displayName: 'الاسم', role: 'الصلاحية', member: 'مستخدم', administrator: 'مدير', create: 'إنشاء', save: 'حفظ التغييرات', edit: 'تعديل', enable: 'تفعيل', disable: 'تعطيل', activeAccount: 'الحساب نشط', optionalPassword: 'اتركها فارغة للاحتفاظ بكلمة المرور الحالية.', noUsers: 'لا يوجد مستخدمون.', userDeleteConfirm: 'سيتم حذف المستخدم ومحادثاته ومفاتيحه وبياناته نهائياً. هل تريد المتابعة؟', project: 'المشروع', getUpdates: 'الحصول على تحديث', reportIssue: 'الإبلاغ عن مشكلة',
+    newChat: 'محادثة جديدة', chat: 'المحادثة', harnesses: 'الهارنسس', apiKeys: 'مفاتيح API', users: 'المستخدمون', docs: 'التوثيق', usage: 'الاستهلاك', workspace: 'مساحة العمل', logout: 'تسجيل الخروج', installed: 'مثبّت', notInstalled: 'غير مثبّت', chatSubtitle: 'تحدث مع أي Harness من مكان واحد — محادثات محفوظة مع ذاكرة سياقية', harnessSubtitle: 'تثبيت أدوات CLI وتحديثها ومراجعة الموديلات المتاحة.', keySubtitle: 'إنشاء مفاتيح الوصول وتعطيلها أو حذفها بأمان.', usageSubtitle: 'مراجعة استهلاك الموديلات والأداء وسجل الطلبات.', docsSubtitle: 'أمثلة ومرجع سريع لاستخدام واجهة API.', online: 'البوابة متصلة', secureAccess: 'وصول آمن', loginTitle: 'تسجيل الدخول', loginDescription: 'أدخل بيانات حسابك للوصول إلى لوحة Afaq.', email: 'البريد الإلكتروني', password: 'كلمة المرور', login: 'دخول', welcomeTitle: 'مساحة تفكير واحدة،', welcomeTitleAccent: 'كل الهارنسس.', welcomeDescription: 'اختر موديلًا من القائمة وابدأ محادثة جديدة. محادثاتك محفوظة تلقائيًا مع ذاكرة سياقية.', model: 'الموديل', loading: 'جارٍ التحميل...', messagePlaceholder: 'اكتب رسالتك هنا... (المحادثة لها ذاكرة)', enterHint: 'Enter للإرسال · Shift + Enter لسطر جديد — المحادثة تحفظ تلقائيًا', send: 'إرسال', harnessTitle: 'الأدوات المتصلة', refresh: 'تحديث الموديلات', keyTitle: 'مفاتيح الوصول', createKey: 'إنشاء مفتاح', userTitle: 'المستخدمون والصلاحيات', userSubtitle: 'إضافة الحسابات وتعديل الصلاحيات وتعطيل الوصول أو حذف المستخدم وبياناته.', addUser: 'إضافة مستخدم', editUser: 'تعديل المستخدم', displayName: 'الاسم', role: 'الصلاحية', member: 'مستخدم', administrator: 'مدير', create: 'إنشاء', save: 'حفظ التغييرات', edit: 'تعديل', enable: 'تفعيل', disable: 'تعطيل', activeAccount: 'الحساب نشط', optionalPassword: 'اتركها فارغة للاحتفاظ بكلمة المرور الحالية.', noUsers: 'لا يوجد مستخدمون.', userDeleteConfirm: 'سيتم حذف المستخدم ومحادثاته ومفاتيحه وبياناته نهائياً. هل تريد المتابعة؟', project: 'المشروع', getUpdates: 'الحصول على تحديث', reportIssue: 'الإبلاغ عن مشكلة', updateProjectTitle: 'تحديث المشروع', updateProjectConfirm: 'سيتم تنزيل آخر إصدار عبر Git باستخدام fast-forward فقط. يجب أن تكون ملفات المشروع دون تغييرات محلية.', updatingProject: 'جارٍ التحديث...', projectUpdated: 'تم تنزيل التحديث', projectCurrent: 'المشروع محدّث بالفعل', restartRequired: 'أعد تشغيل الخدمة لتطبيق الإصدار الجديد.', issueDialogTitle: 'الإبلاغ عن مشكلة', issueDialogDescription: 'أرسل المشكلة مباشرة إلى مستودع المشروع على GitHub.', issueSecurityNote: 'لا ترسل الثغرات الأمنية هنا؛ استخدم الإبلاغ الأمني الخاص في GitHub.', issueTitleLabel: 'عنوان المشكلة', issueTitlePlaceholder: 'وصف مختصر للمشكلة', issueBodyLabel: 'التفاصيل', issueBodyPlaceholder: 'ما الذي حدث؟ وما الخطوات اللازمة لإعادة المشكلة؟', submitIssue: 'إرسال إلى GitHub', submittingIssue: 'جارٍ الإرسال...', issueCreated: 'تم إنشاء المشكلة',
+    projectUpdateBlocked: 'تعذر التحديث لأن ملفات المشروع تحتوي على تغييرات محلية أو لأن تحديثًا آخر قيد التشغيل.', projectUpdateUnavailable: 'التحديث التلقائي غير متاح لهذا التثبيت.', projectUpdateFailed: 'فشل تنزيل التحديث. حاول مرة أخرى لاحقًا.', issueNotConfigured: 'الإبلاغ المباشر غير مفعّل. أضف GITHUB_ISSUES_TOKEN إلى إعدادات الخادم.', issueSubmissionFailed: 'تعذر إرسال المشكلة إلى GitHub. حاول مرة أخرى لاحقًا.',
     docsTitle: 'توثيق API', docsIntro: 'AFAQ Gateway واجهة متوافقة مع OpenAI تتيح الوصول إلى نماذج الذكاء الاصطناعي من أي تطبيق. جميع النماذج المثبتة متاحة فورًا.', docsOverviewTitle: 'نظرة عامة', docsOverviewText: 'تدعم البوابة معايير OpenAI كاملة —authentication, list models, chat completions, streaming — مع إضافات خاصة بالبوابة.', docsBaseUrl: 'رابط القاعدة', docsBaseUrlText: 'الرابط الأساسي للبوابة هو عنوان الخادم متبوعًا بـ v1', docsQuickStartTitle: 'البداية السريعة', docsQuickStartText: 'أنشئ مفتاح API من لوحة التحكم، ثم أرسل أول طلب في خطوتين: المصادقة ثم الإرسال.', docsAuthTitle: 'المصادقة', docsAuthText: 'أنشئ مفتاح API من لوحة التحكم وأرسله في ترويسة Authorization مع كل طلب بهذا الشكل: Bearer afaq_YOUR_KEY', docsModelsTitle: 'الموديلات', docsModelsText: 'استخدم GET /v1/models لمعرفة قائمة كاملة بجميع الموديلات المتاحة من جميع الهارنسس المثبتة.', docsResponseTitle: 'الاستجابة', docsResponseText: 'الرد الكامل موجود في choices[0].message.content. تأكد من التحقق من ok === true.', docsModelsHeading: 'جلب الموديلات', docsModelsBody: 'يعيد هذا المسار قائمة بجميع الموديلات المتاحة. كل موديل له معرف فريد بصيغة harness/provider/model — مثل opencode//opencode/big-pickle.', docsChatHeading: 'إرسال رسالة', docsChatBody: 'أرسل طلب POST إلى /v1/chat/completions مع مفتاح API في الترويسة ورسائل المحادثة في الجسم.', docsModelIdTitle: 'صيغة معرف الموديل', docsModelIdText: 'كل معرف موديل يتكون من ثلاثة أجزاء مفصولة بـ //: اسم الهارنسس // المزود // اسم الموديل. مثال: opencode//opencode/big-pickle.', docsContextTitle: 'الذاكرة السياقية', docsContextText: 'البوابة تحفظ سياق المحادثة تلقائيًا لكل محادثة على حدة. أرسل نفس محادثة继续保持 نفس السياق دون إعادة إرسال السجل.', docsSystemPromptTitle: 'التعليمات النظامية', docsSystemPromptText: 'أضف role: system في مصفوفة الرسائل لتعيين سلوك الموديل. سيتم إرسالها مع كل طلب.', docsStreamHeading: 'البث المباشر (Streaming)', docsStreamText: 'فعّل stream: true للحصول على الرد تدريجيًا عبر SSE. كل جزء يحتوي delta.content يتم إلحاقه بالرد. الطلب الناجح ينتهي بـ data: [DONE].', docsStreamExampleHeading: 'مثال على البث', docsStreamExampleText: 'أضف stream: true في جسم الطلب، ثم اقرأ Server-Sent Events من الاستجابة.', docsErrorsTitle: 'أخطاء شائعة', docsErrorsText: '401 = مفتاح غير صالح أو انتهت الجلسة. 400 = اسم هارنس غير معروف. 502 = خطأ في أداة CLI. 504 = انتهت مهلة الاتصال.',
     searchModels: 'ابحث عن موديل... (claude, gpt, gemini)', filterAll: 'الكل', modelFooterHint: '↑↓ للتنقل · Enter للاختيار · Esc للإغلاق', noModelsFound: 'لا توجد نتائج',
     setupEyebrow: 'الإعداد الأولي — 3 خطوات', setupTitle: 'مرحباً بك في AFAQ', setupSubtitle: 'أنشئ حساب المدير ثم اختر الأدوات التي تريد تثبيتها — كل شيء داخل الكونتينر',
@@ -80,7 +81,8 @@ const translations = {
     filterAllHarnesses: 'كل الهارنسس', usageModelPlaceholder: 'فلتر الموديل', dateRange: 'النطاق الزمني', last7Days: 'آخر 7 أيام', last30Days: 'آخر 30 يوم', last90Days: 'آخر 90 يوم', allTime: 'كل الوقت', usageChartEmpty: 'لا توجد بيانات كافية للرسم', usageEmpty: 'لا توجد بيانات بعد', usageStatTotal: 'إجمالي'
   },
   en: {
-    newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', usage: 'Usage', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', harnessSubtitle: 'Install and update CLI tools, and review available models.', keySubtitle: 'Create, disable, or remove access keys safely.', usageSubtitle: 'Review model consumption, performance, and request history.', docsSubtitle: 'Examples and a quick reference for the API.', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', userSubtitle: 'Create accounts, edit permissions, disable access, or delete a user and their data.', addUser: 'Add user', editUser: 'Edit user', displayName: 'Name', role: 'Role', member: 'User', administrator: 'Administrator', create: 'Create', save: 'Save changes', edit: 'Edit', enable: 'Enable', disable: 'Disable', activeAccount: 'Active account', optionalPassword: 'Leave blank to keep the current password.', noUsers: 'No users found.', userDeleteConfirm: 'This permanently deletes the user, conversations, keys, and owned data. Continue?', project: 'Project', getUpdates: 'Get updates', reportIssue: 'Report issue',
+    newChat: 'New chat', chat: 'Chat', harnesses: 'Harnesses', apiKeys: 'API keys', users: 'Users', docs: 'Docs', usage: 'Usage', workspace: 'Workspace', logout: 'Log out', installed: 'Installed', notInstalled: 'Not installed', chatSubtitle: 'Talk to any harness from one place — saved chats with context memory', harnessSubtitle: 'Install and update CLI tools, and review available models.', keySubtitle: 'Create, disable, or remove access keys safely.', usageSubtitle: 'Review model consumption, performance, and request history.', docsSubtitle: 'Examples and a quick reference for the API.', online: 'Gateway online', secureAccess: 'Secure access', loginTitle: 'Sign in', loginDescription: 'Enter your account details to access Afaq.', email: 'Email address', password: 'Password', login: 'Sign in', welcomeTitle: 'One thinking space,', welcomeTitleAccent: 'All Harnesses.', welcomeDescription: 'Choose a model and start a new conversation. Chats are auto-saved with context memory.', model: 'Model', loading: 'Loading...', messagePlaceholder: 'Write your message... (chat has memory)', enterHint: 'Enter to send · Shift + Enter for new line — chat auto-saves', send: 'Send', harnessTitle: 'Connected tools', refresh: 'Refresh models', keyTitle: 'Access keys', createKey: 'Create key', userTitle: 'Users and permissions', userSubtitle: 'Create accounts, edit permissions, disable access, or delete a user and their data.', addUser: 'Add user', editUser: 'Edit user', displayName: 'Name', role: 'Role', member: 'User', administrator: 'Administrator', create: 'Create', save: 'Save changes', edit: 'Edit', enable: 'Enable', disable: 'Disable', activeAccount: 'Active account', optionalPassword: 'Leave blank to keep the current password.', noUsers: 'No users found.', userDeleteConfirm: 'This permanently deletes the user, conversations, keys, and owned data. Continue?', project: 'Project', getUpdates: 'Get updates', reportIssue: 'Report issue', updateProjectTitle: 'Update project', updateProjectConfirm: 'The gateway will download the latest version with a fast-forward-only Git pull. The project worktree must have no local changes.', updatingProject: 'Updating...', projectUpdated: 'Update downloaded', projectCurrent: 'Project is already up to date', restartRequired: 'Restart the service to apply the new version.', issueDialogTitle: 'Report an issue', issueDialogDescription: 'Send the issue directly to the project repository on GitHub.', issueSecurityNote: 'Do not report security vulnerabilities here; use GitHub private vulnerability reporting.', issueTitleLabel: 'Issue title', issueTitlePlaceholder: 'Short description of the problem', issueBodyLabel: 'Details', issueBodyPlaceholder: 'What happened, and how can the problem be reproduced?', submitIssue: 'Send to GitHub', submittingIssue: 'Sending...', issueCreated: 'Issue created',
+    projectUpdateBlocked: 'The project has local changes or another update is already running.', projectUpdateUnavailable: 'Automatic updates are unavailable for this installation.', projectUpdateFailed: 'The update could not be downloaded. Try again later.', issueNotConfigured: 'Direct reporting is not configured. Add GITHUB_ISSUES_TOKEN to the server settings.', issueSubmissionFailed: 'The issue could not be sent to GitHub. Try again later.',
     terminal: 'Terminal', terminalTitle: 'OS Terminal', terminalSubtitle: 'Full shell as the user running the gateway — for commands and maintenance', stop: 'Stop',
     docsTitle: 'API Documentation', docsIntro: 'AFAQ Gateway is an OpenAI-compatible interface for AI models from any application. All installed models are immediately available.', docsOverviewTitle: 'Overview', docsOverviewText: 'The gateway supports the full OpenAI standard — authentication, list models, chat completions, streaming — plus gateway-specific extensions.', docsBaseUrl: 'Base URL', docsBaseUrlText: 'The base URL is your gateway server address followed by /v1', docsQuickStartTitle: 'Quick Start', docsQuickStartText: 'Create an API key from the dashboard, then send your first request in two steps: authenticate, then send.', docsAuthTitle: 'Authentication', docsAuthText: 'Create an API key from the dashboard and include it in the Authorization header with every request: Bearer afaq_YOUR_KEY', docsModelsTitle: 'Models', docsModelsText: 'Use GET /v1/models to get a full list of all available models from all installed harnesses.', docsResponseTitle: 'Response', docsResponseText: 'The full reply is at choices[0].message.content. Always check ok === true in the response.', docsModelsHeading: 'List models', docsModelsBody: 'This route returns all available models. Each model has a unique ID in the format harness/provider/model — e.g. opencode//opencode/big-pickle.', docsChatHeading: 'Send a message', docsChatBody: 'Send a POST request to /v1/chat/completions with your API key in the header and the conversation messages in the body.', docsModelIdTitle: 'Model ID Format', docsModelIdText: 'Every model ID has three parts separated by //: harness name // provider // model name. Example: opencode//opencode/big-pickle.', docsContextTitle: 'Context Memory', docsContextText: 'The gateway automatically maintains conversation context for each chat. Send to the same conversation to keep the context without resending the full history.', docsSystemPromptTitle: 'System Prompt', docsSystemPromptText: 'Add role: system in the messages array to set the model behavior. It will be sent with every request.', docsStreamHeading: 'Streaming', docsStreamText: 'Set stream: true to receive the reply incrementally via SSE. Each chunk contains delta.content that appends to the reply. Successful streams end with data: [DONE].', docsStreamExampleHeading: 'Streaming Example', docsStreamExampleText: 'Add stream: true in the request body, then read Server-Sent Events from the response.', docsErrorsTitle: 'Common errors', docsErrorsText: '401 = invalid or expired key. 400 = unknown harness name. 502 = CLI tool error. 504 = connection timed out.',
     searchModels: 'Search models... (claude, gpt, gemini)', filterAll: 'All', modelFooterHint: '↑↓ Navigate · Enter Select · Esc Close', noModelsFound: 'No results',
@@ -134,6 +136,7 @@ async function api(url, options = {}) {
     const body = await resp.json().catch(() => ({}));
     const err = new Error(body.detail || body.error?.message || resp.statusText);
     err.status = resp.status;
+    err.code = body.error?.code;
     err.detail = body.detail || body.error?.message;
     if (resp.status === 401 && !url.includes('/api/auth/login')) {
       if (token() && document.body.dataset.page !== 'login') {
@@ -1156,6 +1159,58 @@ async function deleteUser(userId){
 }
 function showToast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('visible'); setTimeout(()=>t.classList.remove('visible'),3500); }
 
+function projectActionError(error){
+  const keys={
+    project_update_conflict:'projectUpdateBlocked',
+    project_update_unavailable:'projectUpdateUnavailable',
+    project_update_failed:'projectUpdateFailed',
+    issue_reporting_unavailable:'issueNotConfigured',
+    issue_submission_failed:'issueSubmissionFailed',
+  };
+  return keys[error.code] ? text(keys[error.code]) : error.message;
+}
+
+async function configureProjectActions(){
+  const user = await api('/api/auth/me');
+  const updateButton = $('#project-update');
+  if(updateButton) updateButton.hidden = user.role !== 'admin';
+}
+
+async function updateProject(){
+  const confirmed = await showConfirmBox({
+    title:text('updateProjectTitle'), message:text('updateProjectConfirm'),
+    confirmText:text('getUpdates'), cancelText:text('cancel'),
+  });
+  if(!confirmed) return;
+  const button=$('#project-update'), label=button?.querySelector('.project-action-label');
+  if(!button || !label) return;
+  button.disabled=true; label.textContent=text('updatingProject');
+  try{
+    const update=await api('/api/admin/project/update',{method:'POST'});
+    const status=update.updated ? `${text('projectUpdated')}. ${text('restartRequired')}` : text('projectCurrent');
+    showToast(`${status} (${update.commit})`);
+  }catch(error){ showToast(projectActionError(error)); }
+  finally{ button.disabled=false; label.textContent=text('getUpdates'); }
+}
+
+function openIssueDialog(){
+  const dialog=$('#issue-modal'), form=$('#issue-form'), message=$('#issue-message');
+  if(!dialog || !form || !message) return;
+  form.reset(); message.textContent=''; dialog.showModal(); $('#issue-title')?.focus();
+}
+
+async function submitProjectIssue(event){
+  event.preventDefault();
+  const button=$('#issue-submit'), message=$('#issue-message');
+  if(!button || !message) return;
+  button.disabled=true; button.textContent=text('submittingIssue'); message.textContent='';
+  try{
+    const created=await api('/api/admin/project/issues',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('#issue-title').value,body:$('#issue-body').value})});
+    $('#issue-modal').close(); showToast(`${text('issueCreated')} #${created.number}`);
+  }catch(error){ message.textContent=projectActionError(error); }
+  finally{ button.disabled=false; button.textContent=text('submitIssue'); }
+}
+
 // ---------- UI Box (replaces alert/confirm/prompt) ----------
 function showConfirmBox({ title, message, confirmText, cancelText, eyebrow }={}){
   return new Promise((resolve)=>{
@@ -1453,6 +1508,10 @@ $('#prompt')?.addEventListener('input', autoResize);
 $('#login-btn').onclick = login;
 $('#new-key').onclick = openKeyModal; $('#key-form').onsubmit = createKey; $('#key-modal-close').onclick = ()=> $('#key-modal').close();
 $('#new-user').onclick = ()=>openUserModal(); $('#user-form').onsubmit = saveUser; $('#user-modal-close').onclick = ()=> $('#user-modal').close();
+$('#project-update')?.addEventListener('click', updateProject);
+$('#project-report-issue')?.addEventListener('click', openIssueDialog);
+$('#issue-form')?.addEventListener('submit', submitProjectIssue);
+$('#issue-modal-close')?.addEventListener('click', ()=> $('#issue-modal').close());
 $('#confirm-modal-close')?.addEventListener('click', ()=> $('#confirm-modal').close());
 $('#prompt-modal-close')?.addEventListener('click', ()=> $('#prompt-modal').close());
 // allow backdrop click to close dialogs (native <dialog> does not close on backdrop, so add listener)
@@ -1934,6 +1993,7 @@ loadHarnesses = loadHarnessesEnhanced;
     return;
   }
   if(!token()){ location.href='/login'; return; }
+  await configureProjectActions();
   show(page,false);
   bindMainHarnessGrid();
   bindSetupEvents();

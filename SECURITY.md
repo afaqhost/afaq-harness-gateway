@@ -42,6 +42,9 @@ timeline within 7 days. We will credit reporters unless anonymity is requested.
   - The `docker-compose.yml` configuration isolates Redis on an internal bridge network with no published host ports and does not mount the host `docker.sock`. Do not re-add `docker.sock` in production.
 - **Credential Rotation:**
   - Rotate API keys via `POST /api/admin/keys/{id}/rotate`. The previous key hash is revoked immediately upon rotation.
+- **Project Support Actions:**
+  - Keep `GITHUB_ISSUES_TOKEN` server-side and scope it to the configured repository with only issue-creation access. The dashboard issue form is for ordinary bugs; use private vulnerability reporting for security defects.
+  - The administrator-only update action runs `git pull --ff-only` only from a clean checkout whose `origin` matches `GITHUB_REPOSITORY`. Review the configured remote as a code-execution trust boundary and restart the service after an update.
 
 ## What Is Out of Scope
 

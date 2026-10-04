@@ -122,6 +122,22 @@ A duplicate email or an unsafe self-change returns `409 conflict` in the unified
 error shape. Missing users return `404 not_found`. Deletion is irreversible, so
 the dashboard asks for confirmation first.
 
+## Dashboard Project Actions
+
+These endpoints accept dashboard JWTs only; API keys cannot use them.
+
+| Method | Endpoint | Access | Behavior |
+| --- | --- | --- | --- |
+| `POST` | `/api/admin/project/update` | Administrator | Verifies a clean Git checkout and the configured GitHub origin, then runs `git pull --ff-only`. A changed revision requires a service restart. |
+| `POST` | `/api/admin/project/issues` | Authenticated user | Creates a GitHub issue from `title` (3–120 characters) and `body` (10–10,000 characters) using the server-side `GITHUB_ISSUES_TOKEN`. |
+
+Project update returns `409 project_update_conflict` for a dirty worktree,
+detached branch, or concurrent update. It returns `503
+project_update_unavailable` when the installation is not a Git checkout, Git is
+missing, or the origin does not match `GITHUB_REPOSITORY`. Issue submission
+returns `503 issue_reporting_unavailable` until a valid token is configured.
+Neither endpoint returns credentials or raw Git command output.
+
 ## SSE Events & Reconnection
 
 Streaming endpoints (`POST /v1/chat/completions` with `stream: true` and `POST /api/chat/conversations/{conv_id}/messages/stream`) emit server-sent events with structured lifecycle:

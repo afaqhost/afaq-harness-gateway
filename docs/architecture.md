@@ -21,7 +21,7 @@ The layer map represents the target architectural direction. While new capabilit
 | Layer | Location | Rule | Current Status |
 | --- | --- | --- | --- |
 | `controllers` (inbound) | `app/api/*` | Thin: parse request → call **one** service → shape response. No business rules, no SQL. | Current direction; `chat.py` and `openai.py` contain inline persistence. |
-| `services` | `app/services/*` | Business verbs: `quota_service`, `harness_job_service`, `harness_queue`, `process_registry`, `model_service`, `credential_service`, `os_terminal`. Depend on interfaces, never on HTTP/SQL. | Established; owns business rules, concurrency limits, and process lifecycle. |
+| `services` | `app/services/*` | Business verbs: `quota_service`, `harness_job_service`, `project_update_service`, `issue_service`, `model_service`, `credential_service`, `os_terminal`. Depend on interfaces, never on HTTP/SQL. | Established; owns business rules, concurrency limits, and process lifecycle. |
 | `repositories` | `app/repositories/*` + `app/db/database.py` ORM | Only place that knows DB/SQL. `auth_repository`, `conversation_repository`, `usage_repository`. | In transition; entities encapsulated, inline controller queries moving here. |
 | `clients` (outbound) | `app/clients/*` | Hide harness CLIs behind `HarnessAdapter` (`base.py`). Registry + `MODEL_CACHE` in `clients/registry.py` (with Redis mirror). | Unified contract governing CLI execution, discovery, and output parsing. |
 | `models` | `app/models/harness.py` | Serializable shapes `HarnessModel`/`HarnessResult` (single source; split DTO only when wire shape differs). | Stable domain models. |
@@ -40,7 +40,7 @@ The layer map represents the target architectural direction. While new capabilit
 | `app/api/auth.py` | Bootstrap, login, strict JWT-only `current_user` and `admin_user` dependencies |
 | `app/api/openai.py` | `GET /v1/models`, `POST /v1/chat/completions` (tools, response_format, isolated SSE stream identity, `Last-Event-ID` replay, cancel) |
 | `app/api/chat.py` | Dashboard conversations/messages (CRUD, soft-delete/restore, search, pagination), streaming with heartbeat + cancel |
-| `app/api/admin.py` | Harness status/health, `refresh`, `install`/`update` jobs (allow-listed `npm install -g`), users, keys + rotation |
+| `app/api/admin.py` | Harness status/health, `refresh`, `install`/`update` jobs, project update/issue actions, users, keys + rotation |
 | `app/api/credentials.py` | Credential profiles (encrypted, per-harness `profile_name`, `check` → `status`) |
 | `app/api/usage.py` | Filtered usage listing (`from`/`to`, harness/model, pagination) |
 | `app/api/os_terminal.py` | OS Terminal REST lifecycle endpoints and authenticated WebSocket proxy |

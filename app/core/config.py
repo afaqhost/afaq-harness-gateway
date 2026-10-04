@@ -1,5 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
+
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -31,6 +33,9 @@ class Settings(BaseSettings):
     redis_socket_timeout_seconds: float = 2.0  # socket/read timeout for Redis
     sse_heartbeat_seconds: int = 15
     sse_retry_ms: int = 3000
+    github_repository: str = Field(default="afaqhost/afaq-harness-gateway", pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+    github_issues_token: SecretStr = SecretStr("")
+    project_update_timeout_seconds: int = Field(default=120, ge=10, le=600)
     default_system_prompt: str = ""  # transparent passthrough: no injected SYSTEM block unless client sends one. Keeps harness as direct model API.
     # To enforce text-only centrally, set via env: DEFAULT_SYSTEM_PROMPT="You are a helpful assistant. Return text only, do not write files."
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

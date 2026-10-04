@@ -10,15 +10,28 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import admin_user, current_user
 from app.clients.agy import INSTALL_SCRIPT_COMMAND
+from app.core.config import BASE_DIR, settings
 from app.core.security import generate_api_key
 from app.db.database import APIKey, Harness, User, get_db
 from app.harnesses.registry import all_adapters, cached_models, cached_models_clear, clear_model_cache_mirror, get_adapter, refresh_models
 from app.services.harness_job_service import harness_job_service
-from app.services import user_service
+from app.services import issue_service, user_service
+from app.services.project_update_service import (
+    ProjectUpdateConflictError,
+    ProjectUpdateFailedError,
+    ProjectUpdateService,
+    ProjectUpdateUnavailableError,
+)
+from app.shared.errors import error_payload
 from app.shared.sse import sse_event
 from app.shared.time import utcnow
 
 router = APIRouter()
+project_update_service = ProjectUpdateService(
+    repository_path=BASE_DIR,
+    repository_slug=settings.github_repository,
+    timeout_seconds=settings.project_update_timeout_seconds,
+)
 
 # Install recipes come from trusted adapter code, but the install endpoint still only
 # runs pre-approved command shapes: npm globals, or an explicitly vetted installer script.
@@ -82,6 +95,48 @@ class KeyCreate(BaseModel):
     daily_limit: int | None = None
     monthly_limit: int | None = None
     allowed_models: list[str] | None = None
+
+
+class IssueCreate(BaseModel):
+    title: str = Field(min_length=3, max_length=120)
+    body: str = Field(min_length=10, max_length=10_000)
+
+    @field_validator("title", "body", mode="before")
+    @classmethod
+    def strip_text(cls, value: object) -> str:
+        if not isinstance(value, str):
+            raise ValueError("Issue text must be a string")
+        return value.strip()
+
+
+@router.post("/project/update")
+async def update_project(_: User = Depends(admin_user)):
+    try:
+        update = await project_update_service.pull_latest()
+    except ProjectUpdateConflictError as exc:
+        raise HTTPException(409, detail=error_payload("project_update_conflict", str(exc))) from exc
+    except ProjectUpdateUnavailableError as exc:
+        raise HTTPException(503, detail=error_payload("project_update_unavailable", str(exc))) from exc
+    except ProjectUpdateFailedError as exc:
+        raise HTTPException(502, detail=error_payload("project_update_failed", str(exc), retryable=True)) from exc
+    return {
+        "status": "updated" if update.updated else "current",
+        "updated": update.updated,
+        "branch": update.branch,
+        "commit": update.commit,
+        "restart_required": update.updated,
+    }
+
+
+@router.post("/project/issues", status_code=201)
+async def create_project_issue(issue: IssueCreate, _: User = Depends(current_user)):
+    try:
+        created = await issue_service.submit_project_issue(issue.title, issue.body)
+    except issue_service.IssueReportingUnavailableError as exc:
+        raise HTTPException(503, detail=error_payload("issue_reporting_unavailable", str(exc))) from exc
+    except issue_service.IssueSubmissionError as exc:
+        raise HTTPException(502, detail=error_payload("issue_submission_failed", str(exc), retryable=True)) from exc
+    return {"number": created.number, "url": created.url}
 
 @router.get("/harnesses")
 async def harnesses(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
