@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import fcntl
 import os
-import sys
 import termios
 import time
 

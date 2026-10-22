@@ -158,6 +158,35 @@ async def enforce_quota(
         )
 
 
+async def _enforce_reservation_limits(
+    session: AsyncSession,
+    api_key_id: int,
+    limits: tuple[int | None, int | None],
+    now: datetime,
+) -> None:
+    today_start, month_start = daily_monthly_bounds(now)
+    daily_limit, monthly_limit = limits
+    for kind, limit, since, retry_after in (
+        ("daily", daily_limit, today_start, "86400"),
+        ("monthly", monthly_limit, month_start, "2592000"),
+    ):
+        if limit is None:
+            continue
+        count = await _count_since(session, api_key_id, since, now)
+        if count >= limit:
+            await session.rollback()
+            raise HTTPException(
+                status_code=429,
+                detail={"error": {
+                    "code": "quota_exceeded",
+                    "message": f"{kind.capitalize()} quota exceeded ({limit} requests).",
+                    "kind": kind,
+                    "limit": limit,
+                }},
+                headers={"Retry-After": retry_after},
+            )
+
+
 async def reserve_quota(
     api_key: APIKey,
     db: AsyncSession | None = None,
@@ -199,36 +228,7 @@ async def reserve_quota(
             # Best-effort prune of expired reservations
             await session.execute(delete(QuotaReservation).where(QuotaReservation.expires_at <= now))
 
-            today_start, month_start = daily_monthly_bounds(now)
-
-            # Atomic count of usage + active reservations
-            if daily_limit is not None:
-                count = await _count_since(session, api_key_id, today_start, now)
-                if count >= daily_limit:
-                    await session.rollback()
-                    detail = {
-                        "error": {
-                            "code": "quota_exceeded",
-                            "message": f"Daily quota exceeded ({daily_limit} requests).",
-                            "kind": "daily",
-                            "limit": daily_limit,
-                        }
-                    }
-                    raise HTTPException(status_code=429, detail=detail, headers={"Retry-After": "86400"})
-
-            if monthly_limit is not None:
-                count = await _count_since(session, api_key_id, month_start, now)
-                if count >= monthly_limit:
-                    await session.rollback()
-                    detail = {
-                        "error": {
-                            "code": "quota_exceeded",
-                            "message": f"Monthly quota exceeded ({monthly_limit} requests).",
-                            "kind": "monthly",
-                            "limit": monthly_limit,
-                        }
-                    }
-                    raise HTTPException(status_code=429, detail=detail, headers={"Retry-After": "2592000"})
+            await _enforce_reservation_limits(session, api_key_id, (daily_limit, monthly_limit), now)
 
             # Admission granted: create opaque reservation
             token = secrets.token_hex(24)
