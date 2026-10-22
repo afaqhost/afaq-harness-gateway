@@ -16,7 +16,7 @@ Configuration is loaded from `.env` through `pydantic-settings`. Start from `.en
 | `HARNESS_TIMEOUT_SECONDS` | `600` | Maximum duration for a harness process |
 | `HARNESS_DATA_DIR` | `storage/harnesses` | Local harness data directory |
 | `UPLOADS_DIR` | `storage/uploads` | Local upload directory |
-| `ALLOWED_ORIGINS` | `http://127.0.0.1:3500,http://localhost:3500` | Comma-separated CORS origins (tightened from `*` in S1) |
+| `ALLOWED_ORIGINS` | `http://127.0.0.1:3500,http://localhost:3500` | Comma-separated explicit HTTP(S) browser origins; empty disables cross-origin access. Wildcards and malformed origins are rejected at startup. |
 | `MODEL_REFRESH_SECONDS` | `300` | Reserved; refresh is startup + `POST /api/admin/harnesses/refresh` |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Global per-bucket rate limit (requests/minute) |
 | `RATE_LIMIT_ENABLED` | `true` | Set `false` to disable rate limiting (e.g., for load tests) |
@@ -31,6 +31,27 @@ Configuration is loaded from `.env` through `pydantic-settings`. Start from `.en
 | `REDIS_ENABLED` | `false` | Auto-enabled when `REDIS_URL` is set; set explicitly if needed |
 | `REDIS_CONNECT_TIMEOUT_SECONDS` | `2.0` | Bounded connect timeout (seconds) for the shared async Redis client |
 | `REDIS_SOCKET_TIMEOUT_SECONDS` | `2.0` | Bounded socket read/write timeout (seconds) for the shared async Redis client |
+
+## Browser origins (CORS)
+
+Set `ALLOWED_ORIGINS` to the exact origins of trusted browser applications, for
+example `https://gateway.example.com,https://dashboard.example.com`. Each entry
+must use `http://` or `https://` and contain a host with an optional port. Do not
+include credentials, paths, trailing slashes, query strings, fragments, or `*`.
+The opaque `null` origin is rejected. Validation applies in both debug and
+production modes; invalid values prevent startup. Existing installations using
+`*` must replace it with explicit trusted origins before restarting.
+
+Cross-origin requests allow `GET`, `HEAD`, `POST`, `PATCH`, and `DELETE`, with
+`Authorization`, `Content-Type`, `X-API-Key`, `X-Request-ID`, `X-Stream-ID`, and
+`Last-Event-ID` request headers. Standard CORS safelisted headers remain allowed.
+Browser preflights are handled by the middleware. Responses expose
+`X-Request-ID` and `X-Stream-ID` to allowed origins for request tracing and SSE
+reconnects. Credential support remains enabled for allowed origins; endpoint
+authentication and authorization still apply.
+
+An empty `ALLOWED_ORIGINS` disables cross-origin browser access. Same-origin
+dashboard requests and non-browser API clients continue to work.
 
 ## Redis & Multi-Replica Configuration
 

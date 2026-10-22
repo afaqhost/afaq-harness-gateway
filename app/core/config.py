@@ -1,7 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -38,6 +39,22 @@ class Settings(BaseSettings):
     default_system_prompt: str = ""  # transparent passthrough: no injected SYSTEM block unless client sends one. Keeps harness as direct model API.
     # To enforce text-only centrally, set via env: DEFAULT_SYSTEM_PROMPT="You are a helpful assistant. Return text only, do not write files."
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @field_validator("allowed_origins")
+    @classmethod
+    def validate_allowed_origins(cls, origins: str) -> str:
+        for origin in (entry.strip() for entry in origins.split(",") if entry.strip()):
+            parsed = urlsplit(origin)
+            if (
+                "*" in origin or any(character.isspace() for character in origin)
+                or parsed.scheme not in {"http", "https"} or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or origin != f"{parsed.scheme}://{parsed.netloc}"
+            ):
+                raise ValueError("ALLOWED_ORIGINS must contain explicit HTTP(S) origins without wildcards, credentials, paths, queries, or fragments")
+            # urlsplit validates port syntax and range when this property is read.
+            _ = parsed.port
+        return origins
 
 INSECURE_SECRETS = {
     "",
