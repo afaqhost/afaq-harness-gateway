@@ -35,6 +35,11 @@ async def fetch_conversation_summary(conv: Conversation, db: AsyncSession) -> tu
     return count, preview
 
 
+async def list_conversation_messages(db: AsyncSession, conversation_id: int) -> list[Message]:
+    query = select(Message).where(Message.conversation_id == conversation_id).order_by(Message.created_at, Message.id)
+    return list((await db.scalars(query)).all())
+
+
 async def list_conversations_for_user(
     user: User,
     db: AsyncSession,

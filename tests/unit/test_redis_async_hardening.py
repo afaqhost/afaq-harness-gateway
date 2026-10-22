@@ -16,7 +16,8 @@ from redis.exceptions import ConnectionError as RedisConnectionError, RedisError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.clients.base import HarnessAdapter
-from app.clients.registry import MODEL_CACHE, cached_models, cached_models_clear, refresh_models
+from app.clients.registry import MODEL_CACHE, cached_models, cached_models_clear
+from app.services.model_refresh_service import refresh_models
 from app.core.config import get_settings, settings
 from app.core.redis import REDIS_EXCEPTIONS, RedisProvider, close_redis, get_redis_client, get_redis_provider
 from app.middleware.rate_limit import RedisRateLimiter

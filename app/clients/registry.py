@@ -18,7 +18,6 @@ from app.clients.generic import GenericAdapter
 from app.clients.opencode import OpenCodeAdapter
 from app.clients.pi import PiAdapter
 from app.models.harness import HarnessModel
-from app.shared.time import utcnow
 
 ADAPTERS: dict[str, HarnessAdapter] = {
     "claude": ClaudeAdapter(),
@@ -155,7 +154,7 @@ def _dicts_to_harness_models(dicts: list[dict]) -> list[HarnessModel]:
     return result
 
 
-async def refresh_models() -> None:
+async def refresh_model_cache() -> None:
     import json
     from app.core.redis import REDIS_EXCEPTIONS, get_redis_client
 
@@ -168,7 +167,7 @@ async def refresh_models() -> None:
 
     for adapter in all_adapters():
         discovered_models: list[HarnessModel] | None = None
-        if adapter.is_installed():
+        if await asyncio.to_thread(adapter.is_installed):
             try:
                 discovered_models = await adapter.list_models()
             except (OSError, asyncio.TimeoutError, RuntimeError) as exc:
@@ -212,28 +211,6 @@ async def refresh_models() -> None:
 
             if not hydrated:
                 MODEL_CACHE[adapter.name] = discovered_models if discovered_models is not None else []
-    # persist Harness.last_checked_at and installed to DB (best-effort)
-    try:
-        from app.db.database import Harness, SessionLocal
-
-        async with SessionLocal() as session:
-            from sqlalchemy import select
-
-            for adapter in all_adapters():
-                installed = adapter.is_installed()
-                row = (await session.execute(select(Harness).where(Harness.name == adapter.name))).scalar_one_or_none()
-                if not row:
-                    row = Harness(name=adapter.name, display_name=adapter.display_name, executable=adapter.executable, provider=adapter.provider or "", installed=installed, last_checked_at=utcnow())
-                    session.add(row)
-                else:
-                    row.installed = installed
-                    row.last_checked_at = utcnow()
-                    row.display_name = adapter.display_name
-            await session.commit()
-    except (OSError, RuntimeError) as exc:
-        import logging; logging.getLogger("afaq").warning("refresh_persist_failed error=%s", exc)
-        # lifespan may run before DB ready or during tests with in-memory DB (different engine)
-        pass
 
 
 def cached_models(adapter_name: str) -> list[HarnessModel]:

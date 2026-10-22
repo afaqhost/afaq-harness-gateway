@@ -12,8 +12,9 @@ from app.clients.agy import INSTALL_SCRIPT_COMMAND
 from app.core.config import BASE_DIR, settings
 from app.core.security import generate_api_key
 from app.db.database import APIKey, Harness, User, get_db
-from app.harnesses.registry import all_adapters, cached_models, cached_models_clear, clear_model_cache_mirror, get_adapter, refresh_models
+from app.harnesses.registry import all_adapters, cached_models, cached_models_clear, clear_model_cache_mirror, get_adapter
 from app.services.harness_job_service import harness_job_service
+from app.services.model_refresh_service import refresh_models
 from app.services import user_service
 from app.services.project_update_service import (
     ProjectUpdateConflictError,

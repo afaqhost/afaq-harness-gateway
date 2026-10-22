@@ -91,11 +91,33 @@ The `/terminal` dashboard feature provides an interactive login shell in the bro
 
 ## Model Cache
 
-`refresh_models()` populates the local in-memory model cache (`MODEL_CACHE`) during FastAPI startup and background refresh:
+`app/services/model_refresh_service.py:refresh_models()` orchestrates model
+discovery and installation-state persistence during FastAPI startup and refresh.
+`app/clients/registry.py:refresh_model_cache()` updates the local in-memory model
+cache (`MODEL_CACHE`) and Redis mirror:
 - **Authoritative Local Discovery:** When local discovery succeeds and returns models, it updates `MODEL_CACHE` and mirrors to Redis asynchronously.
 - **Fail-Safe Hydration:** If local discovery fails or yields no models (e.g. an adapter only installed on other replicas), the local cache hydrates from the shared Redis mirror.
 - **Non-Destructive Mirror:** Transient discovery errors or absent local tools do not delete the shared mirror.
 - **Non-Blocking Reads:** Request-time `cached_models()` serves the local hot cache synchronously without network I/O or Redis calls. `POST /api/admin/harnesses/refresh` rebuilds the cache and mirror.
+
+After discovery, the service checks installation state outside the database
+session and uses `app/repositories/harness_repository.py` to load all matching
+Harness rows in one query. Existing rows update only their display name,
+installation flag, and last-checked timestamp; operator settings are preserved.
+New adapters create new rows, and unrelated rows remain unchanged.
+
+## Conversation prompt preparation
+
+Both dashboard message endpoints call
+`app/services/chat_service.py:save_user_message_and_build_prompt()`. The service
+loads conversation history once through the conversation repository, applies
+the first-message/default-title rule, and commits the new user message before
+dispatching the prompt. History is ordered by creation time and message ID,
+and the current user message appears once.
+
+Each send uses the history snapshot read before its insert. Simultaneous sends
+are not serialized: messages committed by another send after that snapshot are
+not added to the current prompt by a second read.
 
 ## Shared Async Redis & Multi-Replica Architecture
 

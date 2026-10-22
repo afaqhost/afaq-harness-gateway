@@ -20,7 +20,7 @@ from app.api.usage import router as usage_router
 from app.api.credentials import router as credentials_router
 from app.api.metrics import router as metrics_router
 from app.api.os_terminal import router as os_terminal_router
-from app.harnesses.registry import refresh_models
+from app.services.model_refresh_service import refresh_models
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIdMiddleware

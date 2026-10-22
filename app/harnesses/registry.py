@@ -1,6 +1,7 @@
-"""Backwards-compatible facade — delegates to the proper Client layer.
+"""Backwards-compatible facade for adapters and model refresh.
 
-New code should import from ``app.clients.*`` directly.
+New code should import adapters from ``app.clients.*`` and refresh orchestration
+from ``app.services.model_refresh_service`` directly.
 This module is kept so existing ``from app.harnesses.registry import ...``
 imports keep working without a flag day.
 """
@@ -21,9 +22,9 @@ from app.clients.registry import (
     cached_models_clear,
     clear_model_cache_mirror,
     get_adapter,
-    refresh_models,
 )
 from app.models.harness import HarnessModel, HarnessResult
+from app.services.model_refresh_service import refresh_models
 
 __all__ = [
     "HarnessAdapter",

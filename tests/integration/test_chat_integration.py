@@ -121,3 +121,84 @@ async def test_openai_chat_completions_non_stream_with_api_key(client, db_sessio
         data = resp.json()
         assert data["choices"][0]["message"]["content"] == "openai fake reply"
         assert "usage" in data
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize(
+    ("with_history", "title", "expected_title"),
+    [(False, "Custom title", "current question"),
+     (True, "Custom title", "Custom title"), (True, "New chat", "current question")],
+)
+async def test_message_preparation_reads_history_once_and_preserves_prompt(
+    client, db_session, test_engine, user_headers, regular_user, fake_adapter, monkeypatch,
+    stream, with_history, title, expected_title,
+):
+    from datetime import datetime, timedelta
+    from sqlalchemy import event, select
+    from app.clients.registry import ADAPTERS
+    from app.core.config import settings
+    from app.db.database import Conversation, Message
+    from app.models.harness import HarnessResult
+
+    monkeypatch.setattr(settings, "default_system_prompt", "Be helpful.")
+    conversation = Conversation(user_id=regular_user.id, title=title, model="opencode//opencode/big-pickle")
+    unrelated = Conversation(user_id=regular_user.id, title="Other", model=conversation.model)
+    db_session.add_all([conversation, unrelated])
+    await db_session.flush()
+    db_session.add(Message(conversation_id=unrelated.id, role="user", content="unrelated question"))
+    if with_history:
+        earlier = datetime(2020, 1, 1)
+        db_session.add_all([
+            Message(conversation_id=conversation.id, role="user", content="earlier question", created_at=earlier),
+            Message(conversation_id=conversation.id, role="assistant", content="earlier reply", created_at=earlier + timedelta(seconds=1)),
+        ])
+    await db_session.commit()
+
+    message_reads = []
+    prompts = []
+    reads_before_dispatch = []
+
+    def count_message_reads(conn, cursor, statement, parameters, context, executemany):
+        normalized = " ".join(statement.lower().split())
+        if normalized.startswith("select ") and "from messages" in normalized:
+            message_reads.append(statement)
+
+    async def fake_run(prompt, model=None, session_id=None, env=None, request_id=None):
+        prompts.append(prompt)
+        reads_before_dispatch.append(len(message_reads))
+        return HarnessResult(text="new reply", model=model or "default")
+
+    async def fake_stream(prompt, model=None, session_id=None, env=None, request_id=None):
+        await fake_run(prompt, model, session_id, env, request_id)
+        yield "new reply", {}
+
+    monkeypatch.setattr(fake_adapter, "run", fake_run)
+    monkeypatch.setattr(fake_adapter, "stream", fake_stream)
+    monkeypatch.setitem(ADAPTERS, "opencode", fake_adapter)
+    event.listen(test_engine.sync_engine, "before_cursor_execute", count_message_reads)
+    try:
+        suffix = "/stream" if stream else ""
+        response = await client.post(
+            f"/api/chat/conversations/{conversation.id}/messages{suffix}",
+            headers=user_headers, json={"content": "current question"},
+        )
+    finally:
+        event.remove(test_engine.sync_engine, "before_cursor_execute", count_message_reads)
+
+    assert response.status_code == 200
+    if stream:
+        assert "[DONE]" in response.text
+    expected_prompt = "SYSTEM: Be helpful.\n\n"
+    if with_history:
+        expected_prompt += "user: earlier question\nassistant: earlier reply\n"
+    assert prompts == [expected_prompt + "user: current question"]
+    assert reads_before_dispatch == [1]
+    await db_session.refresh(conversation)
+    assert conversation.title == expected_title
+    messages = (await db_session.scalars(
+        select(Message).where(Message.conversation_id == conversation.id).order_by(Message.created_at)
+    )).all()
+    assert [(message.role, message.content) for message in messages][-2:] == [
+        ("user", "current question"), ("assistant", "new reply"),
+    ]

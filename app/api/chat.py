@@ -22,6 +22,7 @@ from app.repositories.conversation_repository import (
     get_conversation_or_404 as repo_get_conversation_or_404,
 )
 from app.services import credential_service, quota_service
+from app.services.chat_service import save_user_message_and_build_prompt
 from app.services.model_service import (
     select_model_for_conversation,
     select_model_for_new_conversation,
@@ -35,8 +36,6 @@ except ImportError:
     HARNESS_LATENCY = None
 
 from app.shared.errors import sanitize_harness_error
-from app.shared.model_utils import preview_text as _preview
-from app.shared.prompt_utils import build_harness_prompt, build_history_prompt
 from app.shared.time import utcnow
 
 logger = logging.getLogger("afaq")
@@ -132,16 +131,6 @@ async def _conversation_to_out(conv: Conversation, db: AsyncSession) -> Conversa
         message_count=count,
         last_message=preview,
     )
-
-
-def _maybe_update_title(conv: Conversation, content: str, is_first: bool) -> None:
-    if is_first or conv.title in ("New chat", "محادثة جديدة", ""):
-        conv.title = _preview(content, 50)
-
-
-def _history_to_prompt(history: list[Message]) -> str:
-    history_prompt = build_history_prompt([(m.role, m.content) for m in history])
-    return build_harness_prompt(settings.default_system_prompt, history_prompt)
 
 
 @router.get("/conversations", response_model=list[ConversationOut])
@@ -281,18 +270,7 @@ async def send_message(
         if model != conv.model:
             conv.model = model
 
-        is_first = (await db.execute(select(Message).where(Message.conversation_id == conv.id).limit(1))).scalar_one_or_none() is None
-        _maybe_update_title(conv, content, is_first)
-        conv.updated_at = utcnow()
-
-        user_msg = Message(conversation_id=conv.id, role="user", content=content)
-        db.add(user_msg)
-        await db.commit()
-        await db.refresh(user_msg)
-        await db.refresh(conv)
-
-        history = (await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))).scalars().all()
-        prompt = _history_to_prompt(history)
+        prompt = await save_user_message_and_build_prompt(db, conv, content)
 
         # request_id for non-stream cancel support
         request_id = f"chat:{conv.id}:{uuid.uuid4().hex[:8]}"
@@ -435,20 +413,11 @@ async def stream_message(
     try:
         if model != conv.model:
             conv.model = model
-        is_first = (await db.execute(select(Message).where(Message.conversation_id == conv.id).limit(1))).scalar_one_or_none() is None
-        _maybe_update_title(conv, content, is_first)
-        conv.updated_at = utcnow()
-        user_msg = Message(conversation_id=conv.id, role="user", content=content)
-        db.add(user_msg)
-        await db.flush()
-        await db.commit()
+        prompt = await save_user_message_and_build_prompt(db, conv, content)
     except Exception:
         if reservation_token:
             await quota_service.release_reservation(reservation_token)
         raise
-
-    history = (await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))).scalars().all()
-    prompt = _history_to_prompt(history)
 
     history_key = identity.history_key
     # credential env for harness
