@@ -87,6 +87,43 @@ async def shared_db(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("daily_limit", "monthly_limit", "kind", "retry_after"),
+    [(0, None, "daily", "86400"), (None, 0, "monthly", "2592000"), (0, 0, "daily", "86400")],
+)
+async def test_quota_rejection_preserves_error_contract_and_rolls_back_pruning(
+    shared_db, daily_limit, monthly_limit, kind, retry_after
+):
+    _, session_factory, _ = shared_db
+    now = datetime(2026, 1, 15, 12)
+    key = APIKey(
+        id=1, user_id=1, name="limited-key", key_prefix="test", key_hash="test-hash",
+        daily_limit=daily_limit, monthly_limit=monthly_limit,
+    )
+    async with session_factory() as session:
+        session.add(User(id=1, email="limited@test.com", password_hash="hash"))
+        session.add(key)
+        session.add(QuotaReservation(
+            token="expired", api_key_id=1,
+            created_at=now - timedelta(hours=2), expires_at=now - timedelta(hours=1),
+        ))
+        await session.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        await quota_service.reserve_quota(key, now=now)
+
+    assert exc.value.status_code == 429
+    assert exc.value.detail == {"error": {
+        "code": "quota_exceeded", "message": f"{kind.capitalize()} quota exceeded (0 requests).",
+        "kind": kind, "limit": 0,
+    }}
+    assert exc.value.headers == {"Retry-After": retry_after}
+    async with session_factory() as session:
+        tokens = (await session.scalars(select(QuotaReservation.token))).all()
+    assert tokens == ["expired"]
+
+
+@pytest.mark.asyncio
 async def test_quota_session_factory_seam_proves_production_sessionlocal_not_used(shared_db):
     """Proves quota_service uses the injected session factory seam and never calls production SessionLocal."""
     _, session_factory, _ = shared_db
